@@ -84,8 +84,8 @@ describe('autoLabel', () => {
     ]);
   });
 
-  it('lässt Entlüftungen ohne Kennzeichen', () => {
-    const { diagram } = addComponent(createDiagram('pneumatic'), 'supply.exhaust', { x: 0, y: 0 });
+  it('lässt Schalldämpfer ohne Kennzeichen', () => {
+    const { diagram } = addComponent(createDiagram('pneumatic'), 'supply.silencer', { x: 0, y: 0 });
     expect(autoLabel(diagram).components[0]!.label).toBe('');
   });
 });

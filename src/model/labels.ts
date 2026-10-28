@@ -27,7 +27,7 @@ import type { ComponentInstance, Diagram, Endpoint, PortKind } from './types.ts'
 export type ComponentCode = 'P' | 'M' | 'A' | 'V' | 'Z';
 
 /** Bauteile, die kein eigenes Kennzeichen bekommen (reine Anschlusssymbole). */
-const UNLABELED = new Set(['supply.exhaust']);
+const UNLABELED = new Set(['supply.silencer']);
 
 export function needsLabel(component: Pick<ComponentInstance, 'type'>): boolean {
   return !UNLABELED.has(component.type);
