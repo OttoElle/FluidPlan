@@ -15,6 +15,11 @@ sind wie in der Norm 2M auseinander.
 
 Voraussetzung: Node.js 22 oder neuer.
 
+**Windows:** `start.bat` doppelklicken. Beim ersten Start werden die Abhängigkeiten
+installiert, danach öffnet sich der Editor im Browser. Schließen des Fensters beendet ihn.
+
+Oder von Hand:
+
 ```bash
 npm install
 npm run dev        # Entwicklungsserver auf http://localhost:5173
