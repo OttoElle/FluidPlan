@@ -117,18 +117,22 @@ Schaltpläne werden als `*.fluidplan.json` gespeichert:
 ```json
 {
   "format": "fluidplan",
-  "version": 1,
+  "version": 3,
   "diagram": {
     "domain": "hydraulic",
     "meta": { "title": "…", "author": "", "created": "…", "modified": "…" },
+    "sheet": { "format": "A4", "orientation": "landscape", "frame": true },
     "components": [
       { "id": "c1", "type": "actuator.cylinder-double", "position": { "x": 140, "y": 40 },
         "rotation": 0, "mirrored": false, "label": "1A1", "properties": {} }
     ],
     "connections": [
       { "id": "l1", "from": { "componentId": "c2", "portId": "A" },
-        "to": { "componentId": "c1", "portId": "A" }, "kind": "working", "waypoints": [] }
-    ]
+        "to": { "componentId": "c1", "portId": "A" }, "kind": "working", "waypoints": [] },
+      { "id": "l2", "from": { "componentId": "c3", "portId": "P" },
+        "to": { "junctionId": "j1" }, "kind": "working", "waypoints": [] }
+    ],
+    "junctions": [{ "id": "j1", "position": { "x": 100, "y": 200 } }]
   }
 }
 ```
