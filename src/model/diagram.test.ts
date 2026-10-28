@@ -8,6 +8,7 @@ import {
   nextId,
   portPosition,
   removeComponent,
+  transformLocalPoint,
   updateComponent,
 } from './diagram.ts';
 import { COMPONENT_LIBRARY, definitionsFor } from './library.ts';
@@ -30,6 +31,20 @@ describe('Bauteilbibliothek', () => {
         const onEdge = p.offset.x === 0 || p.offset.x === width || p.offset.y === 0 || p.offset.y === height;
         const inside = p.offset.x >= 0 && p.offset.x <= width && p.offset.y >= 0 && p.offset.y <= height;
         expect(onEdge && inside, `${def.type}.${p.id}`).toBe(true);
+      }
+    }
+  });
+
+  it('hält alle Anschlüsse in jeder Drehung und Spiegelung auf dem Raster', () => {
+    const onGrid = (v: number) => Number.isInteger(v / 10);
+    for (const def of COMPONENT_LIBRARY) {
+      for (const rotation of [0, 90, 180, 270] as const) {
+        for (const mirrored of [false, true]) {
+          for (const p of def.ports) {
+            const at = transformLocalPoint({ position: { x: 0, y: 0 }, rotation, mirrored }, def, p.offset);
+            expect(onGrid(at.x) && onGrid(at.y), `${def.type}.${p.id} ${rotation}° ${mirrored}`).toBe(true);
+          }
+        }
       }
     }
   });

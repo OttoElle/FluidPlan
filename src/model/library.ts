@@ -5,6 +5,11 @@ import type { ComponentDefinition, Domain } from './types.ts';
  * Anschlussbezeichnungen: Hydraulik nach ISO 1219 (P, T, A, B, …),
  * Pneumatik nach ISO 5599 (1, 2, 3, 4, 5, 12, 14).
  * Maße in Rastereinheiten; Anschlüsse liegen auf dem 10er-Raster.
+ *
+ * Bauteile mit ISO-1219-Symbol (siehe ui/symbols.tsx) sind im Modul M = 10
+ * gezeichnet, ein Rasterschritt ist also 1M. Ihre Größen und Anschlüsse folgen
+ * den Grundmaßen aus DIN ISO 1219-1 (Kreis 6M, Ventilfeld 4M, Zylinder 9M × 4M,
+ * benachbarte Anschlüsse 2M auseinander).
  */
 export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
   // --- Energieversorgung ---
@@ -12,11 +17,18 @@ export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
     type: 'supply.pump',
     name: 'Hydropumpe (konstant)',
     domains: ['hydraulic'],
-    size: { width: 40, height: 40 },
+    size: { width: 90, height: 90 },
     ports: [
-      { id: 'P', kind: 'pressure', offset: { x: 20, y: 0 } },
-      { id: 'S', kind: 'return', offset: { x: 20, y: 40 } },
+      { id: 'P', kind: 'pressure', offset: { x: 60, y: 0 } },
+      { id: 'S', kind: 'return', offset: { x: 60, y: 90 } },
     ],
+  },
+  {
+    type: 'supply.compressor',
+    name: 'Kompressor',
+    domains: ['pneumatic'],
+    size: { width: 90, height: 70 },
+    ports: [{ id: '1', kind: 'pressure', offset: { x: 60, y: 0 } }],
   },
   {
     type: 'supply.tank',
@@ -60,12 +72,12 @@ export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
     type: 'valve.4-2',
     name: '4/2-Wegeventil',
     domains: ['hydraulic'],
-    size: { width: 80, height: 40 },
+    size: { width: 120, height: 60 },
     ports: [
-      { id: 'A', kind: 'work', offset: { x: 30, y: 0 } },
-      { id: 'B', kind: 'work', offset: { x: 50, y: 0 } },
-      { id: 'P', kind: 'pressure', offset: { x: 30, y: 40 } },
-      { id: 'T', kind: 'return', offset: { x: 50, y: 40 } },
+      { id: 'A', kind: 'work', offset: { x: 70, y: 0 } },
+      { id: 'B', kind: 'work', offset: { x: 90, y: 0 } },
+      { id: 'P', kind: 'pressure', offset: { x: 70, y: 60 } },
+      { id: 'T', kind: 'return', offset: { x: 90, y: 60 } },
     ],
   },
   {
@@ -121,7 +133,7 @@ export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
     type: 'valve.pressure-relief',
     name: 'Druckbegrenzungsventil',
     domains: ['hydraulic', 'pneumatic'],
-    size: { width: 30, height: 60 },
+    size: { width: 40, height: 60 },
     ports: [
       { id: 'P', kind: 'pressure', offset: { x: 10, y: 0 } },
       { id: 'T', kind: 'return', offset: { x: 10, y: 60 } },
@@ -133,18 +145,18 @@ export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
     type: 'actuator.cylinder-double',
     name: 'Doppeltwirkender Zylinder',
     domains: ['hydraulic', 'pneumatic'],
-    size: { width: 100, height: 30 },
+    size: { width: 130, height: 50 },
     ports: [
-      { id: 'A', kind: 'work', offset: { x: 10, y: 30 } },
-      { id: 'B', kind: 'work', offset: { x: 70, y: 30 } },
+      { id: 'A', kind: 'work', offset: { x: 10, y: 50 } },
+      { id: 'B', kind: 'work', offset: { x: 80, y: 50 } },
     ],
   },
   {
     type: 'actuator.cylinder-single',
     name: 'Einfachwirkender Zylinder',
     domains: ['hydraulic', 'pneumatic'],
-    size: { width: 100, height: 30 },
-    ports: [{ id: 'A', kind: 'work', offset: { x: 10, y: 30 } }],
+    size: { width: 130, height: 50 },
+    ports: [{ id: 'A', kind: 'work', offset: { x: 10, y: 50 } }],
   },
 
   // --- Messgeräte ---

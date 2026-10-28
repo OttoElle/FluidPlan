@@ -3,8 +3,13 @@
 Leichtgewichtiger Editor für einfache **Hydraulik- und Pneumatik-Schaltpläne** im Browser.
 
 Stand: Projektgerüst mit Datenmodell, Bauteilbibliothek und Speichern/Laden als JSON.
-Bauteile werden vorerst als beschriftete Rahmen mit Anschlusspunkten dargestellt;
-genormte Symbole nach ISO 1219 und das Zeichnen von Leitungen per Maus folgen.
+Erste Schaltzeichen nach DIN ISO 1219-1: Hydropumpe, Kompressor, 4/2-Wegeventil und
+doppeltwirkender Zylinder. Die übrigen Bauteile erscheinen noch als beschriftete Rahmen;
+das Zeichnen von Leitungen per Maus folgt.
+
+Symbole sind im Modul M gezeichnet, ein Rasterschritt der Zeichenfläche ist 1M (10 Einheiten).
+Anschlüsse liegen in jeder Drehung und Spiegelung auf dem Raster, benachbarte Anschlüsse
+sind wie in der Norm 2M auseinander.
 
 ## Schnellstart
 
@@ -38,6 +43,7 @@ src/
   ui/
     App.tsx          Oberfläche: Werkzeugleiste, Bauteilliste, Eigenschaften
     DiagramView.tsx  SVG-Zeichenfläche
+    symbols.tsx      Schaltzeichen nach ISO 1219 (im Modul M gezeichnet)
 ```
 
 ## Datenmodell

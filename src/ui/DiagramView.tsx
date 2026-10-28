@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { portPosition, transformLocalPoint } from '../model/diagram.ts';
 import { getDefinition } from '../model/library.ts';
 import type { ComponentInstance, Diagram, LineKind, Point } from '../model/types.ts';
+import { ComponentSymbol, hasSymbol } from './symbols.tsx';
 
 const GRID = 10;
 const DASH: Record<LineKind, string | undefined> = { working: undefined, pilot: '6 4', drain: '2 3' };
@@ -15,8 +16,8 @@ interface Props {
 
 /**
  * Zeichnet den Schaltplan als SVG.
- * Bauteile erscheinen vorerst als beschriftete Rahmen mit Anschlusspunkten;
- * die genormten Symbole nach ISO 1219 folgen in einem eigenen Schritt.
+ * Bauteile mit Schaltzeichen (symbols.tsx) erscheinen als ISO-1219-Symbol,
+ * alle übrigen vorerst als beschriftete Rahmen mit Anschlusspunkten.
  */
 export function DiagramView({ diagram, selectedId, onSelect, onMove }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -102,12 +103,30 @@ function ComponentShape({
   const w = Math.abs(corners[0]!.x - corners[1]!.x);
   const h = Math.abs(corners[0]!.y - corners[1]!.y);
 
+  const cx = def.size.width / 2;
+  const cy = def.size.height / 2;
+  // Gleiche Reihenfolge wie transformLocalPoint: spiegeln, drehen, verschieben.
+  const transform =
+    `translate(${component.position.x + cx} ${component.position.y + cy}) rotate(${component.rotation}) ` +
+    `scale(${component.mirrored ? -1 : 1} 1) translate(${-cx} ${-cy})`;
+
   return (
     <g className={selected ? 'component selected' : 'component'} onPointerDown={onPointerDown}>
-      <rect x={x} y={y} width={w} height={h} />
-      <text x={x + w / 2} y={y + h / 2} className="name">
-        {def.name}
-      </text>
+      {hasSymbol(def.type) ? (
+        <>
+          <rect x={x} y={y} width={w} height={h} className="hit" />
+          <g transform={transform}>
+            <ComponentSymbol type={def.type} />
+          </g>
+        </>
+      ) : (
+        <>
+          <rect x={x} y={y} width={w} height={h} className="box" />
+          <text x={x + w / 2} y={y + h / 2} className="name">
+            {def.name}
+          </text>
+        </>
+      )}
       {component.label && (
         <text x={x - 4} y={y + 4} className="label">
           {component.label}

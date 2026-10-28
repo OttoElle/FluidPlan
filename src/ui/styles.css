@@ -94,8 +94,12 @@ button:hover { border-color: var(--accent); }
 .line { fill: none; stroke: var(--line); stroke-width: 1.5; }
 
 .component { cursor: move; }
-.component rect { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
-.component.selected rect { stroke: var(--accent); stroke-width: 2; }
+.component .box { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.component.selected .box { stroke: var(--accent); stroke-width: 2; }
+.component .hit { fill: transparent; stroke: none; }
+.component.selected .hit { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 3; }
+.symbol { fill: none; stroke: var(--line); stroke-linejoin: miter; }
+.symbol .fill { fill: var(--line); }
 .component .name { font-size: 7px; text-anchor: middle; dominant-baseline: middle; fill: var(--muted); }
 .component .label { font-size: 8px; text-anchor: end; fill: var(--text); font-weight: 600; }
 .port circle { fill: var(--accent); }
