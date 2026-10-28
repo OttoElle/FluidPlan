@@ -25,6 +25,8 @@ import {
 import { EMPTY_SELECTION, toggle, union, type Selection } from '../model/selection.ts';
 import type { Annotation, ComponentInstance, Diagram, Endpoint, LineKind, Point } from '../model/types.ts';
 import { ComponentSymbol, hasSymbol } from './symbols.tsx';
+import { IconButton } from './IconButton.tsx';
+import { Maximize, ZoomIn, ZoomOut } from 'lucide-react';
 
 export type { Selection };
 
@@ -610,7 +612,7 @@ export function DiagramView({
       </svg>
 
       <div className="zoom-controls">
-        <button onClick={() => zoomCenter(1 / 1.25)} title="Verkleinern">−</button>
+        <IconButton icon={ZoomOut} label="Verkleinern" tooltip="above" onClick={() => zoomCenter(1 / 1.25)} />
         <button
           className="zoom-level"
           title="Originalgröße (100 % = Papiermaß)"
@@ -618,8 +620,8 @@ export function DiagramView({
         >
           {percent} %
         </button>
-        <button onClick={() => zoomCenter(1.25)} title="Vergrößern">+</button>
-        <button onClick={fit} title="Ganzes Blatt anzeigen">Einpassen</button>
+        <IconButton icon={ZoomIn} label="Vergrößern" tooltip="above" onClick={() => zoomCenter(1.25)} />
+        <IconButton icon={Maximize} label="Ganzes Blatt anzeigen" tooltip="left" onClick={fit} />
       </div>
     </div>
   );

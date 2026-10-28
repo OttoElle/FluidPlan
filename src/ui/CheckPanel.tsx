@@ -1,4 +1,6 @@
+import { X } from 'lucide-react';
 import type { Issue } from '../model/check.ts';
+import { IconButton } from './IconButton.tsx';
 
 /**
  * Ergebnis von „Zeichnung prüfen“. Die Liste aktualisiert sich beim
@@ -22,9 +24,7 @@ export function CheckPanel({
         <span className="summary">
           {issues.length === 0 ? 'Keine Auffälligkeiten' : `${errors} Fehler, ${warnings} ${warnings === 1 ? 'Hinweis' : 'Hinweise'}`}
         </span>
-        <button onClick={onClose} title="Schließen">
-          ×
-        </button>
+        <IconButton icon={X} label="Schließen" onClick={onClose} />
       </header>
       {issues.length > 0 && (
         <ul>

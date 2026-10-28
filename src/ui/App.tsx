@@ -1,3 +1,28 @@
+import {
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  FilePlus2,
+  FileDown,
+  TrianglesCenterlineDashedHorizontal,
+  TrianglesCenterlineDashedVertical,
+  FolderOpen,
+  ListChecks,
+  Redo2,
+  RotateCw,
+  Route,
+  Save,
+  Slash,
+  Square,
+  Tag,
+  Trash2,
+  Type,
+  Undo2,
+  type LucideIcon,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DiagramError,
@@ -45,6 +70,9 @@ import {
   type Selection,
 } from '../model/selection.ts';
 import { ExportDialog } from './ExportDialog.tsx';
+import { IconButton } from './IconButton.tsx';
+import { SymbolPreview } from './SymbolPreview.tsx';
+import { Tooltip } from './Tooltip.tsx';
 import { useHistory } from './useHistory.ts';
 
 const LINE_KIND_NAMES: Record<LineKind, string> = {
@@ -66,10 +94,10 @@ const STROKE_STYLE_NAMES: Record<StrokeStyle, string> = {
   dashdot: 'Strich-Punkt (Baugruppe)',
 };
 
-const TOOLS: [AnnotationTool, string, string][] = [
-  ['text', 'Text', 'Klick auf das Blatt setzt einen Text'],
-  ['line', 'Linie', 'Linie auf dem Blatt aufziehen'],
-  ['rect', 'Rechteck', 'Rechteck aufziehen, z. B. als Baugruppen-Umrandung (Strich-Punkt)'],
+const TOOLS: [AnnotationTool, LucideIcon, string][] = [
+  ['text', Type, 'Text: Klick auf das Blatt setzt einen Text'],
+  ['line', Slash, 'Linie auf dem Blatt aufziehen'],
+  ['rect', Square, 'Rechteck aufziehen, z. B. als Baugruppen-Umrandung'],
 ];
 
 /** Bearbeitbare Felder des Schriftfelds; Datum und Format füllt das Programm. */
@@ -90,13 +118,13 @@ const focusField = (id: string) =>
     el?.select();
   });
 
-const ALIGNMENTS: [Alignment, string, string][] = [
-  ['left', '⇤ Links', 'Linke Kanten bündig'],
-  ['center', '↔ Mitte', 'Waagerecht mittig (senkrechte Achse)'],
-  ['right', 'Rechts ⇥', 'Rechte Kanten bündig'],
-  ['top', '⤒ Oben', 'Obere Kanten bündig'],
-  ['middle', '↕ Mitte', 'Senkrecht mittig (waagerechte Achse)'],
-  ['bottom', '⤓ Unten', 'Untere Kanten bündig'],
+const ALIGNMENTS: [Alignment, LucideIcon, string][] = [
+  ['left', AlignStartVertical, 'Linke Kanten bündig'],
+  ['center', AlignCenterVertical, 'Waagerecht mittig (senkrechte Achse)'],
+  ['right', AlignEndVertical, 'Rechte Kanten bündig'],
+  ['top', AlignStartHorizontal, 'Obere Kanten bündig'],
+  ['middle', AlignCenterHorizontal, 'Senkrecht mittig (waagerechte Achse)'],
+  ['bottom', AlignEndHorizontal, 'Untere Kanten bündig'],
 ];
 
 /** z. B. „3 Bauteile, 1 Leitung“. */
@@ -222,18 +250,13 @@ export function App() {
   const setLineKind = (kind: LineKind) =>
     edit((d) => selectedLines.reduce((acc, l) => updateConnection(acc, l.id, { kind }), d));
 
+  const deleteButton = <IconButton icon={Trash2} label="Löschen" shortcut="Entf" onClick={deleteSelection} />;
   const arrangeButtons = (
     <div className="row">
-      <button onClick={rotate} title="90° im Uhrzeigersinn drehen (R)">
-        Drehen
-      </button>
-      <button onClick={() => mirror('horizontal')} title="Links und rechts vertauschen">
-        Spiegeln ↔
-      </button>
-      <button onClick={() => mirror('vertical')} title="Oben und unten vertauschen">
-        Spiegeln ↕
-      </button>
-      <button onClick={deleteSelection}>Löschen</button>
+      <IconButton icon={RotateCw} label="90° im Uhrzeigersinn drehen" shortcut="R" onClick={rotate} />
+      <IconButton icon={TrianglesCenterlineDashedVertical} label="Spiegeln: links und rechts vertauschen" onClick={() => mirror('horizontal')} />
+      <IconButton icon={TrianglesCenterlineDashedHorizontal} label="Spiegeln: oben und unten vertauschen" onClick={() => mirror('vertical')} />
+      {deleteButton}
     </div>
   );
 
@@ -241,9 +264,17 @@ export function App() {
   // In Eingabefeldern bleiben die Tasten beim Feld (dort wirkt das Rückgängig des Browsers).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      // Speichern, Öffnen und Exportieren wirken auch in Eingabefeldern.
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === 's' || key === 'o' || key === 'e')) {
+        e.preventDefault();
+        if (key === 's') save();
+        else if (key === 'o') fileInput.current?.click();
+        else setExportOpen(true);
+        return;
+      }
       const t = e.target as HTMLElement;
       if (t.closest('input, textarea, select, [contenteditable]')) return;
-      const key = e.key.toLowerCase();
       if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === 'z' || key === 'y')) {
         e.preventDefault();
         if (key === 'y' || e.shiftKey) history.redo();
@@ -274,22 +305,25 @@ export function App() {
     <div className="app">
       <header className="toolbar">
         <strong className="brand">FluidPlan</strong>
-        <button onClick={() => setNewDialogOpen(true)}>Neu…</button>
-        <button onClick={() => fileInput.current?.click()}>Öffnen…</button>
-        <button onClick={save}>Speichern</button>
-        <button onClick={history.undo} disabled={!history.canUndo} title="Rückgängig (Strg+Z)">
-          ↶
-        </button>
-        <button onClick={history.redo} disabled={!history.canRedo} title="Wiederholen (Strg+Y)">
-          ↷
-        </button>
-        <button onClick={label} title="Alle Kennzeichen nach ISO 1219-2 neu vergeben (1A1, 1V1, 0P1, …)">
-          Kennzeichnen
-        </button>
-        <button onClick={() => setChecking(!checking)} aria-pressed={checking} title="Zeichnung auf Fehler prüfen">
-          Prüfen
-        </button>
-        <button onClick={() => setExportOpen(true)}>Exportieren…</button>
+        <div className="tool-group">
+          <IconButton icon={FilePlus2} label="Neuer Schaltplan" onClick={() => setNewDialogOpen(true)} />
+          <IconButton icon={FolderOpen} label="Öffnen" shortcut="Strg+O" onClick={() => fileInput.current?.click()} />
+          <IconButton icon={Save} label="Speichern" shortcut="Strg+S" onClick={save} />
+        </div>
+        <div className="tool-group">
+          <IconButton icon={Undo2} label="Rückgängig" shortcut="Strg+Z" onClick={history.undo} disabled={!history.canUndo} />
+          <IconButton icon={Redo2} label="Wiederholen" shortcut="Strg+Y" onClick={history.redo} disabled={!history.canRedo} />
+        </div>
+        <div className="tool-group">
+          <IconButton icon={Tag} label="Kennzeichnen nach ISO 1219-2 (1A1, 1V1, 0P1, …)" onClick={label} />
+          <IconButton
+            icon={ListChecks}
+            label="Zeichnung prüfen"
+            onClick={() => setChecking(!checking)}
+            aria-pressed={checking}
+          />
+          <IconButton icon={FileDown} label="Exportieren als PDF, SVG oder PNG" shortcut="Strg+E" onClick={() => setExportOpen(true)} />
+        </div>
         <input
           ref={fileInput}
           type="file"
@@ -321,6 +355,7 @@ export function App() {
       />
       <NewDocumentDialog open={newDialogOpen} onCreate={startNew} onClose={() => setNewDialogOpen(false)} />
 
+      <Tooltip />
       {message && (
         <pre className="message" role="alert" onClick={() => setMessage(null)}>
           {message}
@@ -330,10 +365,8 @@ export function App() {
       <aside className="palette">
         <h2>Zeichnen</h2>
         <div className="palette-tools">
-          {TOOLS.map(([t, name, title]) => (
-            <button key={t} title={title} aria-pressed={tool === t} onClick={() => setTool(tool === t ? null : t)}>
-              {name}
-            </button>
+          {TOOLS.map(([t, icon, title]) => (
+            <IconButton key={t} icon={icon} label={title} aria-pressed={tool === t} onClick={() => setTool(tool === t ? null : t)} />
           ))}
         </div>
         <h2>Bauteile</h2>
@@ -343,11 +376,14 @@ export function App() {
           return (
             <details key={group} open className="palette-group">
               <summary>{group}</summary>
-              {entries.map((entry) => (
-                <button key={entry.key} onClick={() => add(entry)}>
-                  {entry.name}
-                </button>
-              ))}
+              <div className="palette-grid">
+                {entries.map((entry) => (
+                  <button key={entry.key} className="palette-item" title={entry.name} onClick={() => add(entry)}>
+                    <SymbolPreview component={entry} />
+                    <span>{entry.name}</span>
+                  </button>
+                ))}
+              </div>
             </details>
           );
         })}
@@ -428,14 +464,13 @@ export function App() {
               </select>
             </label>
             <div className="row">
-              <button
+              <IconButton
+                icon={Route}
+                label="Automatisch führen (eigene Knicke verwerfen)"
                 disabled={selectedLine.waypoints.length === 0}
-                title="Eigene Knicke verwerfen und die Leitung automatisch führen"
                 onClick={() => edit(updateConnection(diagram, selectedLine.id, { waypoints: [] }))}
-              >
-                Automatisch führen
-              </button>
-              <button onClick={deleteSelection}>Löschen</button>
+              />
+              {deleteButton}
             </div>
             <p className="hint">
               Ein Teilstück der Leitung ziehen, um es zu verschieben. Entf löscht die Leitung.
@@ -492,7 +527,7 @@ export function App() {
               </label>
             )}
             <div className="row">
-              <button onClick={deleteSelection}>Löschen</button>
+              {deleteButton}
             </div>
             <p className="hint">
               {selectedAnnotation.kind === 'text'
@@ -507,7 +542,7 @@ export function App() {
               einem Abzweig nur zwei Leitungen übrig, werden sie wieder zu einer.
             </p>
             <div className="row">
-              <button onClick={deleteSelection}>Löschen</button>
+              {deleteButton}
             </div>
           </>
         ) : !isEmpty(current) ? (
@@ -518,10 +553,8 @@ export function App() {
               <>
                 <h2>Ausrichten</h2>
                 <div className="row align">
-                  {ALIGNMENTS.map(([alignment, label, title]) => (
-                    <button key={alignment} onClick={() => align(alignment)} title={title}>
-                      {label}
-                    </button>
+                  {ALIGNMENTS.map(([alignment, icon, title]) => (
+                    <IconButton key={alignment} icon={icon} label={title} onClick={() => align(alignment)} />
                   ))}
                 </div>
               </>
@@ -542,7 +575,7 @@ export function App() {
             )}
             {selectedIds.length === 0 && (
               <div className="row">
-                <button onClick={deleteSelection}>Löschen</button>
+                {deleteButton}
               </div>
             )}
             <p className="hint">

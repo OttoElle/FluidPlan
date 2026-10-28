@@ -1,3 +1,5 @@
+import { Plus, X } from 'lucide-react';
+import { IconButton } from './IconButton.tsx';
 import {
   ACTION_NAMES,
   CUSHION_NAMES,
@@ -129,12 +131,11 @@ function ValveConfigurator({
                 ))}
               </select>
               <RoleSelect value={p.to} roles={roles} label={label} onChange={(to) => setPaths(i, replace(pos.paths, k, { ...p, to }))} />
-              <button aria-label="Weg entfernen" onClick={() => setPaths(i, pos.paths.filter((_, j) => j !== k))}>
-                ✕
-              </button>
+              <IconButton icon={X} label="Weg entfernen" tooltip="left" onClick={() => setPaths(i, pos.paths.filter((_, j) => j !== k))} />
             </div>
           ))}
           <button
+            className="with-icon"
             onClick={() => {
               // Erstes noch freies Anschlusspaar vorschlagen.
               const used = new Set(pos.paths.flatMap((p) => [p.from, p.to]));
@@ -144,7 +145,7 @@ function ValveConfigurator({
               setPaths(i, [...pos.paths, { from, to, kind: 'flow' }]);
             }}
           >
-            + Weg
+            <Plus size={14} aria-hidden /> Weg
           </button>
           {pos.paths.length === 0 && <p className="hint">Alle Anschlüsse gesperrt.</p>}
         </fieldset>
@@ -190,9 +191,7 @@ function ActuatorList({ title, list, onChange }: { title: string; list: Actuator
       {list.map((a) => (
         <div key={a} className="row chip">
           <span>{ACTUATOR_NAMES[a]}</span>
-          <button aria-label={`${ACTUATOR_NAMES[a]} entfernen`} onClick={() => onChange(list.filter((x) => x !== a))}>
-            ✕
-          </button>
+          <IconButton icon={X} label={`${ACTUATOR_NAMES[a]} entfernen`} tooltip="left" onClick={() => onChange(list.filter((x) => x !== a))} />
         </div>
       ))}
       {list.length < MAX_ACTUATORS && (

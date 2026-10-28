@@ -38,7 +38,7 @@ Abstand 2M darüber (Reihenfolge Druck, Magnet, Feder, Hand), Magnet 3M × 2M, F
 Zylinderrahmen 9M × 4M mit 2M breitem Kolben; ihre Anschlüsse liegen auf dem 2M-Raster.
 
 Gezeichnet wird auf einem Blatt (A4 bis A1, hoch oder quer, wahlweise mit Rahmen und
-Schriftfeld nach DIN EN ISO 5457), festgelegt beim Anlegen über „Neu…“ und später in der
+Schriftfeld nach DIN EN ISO 5457), festgelegt beim Anlegen über „Neuer Schaltplan“ (Symbol ganz links in der Werkzeugleiste) und später in der
 Seitenleiste änderbar. Maßstab: 1 Einheit = 0,25 mm, also 1M = 2,5 mm auf dem Papier.
 Mausrad zoomt um den Mauszeiger, Ziehen auf freier Fläche oder mit der mittleren Maustaste
 verschiebt die Ansicht; 100 % entspricht der Papiergröße.
@@ -93,6 +93,9 @@ src/
     Configurator.tsx Konfigurator für Wegeventil und Zylinder
     ExportDialog.tsx Dialog „Exportieren“
     CheckPanel.tsx   Ergebnisliste von „Zeichnung prüfen“
+    IconButton.tsx   Schaltfläche mit Symbol (lucide-react), Beschriftung als Tooltip
+    Tooltip.tsx      Gemeinsamer Tooltip für alle Elemente mit data-tooltip
+    SymbolPreview.tsx Verkleinertes Schaltzeichen für die Bauteilliste
 ```
 
 ## Datenmodell
