@@ -4,8 +4,15 @@ Leichtgewichtiger Editor für einfache **Hydraulik- und Pneumatik-Schaltpläne**
 
 Stand: Projektgerüst mit Datenmodell, Bauteilbibliothek und Speichern/Laden als JSON.
 Erste Schaltzeichen nach DIN ISO 1219-1: Hydropumpe, Kompressor, 4/2-Wegeventil und
-doppeltwirkender Zylinder. Die übrigen Bauteile erscheinen noch als beschriftete Rahmen;
-das Zeichnen von Leitungen per Maus folgt.
+doppeltwirkender Zylinder. Die übrigen Bauteile erscheinen noch als beschriftete Rahmen.
+
+Leitungen verlaufen rechtwinklig im Raster. Gezeichnet wird von Anschluss zu Anschluss
+(ziehen, oder Anschluss anklicken, optional Knickpunkte auf die Fläche klicken, Ziel
+anklicken; Esc bricht ab). Ohne eigene Knickpunkte wird die Leitung automatisch geführt:
+senkrecht aus dem Anschluss heraus, um Bauteile herum, mit möglichst wenigen Knicken.
+Ein Teilstück lässt sich mit der Maus quer verschieben; danach bleibt der Verlauf so,
+bis man „Automatisch führen“ wählt. Wo sich Leitungen vom selben Anschluss trennen,
+erscheint ein Verbindungspunkt. Entf löscht die ausgewählte Leitung bzw. das Bauteil.
 
 Symbole sind im Modul M gezeichnet, ein Rasterschritt der Zeichenfläche ist 1M (10 Einheiten).
 Anschlüsse liegen in jeder Drehung und Spiegelung auf dem Raster, benachbarte Anschlüsse
@@ -47,6 +54,7 @@ src/
     types.ts         Datenmodell: Diagram, ComponentInstance, Connection, Ports
     library.ts       Bauteilbibliothek (Definitionen mit Anschlüssen)
     diagram.ts       Reine Funktionen zum Bearbeiten (hinzufügen, verbinden, löschen, Anschlussposition)
+    routing.ts       Rechtwinklige Leitungsführung im Raster (A*-Suche, Teilstücke verschieben)
     example.ts       Beispielschaltplan
   io/
     json.ts          Dateiformat, Speichern (serialize) und Laden mit Prüfung (parse)
@@ -66,6 +74,7 @@ src/
   Spiegelung, Betriebsmittelkennzeichen (z. B. `1V1`) und freie Kennwerte.
 - **Leitung**: verbindet zwei Anschlüsse (`{ componentId, portId }`), hat eine Linienart
   (`working` Arbeitsleitung, `pilot` Steuerleitung, `drain` Leckageleitung) und optionale Knickpunkte.
+  Leere Knickpunktliste = automatisch geführt.
 
 Das Datenmodell wird nur über die Funktionen in `diagram.ts` verändert. Sie geben jeweils
 einen neuen Schaltplan zurück, was Undo/Redo später einfach macht.

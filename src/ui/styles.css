@@ -157,3 +157,15 @@ select {
 .component .label { font-size: 8px; text-anchor: end; fill: var(--text); font-weight: 600; }
 .port circle { fill: var(--accent); }
 .port text { font-size: 6px; fill: var(--accent); }
+
+/* Leitungen */
+.connection.selected .line { stroke: var(--accent); stroke-width: 2.5; }
+.segment-hit { stroke: transparent; stroke-width: 8; }
+.segment-hit.horizontal { cursor: ns-resize; }
+.segment-hit.vertical { cursor: ew-resize; }
+.line.draft { stroke: var(--accent); stroke-dasharray: 4 3; pointer-events: none; }
+.junction { fill: var(--line); pointer-events: none; }
+.port { cursor: crosshair; }
+.port .port-hit { fill: transparent; }
+.port:hover circle:not(.port-hit) { r: 3.5; }
+.component.drawing { cursor: crosshair; }

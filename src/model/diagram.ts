@@ -145,6 +145,31 @@ export function connect(
   return { diagram: { ...diagram, connections: [...diagram.connections, connection] }, connection };
 }
 
+export function updateConnection(
+  diagram: Diagram,
+  id: string,
+  changes: Partial<Pick<Connection, 'kind' | 'waypoints'>>,
+): Diagram {
+  if (!diagram.connections.some((l) => l.id === id)) {
+    throw new DiagramError(`Leitung "${id}" existiert nicht`);
+  }
+  return {
+    ...diagram,
+    connections: diagram.connections.map((l) => (l.id === id ? { ...l, ...changes } : l)),
+  };
+}
+
+/** Passende Linienart für eine neue Leitung zwischen zwei Anschlüssen. */
+export function lineKindFor(diagram: Diagram, a: PortRef, b: PortRef): LineKind {
+  const kinds = [a, b].map((ref) => {
+    const component = diagram.components.find((c) => c.id === ref.componentId);
+    return component && getDefinition(component.type)?.ports.find((p) => p.id === ref.portId)?.kind;
+  });
+  if (kinds.includes('pilot')) return 'pilot';
+  if (kinds.includes('drain')) return 'drain';
+  return 'working';
+}
+
 export function removeConnection(diagram: Diagram, id: string): Diagram {
   return { ...diagram, connections: diagram.connections.filter((l) => l.id !== id) };
 }

@@ -2,8 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { portPosition, transformLocalPoint } from '../model/diagram.ts';
 import { getDefinition } from '../model/library.ts';
 import { MM_PER_UNIT, drawingArea, sheetSize, titleBlock } from '../model/sheet.ts';
-import type { ComponentInstance, Diagram, LineKind, Point } from '../model/types.ts';
+import {
+  junctions,
+  moveSegment,
+  obstaclesOf,
+  orthogonalize,
+  portDirection,
+  route,
+  routeAll,
+} from '../model/routing.ts';
+import type { ComponentInstance, Diagram, LineKind, Point, PortRef } from '../model/types.ts';
 import { ComponentSymbol, hasSymbol } from './symbols.tsx';
+
+/** Was gerade ausgewählt ist: ein Bauteil oder eine Leitung. */
+export type Selection = { kind: 'component' | 'connection'; id: string } | null;
 
 const GRID = 10;
 const DASH: Record<LineKind, string | undefined> = { working: undefined, pilot: '6 4', drain: '2 3' };
@@ -17,9 +29,20 @@ const FIT_PADDING = 24;
 
 interface Props {
   diagram: Diagram;
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  selection: Selection;
+  onSelect: (selection: Selection) => void;
   onMove: (id: string, position: Point) => void;
+  /** Neue Leitung; `waypoints` leer = automatisch führen. */
+  onConnect: (from: PortRef, to: PortRef, waypoints: Point[]) => void;
+  onRouteChange: (id: string, waypoints: Point[]) => void;
+}
+
+/** Leitung, die gerade gezeichnet wird. */
+interface Draft {
+  from: PortRef;
+  /** Per Klick gesetzte Zwischenpunkte. */
+  waypoints: Point[];
+  cursor: Point;
 }
 
 /** Sichtbarer Ausschnitt: Schaltplan-Koordinate der linken oberen Ecke und Pixel pro Einheit. */
@@ -31,7 +54,8 @@ interface View {
 
 type Drag =
   | { kind: 'move'; id: string; start: Point; origin: Point }
-  | { kind: 'pan'; startX: number; startY: number; origin: View; moved: boolean };
+  | { kind: 'pan'; startX: number; startY: number; origin: View; moved: boolean }
+  | { kind: 'segment'; id: string; index: number; path: Point[]; start: Point; offset: number };
 
 const clampScale = (s: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
 
@@ -42,12 +66,24 @@ const clampScale = (s: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
  * Bauteile mit Schaltzeichen (symbols.tsx) erscheinen als ISO-1219-Symbol,
  * alle übrigen vorerst als beschriftete Rahmen mit Anschlusspunkten.
  */
-export function DiagramView({ diagram, selectedId, onSelect, onMove }: Props) {
+export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, onRouteChange }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<Drag | null>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [view, setView] = useState<View | null>(null);
   const [panning, setPanning] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [hoverPort, setHoverPort] = useState<PortRef | null>(null);
+
+  // Esc bricht das Zeichnen einer Leitung ab.
+  useEffect(() => {
+    if (!draft) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDraft(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [draft]);
 
   const { sheet } = diagram;
   const paper = sheetSize(sheet);
@@ -115,6 +151,40 @@ export function DiagramView({ diagram, selectedId, onSelect, onMove }: Props) {
   };
 
   const snap = (v: number) => Math.round(v / GRID) * GRID;
+  const snapPoint = (p: Point): Point => ({ x: snap(p.x), y: snap(p.y) });
+
+  const obstacles = obstaclesOf(diagram);
+  const paths = routeAll(diagram);
+  const dots = junctions(diagram.connections, paths);
+
+  const samePort = (a: PortRef, b: PortRef) => a.componentId === b.componentId && a.portId === b.portId;
+
+  /** Klick bzw. Loslassen auf einem Anschluss: Leitung beginnen oder abschließen. */
+  const portClicked = (ref: PortRef) => {
+    if (!draft) {
+      setDraft({ from: ref, waypoints: [], cursor: portPosition(diagram, ref) });
+      onSelect(null);
+    } else if (!samePort(draft.from, ref)) {
+      const start = portPosition(diagram, draft.from);
+      const end = portPosition(diagram, ref);
+      const waypoints = draft.waypoints.length
+        ? orthogonalize([start, ...draft.waypoints, end], portDirection(diagram, draft.from), portDirection(diagram, ref)).slice(1, -1)
+        : [];
+      setDraft(null);
+      onConnect(draft.from, ref, waypoints);
+    }
+  };
+
+  /** Vorschau der Leitung, die gerade gezeichnet wird. */
+  const draftPath = (d: Draft): Point[] => {
+    const start = portPosition(diagram, d.from);
+    const startDir = portDirection(diagram, d.from);
+    const target = hoverPort && !samePort(hoverPort, d.from) ? hoverPort : null;
+    const end = target ? portPosition(diagram, target) : snapPoint(d.cursor);
+    const endDir = target ? portDirection(diagram, target) : undefined;
+    if (d.waypoints.length === 0) return route({ start, startDir, end, endDir, obstacles });
+    return orthogonalize([start, ...d.waypoints, end], startDir, endDir);
+  };
 
   const zoomCenter = (factor: number) => size && zoomAt(factor, size.width / 2, size.height / 2);
   const percent = view ? Math.round((view.scale / (PX_PER_MM * MM_PER_UNIT)) * 100) : 100;
@@ -129,16 +199,37 @@ export function DiagramView({ diagram, selectedId, onSelect, onMove }: Props) {
         className={panning ? 'diagram panning' : 'diagram'}
         viewBox={view && size ? `${view.x} ${view.y} ${size.width / view.scale} ${size.height / view.scale}` : undefined}
         onPointerDown={(e) => {
+          if (draft && e.button === 0) {
+            // Beim Zeichnen setzt ein Klick auf die Fläche einen Knickpunkt.
+            const p = snapPoint(toDiagram(e));
+            setDraft({ ...draft, waypoints: [...draft.waypoints, p], cursor: p });
+            return;
+          }
+          if (draft && e.button === 2) {
+            setDraft(null);
+            return;
+          }
           if (!view || (e.button !== 0 && e.button !== 1)) return;
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
           drag.current = { kind: 'pan', startX: e.clientX, startY: e.clientY, origin: view, moved: false };
           setPanning(true);
         }}
+        onContextMenu={(e) => draft && e.preventDefault()}
         onPointerMove={(e) => {
+          if (draft) setDraft({ ...draft, cursor: toDiagram(e) });
           const d = drag.current;
           if (!d) return;
-          if (d.kind === 'move') {
+          if (d.kind === 'segment') {
+            const p = toDiagram(e);
+            const a = d.path[d.index]!;
+            const b = d.path[d.index + 1]!;
+            const offset = a.y === b.y ? snap(p.y - d.start.y) : snap(p.x - d.start.x);
+            if (offset !== d.offset) {
+              d.offset = offset;
+              onRouteChange(d.id, moveSegment(d.path, d.index, offset));
+            }
+          } else if (d.kind === 'move') {
             const p = toDiagram(e);
             onMove(d.id, { x: snap(d.origin.x + p.x - d.start.x), y: snap(d.origin.y + p.y - d.start.y) });
           } else {
@@ -176,31 +267,68 @@ export function DiagramView({ diagram, selectedId, onSelect, onMove }: Props) {
         {sheet.frame && <SheetFrame diagram={diagram} />}
 
         {diagram.connections.map((l) => {
-          const points = [portPosition(diagram, l.from), ...l.waypoints, portPosition(diagram, l.to)];
+          const path = paths.get(l.id)!;
+          const selected = selection?.kind === 'connection' && selection.id === l.id;
           return (
-            <polyline
-              key={l.id}
-              className="line"
-              points={points.map((p) => `${p.x},${p.y}`).join(' ')}
-              strokeDasharray={DASH[l.kind]}
-            />
+            <g key={l.id} className={selected ? 'connection selected' : 'connection'}>
+              <polyline className="line" points={toPoints(path)} strokeDasharray={DASH[l.kind]} />
+              {!draft &&
+                path.slice(1).map((b, i) => {
+                  const a = path[i]!;
+                  return (
+                    <line
+                      key={i}
+                      className={a.y === b.y ? 'segment-hit horizontal' : 'segment-hit vertical'}
+                      x1={a.x}
+                      y1={a.y}
+                      x2={b.x}
+                      y2={b.y}
+                      onPointerDown={(e) => {
+                        if (e.button !== 0) return;
+                        e.stopPropagation();
+                        e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
+                        onSelect({ kind: 'connection', id: l.id });
+                        drag.current = { kind: 'segment', id: l.id, index: i, path, start: toDiagram(e), offset: 0 };
+                      }}
+                    />
+                  );
+                })}
+            </g>
           );
         })}
+        {dots.map((p) => (
+          <circle key={`${p.x},${p.y}`} className="junction" cx={p.x} cy={p.y} r={2} />
+        ))}
 
         {diagram.components.map((c) => (
           <ComponentShape
             key={c.id}
             component={c}
-            selected={c.id === selectedId}
+            selected={selection?.kind === 'component' && selection.id === c.id}
+            drawing={draft !== null}
             onPointerDown={(e) => {
-              if (e.button !== 0) return; // mittlere Taste: Ansicht verschieben
+              if (e.button !== 0 || draft) return; // mittlere Taste: Ansicht verschieben
               e.stopPropagation();
               (e.currentTarget.ownerSVGElement ?? e.currentTarget).setPointerCapture?.(e.pointerId);
-              onSelect(c.id);
+              onSelect({ kind: 'component', id: c.id });
               drag.current = { kind: 'move', id: c.id, start: toDiagram(e), origin: c.position };
             }}
+            onPortPointerDown={(portId, e) => {
+              if (e.button !== 0) return;
+              e.stopPropagation();
+              portClicked({ componentId: c.id, portId });
+            }}
+            onPortPointerUp={(portId) => {
+              // Ziehen von Anschluss zu Anschluss: Loslassen auf dem Ziel schließt ab.
+              if (draft && !samePort(draft.from, { componentId: c.id, portId })) {
+                portClicked({ componentId: c.id, portId });
+              }
+            }}
+            onPortHover={(portId) => setHoverPort(portId === null ? null : { componentId: c.id, portId })}
           />
         ))}
+
+        {draft && <polyline className="line draft" points={toPoints(draftPath(draft))} />}
       </svg>
 
       <div className="zoom-controls">
@@ -254,14 +382,24 @@ function SheetFrame({ diagram }: { diagram: Diagram }) {
 
 const ORIENTATION_NAMES = { portrait: 'hoch', landscape: 'quer' } as const;
 
+const toPoints = (path: Point[]) => path.map((p) => `${p.x},${p.y}`).join(' ');
+
 function ComponentShape({
   component,
   selected,
+  drawing,
   onPointerDown,
+  onPortPointerDown,
+  onPortPointerUp,
+  onPortHover,
 }: {
   component: ComponentInstance;
   selected: boolean;
+  drawing: boolean;
   onPointerDown: (e: React.PointerEvent<SVGGElement>) => void;
+  onPortPointerDown: (portId: string, e: React.PointerEvent) => void;
+  onPortPointerUp: (portId: string) => void;
+  onPortHover: (portId: string | null) => void;
 }) {
   const def = getDefinition(component.type);
   if (!def) return null;
@@ -282,7 +420,7 @@ function ComponentShape({
     `scale(${component.mirrored ? -1 : 1} 1) translate(${-cx} ${-cy})`;
 
   return (
-    <g className={selected ? 'component selected' : 'component'} onPointerDown={onPointerDown}>
+    <g className={`component${selected ? ' selected' : ''}${drawing ? ' drawing' : ''}`} onPointerDown={onPointerDown}>
       {hasSymbol(def.type) ? (
         <>
           <rect x={x} y={y} width={w} height={h} className="hit" />
@@ -306,7 +444,16 @@ function ComponentShape({
       {def.ports.map((port) => {
         const p = transformLocalPoint(component, def, port.offset);
         return (
-          <g key={port.id} className="port">
+          <g
+            key={port.id}
+            className="port"
+            onPointerDown={(e) => onPortPointerDown(port.id, e)}
+            onPointerUp={() => onPortPointerUp(port.id)}
+            onPointerEnter={() => onPortHover(port.id)}
+            onPointerLeave={() => onPortHover(null)}
+          >
+            <title>Anschluss {port.id}: Leitung ziehen oder anklicken</title>
+            <circle cx={p.x} cy={p.y} r={6} className="port-hit" />
             <circle cx={p.x} cy={p.y} r={2.5} />
             <text x={p.x + 4} y={p.y - 3}>
               {port.id}

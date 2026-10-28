@@ -1,16 +1,33 @@
-import { useRef, useState } from 'react';
-import { addComponent, createDiagram, removeComponent, touch, updateComponent } from '../model/diagram.ts';
+import { useEffect, useRef, useState } from 'react';
+import {
+  DiagramError,
+  addComponent,
+  connect,
+  createDiagram,
+  lineKindFor,
+  removeComponent,
+  removeConnection,
+  touch,
+  updateComponent,
+  updateConnection,
+} from '../model/diagram.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
 import { definitionsFor } from '../model/library.ts';
 import { drawingArea } from '../model/sheet.ts';
-import type { Diagram } from '../model/types.ts';
+import type { Diagram, LineKind } from '../model/types.ts';
 import { downloadDiagram, readDiagramFile } from '../io/browser.ts';
-import { DiagramView } from './DiagramView.tsx';
+import { DiagramView, type Selection } from './DiagramView.tsx';
+
+const LINE_KIND_NAMES: Record<LineKind, string> = {
+  working: 'Arbeitsleitung',
+  pilot: 'Steuerleitung',
+  drain: 'Leckageleitung',
+};
 import { DOMAIN_NAMES, NewDocumentDialog, SheetFields, type NewDocument } from './SheetSettings.tsx';
 
 export function App() {
   const [diagram, setDiagram] = useState<Diagram>(() => exampleHydraulicDiagram());
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Selection>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -18,7 +35,7 @@ export function App() {
   const startNew = ({ domain, title, sheet }: NewDocument) => {
     setNewDialogOpen(false);
     setDiagram(createDiagram(domain, title, new Date(), sheet));
-    setSelectedId(null);
+    setSelection(null);
     setMessage(null);
   };
 
@@ -26,7 +43,7 @@ export function App() {
     const result = await readDiagramFile(file);
     if (result.ok) {
       setDiagram(result.diagram);
-      setSelectedId(null);
+      setSelection(null);
       setMessage(null);
     } else {
       setMessage(`„${file.name}“ konnte nicht geladen werden:\n` + result.errors.join('\n'));
@@ -47,10 +64,32 @@ export function App() {
       y: area.y + 40 + offset,
     });
     setDiagram(next);
-    setSelectedId(component.id);
+    setSelection({ kind: 'component', id: component.id });
   };
 
-  const selected = diagram.components.find((c) => c.id === selectedId);
+  const selected = selection?.kind === 'component' ? diagram.components.find((c) => c.id === selection.id) : undefined;
+  const selectedLine =
+    selection?.kind === 'connection' ? diagram.connections.find((l) => l.id === selection.id) : undefined;
+
+  const deleteSelection = () => {
+    if (selection?.kind === 'component') setDiagram((d) => removeComponent(d, selection.id));
+    if (selection?.kind === 'connection') setDiagram((d) => removeConnection(d, selection.id));
+    setSelection(null);
+  };
+
+  // Entf bzw. Rücktaste löscht die Auswahl, außer beim Tippen in ein Eingabefeld.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const t = e.target as HTMLElement;
+      if (t.closest('input, textarea, select, [contenteditable]')) return;
+      if (!selection) return;
+      e.preventDefault();
+      deleteSelection();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   return (
     <div className="app">
@@ -99,9 +138,21 @@ export function App() {
       <main className="canvas">
         <DiagramView
           diagram={diagram}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
+          selection={selection}
+          onSelect={setSelection}
           onMove={(id, position) => setDiagram((d) => updateComponent(d, id, { position }))}
+          onConnect={(from, to, waypoints) => {
+            try {
+              const r = connect(diagram, from, to, lineKindFor(diagram, from, to), waypoints);
+              setDiagram(r.diagram);
+              setSelection({ kind: 'connection', id: r.connection.id });
+              setMessage(null);
+            } catch (err) {
+              if (!(err instanceof DiagramError)) throw err;
+              setMessage(err.message);
+            }
+          }}
+          onRouteChange={(id, waypoints) => setDiagram((d) => updateConnection(d, id, { waypoints }))}
         />
       </main>
 
@@ -131,21 +182,49 @@ export function App() {
               <button onClick={() => setDiagram(updateComponent(diagram, selected.id, { mirrored: !selected.mirrored }))}>
                 Spiegeln
               </button>
-              <button
-                onClick={() => {
-                  setDiagram(removeComponent(diagram, selected.id));
-                  setSelectedId(null);
-                }}
-              >
-                Löschen
-              </button>
+              <button onClick={deleteSelection}>Löschen</button>
             </div>
+          </>
+        ) : selectedLine ? (
+          <>
+            <label>
+              Linienart
+              <select
+                value={selectedLine.kind}
+                onChange={(e) =>
+                  setDiagram(updateConnection(diagram, selectedLine.id, { kind: e.target.value as LineKind }))
+                }
+              >
+                {(Object.keys(LINE_KIND_NAMES) as LineKind[]).map((k) => (
+                  <option key={k} value={k}>
+                    {LINE_KIND_NAMES[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="row">
+              <button
+                disabled={selectedLine.waypoints.length === 0}
+                title="Eigene Knicke verwerfen und die Leitung automatisch führen"
+                onClick={() => setDiagram(updateConnection(diagram, selectedLine.id, { waypoints: [] }))}
+              >
+                Automatisch führen
+              </button>
+              <button onClick={deleteSelection}>Löschen</button>
+            </div>
+            <p className="hint">
+              Ein Teilstück der Leitung ziehen, um es zu verschieben. Entf löscht die Leitung.
+            </p>
           </>
         ) : (
           <>
             <p className="hint">
               Bauteil anklicken, um es zu bearbeiten. Ziehen verschiebt es. Mausrad zoomt, Ziehen auf freier Fläche
               verschiebt die Ansicht.
+            </p>
+            <p className="hint">
+              Leitung zeichnen: von einem Anschluss zum anderen ziehen, oder Anschluss anklicken, bei Bedarf Knickpunkte
+              auf die Fläche klicken und den Zielanschluss anklicken. Esc bricht ab.
             </p>
             <h2>Blatt</h2>
             <SheetFields sheet={diagram.sheet} onChange={(sheet) => setDiagram({ ...diagram, sheet })} />
