@@ -23,6 +23,12 @@ Ein Teilstück lässt sich mit der Maus quer verschieben; danach bleibt der Verl
 bis man „Automatisch führen“ wählt. Wo sich Leitungen vom selben Anschluss trennen,
 erscheint ein Verbindungspunkt. Entf löscht die ausgewählte Leitung bzw. das Bauteil.
 
+Endet eine neue Leitung auf einer bestehenden Leitung, entsteht dort ein Abzweig (T-Verteiler)
+mit Verbindungspunkt; an einem Abzweig treffen höchstens 4 Leitungen zusammen. Abzweige
+lassen sich ziehen und löschen. Bleiben an einem Abzweig nur zwei Leitungen übrig, werden
+sie automatisch wieder zu einer. Optional (Blatt-Einstellung „Leitungssprünge an Kreuzungen“)
+springen waagerechte Leitungen mit einem kleinen Bogen über Kreuzungen ohne Verbindung.
+
 Symbole sind im Modul M gezeichnet, ein Rasterschritt der Zeichenfläche ist 1M (10 Einheiten).
 Anschlüsse liegen in jeder Drehung und Spiegelung auf dem Raster, benachbarte Anschlüsse
 sind wie in der Norm 2M auseinander. Wegeventile und Zylinder folgen den Maßen der Norm
@@ -98,7 +104,8 @@ src/
   wie `valve.4-2` werden beim Laden umgestellt.
 - **Leitung**: verbindet zwei Anschlüsse (`{ componentId, portId }`), hat eine Linienart
   (`working` Arbeitsleitung, `pilot` Steuerleitung, `drain` Leckageleitung) und optionale Knickpunkte.
-  Leere Knickpunktliste = automatisch geführt.
+  Leere Knickpunktliste = automatisch geführt. Ein Leitungsende kann statt eines Anschlusses
+  auch ein **Abzweigpunkt** sein (`{ junctionId }`, Liste `junctions` im Schaltplan, ab Dateiversion 3).
 
 Das Datenmodell wird nur über die Funktionen in `diagram.ts` verändert. Sie geben jeweils
 einen neuen Schaltplan zurück, was Undo/Redo später einfach macht.

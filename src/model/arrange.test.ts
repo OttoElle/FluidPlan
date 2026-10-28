@@ -3,12 +3,12 @@ import { alignComponents, boundsOf, mirrorComponents, moveComponents, rotateComp
 import { portPosition, updateConnection } from './diagram.ts';
 import { exampleHydraulicDiagram } from './example.ts';
 import { componentBox } from './routing.ts';
-import type { Diagram, Point } from './types.ts';
+import type { Diagram, Point, PortRef } from './types.ts';
 
 const allPorts = (d: Diagram, ids: string[]): Point[] =>
   d.connections
     .flatMap((l) => [l.from, l.to])
-    .filter((r) => ids.includes(r.componentId))
+    .filter((r): r is PortRef => 'componentId' in r && ids.includes(r.componentId))
     .map((r) => portPosition(d, r));
 
 const onGrid = (p: Point) => p.x % 10 === 0 && p.y % 10 === 0;
@@ -19,7 +19,9 @@ describe('Anordnen', () => {
 
   it('verschiebt Bauteile samt Knickpunkten der Leitungen zwischen ihnen', () => {
     const [valve, cylinder] = [base.components[1]!, base.components[0]!];
-    const inner = base.connections.find((l) => l.from.componentId === valve.id && l.to.componentId === cylinder.id)!;
+    const inner = base.connections.find(
+      (l) => JSON.stringify([l.from, l.to]).includes(`"${valve.id}"`) && JSON.stringify(l.to).includes(`"${cylinder.id}"`),
+    )!;
     const d0 = updateConnection(base, inner.id, { waypoints: [{ x: 300, y: 200 }] });
     const d = moveComponents(d0, [valve.id, cylinder.id], { x: 20, y: -10 });
     expect(d.components[0]!.position).toEqual({ x: cylinder.position.x + 20, y: cylinder.position.y - 10 });

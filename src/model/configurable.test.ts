@@ -116,7 +116,7 @@ describe('Konfigurierbare Bauteile', () => {
     d = connect(d, { componentId: 'c1', portId: 'T' }, { componentId: 'c2', portId: 'T' }).diagram;
     d = connect(d, { componentId: 'c1', portId: 'P' }, { componentId: 'c2', portId: 'T' }).diagram;
     const after = configureComponent(d, 'c1', defaultValveConfig('hydraulic', 2, 2));
-    expect(after.connections.map((l) => l.from.portId)).toEqual(['P']);
+    expect(after.connections.map((l) => ('portId' in l.from ? l.from.portId : ''))).toEqual(['P']);
   });
 });
 

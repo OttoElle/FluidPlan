@@ -1,6 +1,6 @@
 import { definitionOf } from './library.ts';
-import { portPosition, transformLocalPoint } from './diagram.ts';
-import type { ComponentInstance, Connection, Diagram, Point, PortRef } from './types.ts';
+import { endpointKey, endpointPosition, isJunctionRef, transformLocalPoint } from './diagram.ts';
+import type { ComponentInstance, Connection, Diagram, Endpoint, Point, PortRef } from './types.ts';
 
 /**
  * Rechtwinklige Leitungsführung im Raster.
@@ -63,6 +63,11 @@ export function portDirection(diagram: Diagram, ref: PortRef): Direction {
   for (let r = 0; r < component.rotation; r += 90) [dx, dy] = [-dy, dx];
   dir = { x: dx + 0, y: dy + 0 };
   return dir;
+}
+
+/** Wie portDirection; an einem Abzweigpunkt ist jede Richtung möglich (undefined). */
+export function endpointDirection(diagram: Diagram, ref: Endpoint): Direction | undefined {
+  return isJunctionRef(ref) ? undefined : portDirection(diagram, ref);
 }
 
 const samePoint = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
@@ -154,7 +159,8 @@ class MinHeap<T> {
 
 export interface RouteRequest {
   start: Point;
-  startDir: Direction;
+  /** Richtung, in die der Startanschluss zeigt; fehlt sie (Abzweig), ist jede erlaubt. */
+  startDir?: Direction;
   end: Point;
   /** Richtung, in die der Zielanschluss zeigt; fehlt sie, ist jede Ankunft erlaubt. */
   endDir?: Direction;
@@ -213,20 +219,25 @@ export function route({ start, startDir, end, endDir, obstacles, occupied }: Rou
   const heap = new MinHeap<number>();
   const heuristic = (x: number, y: number) => Math.abs(x - e.x) + Math.abs(y - e.y);
 
-  const d0 = DIRECTIONS.findIndex((d) => d.x === startDir.x && d.y === startDir.y);
-  const first = { x: s.x + startDir.x, y: s.y + startDir.y };
   const endArrival = endDir ? DIRECTIONS.findIndex((d) => d.x === -endDir.x && d.y === -endDir.y) : -1;
   const inside = (x: number, y: number) => x >= minX && x <= maxX && y >= minY && y <= maxY;
 
-  if (d0 < 0 || !inside(first.x, first.y)) return fallbackRoute(start, startDir, end, endDir);
-  // Der erste Schritt führt immer senkrecht vom Bauteil weg.
-  const firstState = state(first.x, first.y, d0);
-  cost[firstState] = 1;
-  prev[firstState] = -2; // markiert den Anfang
-  heap.push(1 + heuristic(first.x, first.y), firstState);
-
+  // Der erste Schritt führt immer senkrecht vom Bauteil weg; an einem Abzweig in jede freie Richtung.
+  const firstDirs = startDir
+    ? [DIRECTIONS.findIndex((d) => d.x === startDir.x && d.y === startDir.y)]
+    : [0, 1, 2, 3];
   let found = -1;
-  if (samePoint(first, e) && (endArrival < 0 || endArrival === d0)) found = firstState;
+  for (const d0 of firstDirs) {
+    if (d0 < 0) continue;
+    const first = { x: s.x + DIRECTIONS[d0]!.x, y: s.y + DIRECTIONS[d0]!.y };
+    if (!inside(first.x, first.y) || blocked[cell(first.x, first.y)]) continue;
+    const firstState = state(first.x, first.y, d0);
+    const c = 1 + (occupied?.has(`${first.x * GRID},${first.y * GRID}`) ? OCCUPIED_COST : 0);
+    cost[firstState] = c;
+    prev[firstState] = -2; // markiert den Anfang
+    heap.push(c + heuristic(first.x, first.y), firstState);
+    if (samePoint(first, e) && (endArrival < 0 || endArrival === d0)) found = firstState;
+  }
 
   while (found < 0 && heap.size) {
     const cur = heap.pop();
@@ -269,8 +280,8 @@ export function route({ start, startDir, end, endDir, obstacles, occupied }: Rou
 }
 
 /** Einfacher Weg ohne Hindernisprüfung: kurzer Stich aus jedem Anschluss, dazwischen ein Knick. */
-function fallbackRoute(start: Point, startDir: Direction, end: Point, endDir?: Direction): Point[] {
-  const a = { x: start.x + startDir.x * 2 * GRID, y: start.y + startDir.y * 2 * GRID };
+function fallbackRoute(start: Point, startDir: Direction | undefined, end: Point, endDir?: Direction): Point[] {
+  const a = startDir ? { x: start.x + startDir.x * 2 * GRID, y: start.y + startDir.y * 2 * GRID } : start;
   const b = endDir ? { x: end.x + endDir.x * 2 * GRID, y: end.y + endDir.y * 2 * GRID } : end;
   return orthogonalize([start, a, b, end], startDir, endDir);
 }
@@ -287,15 +298,16 @@ export function connectionPath(
   obstacles = obstaclesOf(diagram),
   occupied?: ReadonlySet<string>,
 ): Point[] {
-  const start = portPosition(diagram, connection.from);
-  const end = portPosition(diagram, connection.to);
-  const startDir = portDirection(diagram, connection.from);
-  const endDir = portDirection(diagram, connection.to);
+  const start = endpointPosition(diagram, connection.from);
+  const end = endpointPosition(diagram, connection.to);
+  const startDir = endpointDirection(diagram, connection.from);
+  const endDir = endpointDirection(diagram, connection.to);
   if (connection.waypoints.length === 0) return route({ start, startDir, end, endDir, obstacles, occupied });
   return orthogonalize([start, ...connection.waypoints, end], startDir, endDir);
 }
 
-const portKey = (r: PortRef) => `${r.componentId}/${r.portId}`;
+/** Schlüssel eines Bauteilanschlusses; Abzweigpunkte zählen hier nicht (undefined). */
+const portKey = (r: Endpoint) => (isJunctionRef(r) ? undefined : endpointKey(r));
 
 /**
  * Verlauf aller Leitungen. Selbst geführte Leitungen kommen zuerst, die
@@ -307,11 +319,17 @@ export function routeAll(diagram: Diagram): Map<string, Point[]> {
   const paths = new Map<string, Point[]>();
   const ordered = [...diagram.connections].sort((a, b) => b.waypoints.length - a.waypoints.length);
   for (const l of ordered) {
-    const mine = new Set([portKey(l.from), portKey(l.to)]);
+    // Leitungen am selben Anschluss dürfen ein Stück gemeinsam laufen (Verbindungspunkt),
+    // an einem Abzweigpunkt dagegen muss jede Leitung in eine eigene Richtung gehen.
+    const mine = new Set([portKey(l.from), portKey(l.to)].filter((k) => k !== undefined));
     const occupied = new Set<string>();
     for (const other of ordered) {
       const path = paths.get(other.id);
-      if (!path || mine.has(portKey(other.from)) || mine.has(portKey(other.to))) continue;
+      const shares = [other.from, other.to].some((e) => {
+        const k = portKey(e);
+        return k !== undefined && mine.has(k);
+      });
+      if (!path || shares) continue;
       for (const p of gridSteps(path)) occupied.add(`${p.x},${p.y}`);
     }
     paths.set(l.id, connectionPath(diagram, l, obstacles, occupied));
@@ -374,7 +392,7 @@ function gridSteps(path: Point[]): Point[] {
  * ein Stück gemeinsam, bekommt die Stelle, an der sie sich trennen, einen
  * Verbindungspunkt (ISO 1219-1).
  */
-export function junctions(connections: Connection[], paths: Map<string, Point[]>): Point[] {
+export function branchDots(connections: Connection[], paths: Map<string, Point[]>): Point[] {
   const found = new Map<string, Point>();
   for (let i = 0; i < connections.length; i++) {
     for (let j = i + 1; j < connections.length; j++) {
@@ -386,7 +404,8 @@ export function junctions(connections: Connection[], paths: Map<string, Point[]>
         ['to', 'from'],
         ['to', 'to'],
       ] as const) {
-        if (portKey(a[ea]) !== portKey(b[eb])) continue;
+        const key = portKey(a[ea]);
+        if (key === undefined || key !== portKey(b[eb])) continue;
         const pa = gridSteps(ea === 'from' ? paths.get(a.id)! : [...paths.get(a.id)!].reverse());
         const pb = gridSteps(eb === 'from' ? paths.get(b.id)! : [...paths.get(b.id)!].reverse());
         let k = 0;
@@ -396,4 +415,59 @@ export function junctions(connections: Connection[], paths: Map<string, Point[]>
     }
   }
   return [...found.values()];
+}
+
+/** Radius eines Leitungssprungs. */
+export const JUMP_RADIUS = 4;
+
+/**
+ * Kreuzungen ohne Verbindung: Stellen, an denen ein waagerechtes Teilstück
+ * einer Leitung ein senkrechtes einer anderen Leitung schneidet. Je Leitung
+ * die Kreuzungspunkte auf ihren waagerechten Teilstücken; dort springt sie.
+ */
+export function crossings(paths: Map<string, Point[]>): Map<string, Point[]> {
+  const horizontal: { id: string; y: number; x1: number; x2: number }[] = [];
+  const vertical: { id: string; x: number; y1: number; y2: number }[] = [];
+  for (const [id, path] of paths) {
+    path.slice(1).forEach((b, i) => {
+      const a = path[i]!;
+      if (a.y === b.y && a.x !== b.x) horizontal.push({ id, y: a.y, x1: Math.min(a.x, b.x), x2: Math.max(a.x, b.x) });
+      else if (a.x === b.x && a.y !== b.y) vertical.push({ id, x: a.x, y1: Math.min(a.y, b.y), y2: Math.max(a.y, b.y) });
+    });
+  }
+  const out = new Map<string, Point[]>();
+  for (const h of horizontal) {
+    for (const v of vertical) {
+      if (v.id === h.id) continue;
+      // Nur echte Kreuzungen, mit Platz für den Bogen; T-Stöße und Ecken zählen nicht.
+      if (v.x - JUMP_RADIUS < h.x1 || v.x + JUMP_RADIUS > h.x2 || h.y <= v.y1 || h.y >= v.y2) continue;
+      const list = out.get(h.id) ?? [];
+      list.push({ x: v.x, y: h.y });
+      out.set(h.id, list);
+    }
+  }
+  return out;
+}
+
+/**
+ * SVG-Pfad eines Linienzugs; an den Punkten in `jumps` (auf waagerechten
+ * Teilstücken) wird ein kleiner Bogen nach oben gezeichnet.
+ */
+export function linePathData(path: Point[], jumps: Point[] = []): string {
+  if (path.length === 0) return '';
+  let d = `M${path[0]!.x},${path[0]!.y}`;
+  path.slice(1).forEach((b, i) => {
+    const a = path[i]!;
+    if (a.y === b.y && jumps.length) {
+      const dir = Math.sign(b.x - a.x);
+      const here = jumps
+        .filter((p) => p.y === a.y && (p.x - a.x) * dir > 0 && (b.x - p.x) * dir > 0)
+        .sort((p, q) => (p.x - q.x) * dir);
+      for (const p of here) {
+        d += ` L${p.x - dir * JUMP_RADIUS},${p.y} A${JUMP_RADIUS},${JUMP_RADIUS} 0 0 ${dir > 0 ? 1 : 0} ${p.x + dir * JUMP_RADIUS},${p.y}`;
+      }
+    }
+    d += ` L${b.x},${b.y}`;
+  });
+  return d;
 }

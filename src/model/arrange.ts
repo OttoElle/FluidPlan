@@ -18,10 +18,40 @@ const snap = (v: number) => Math.round(v / GRID) * GRID;
 const componentOf = (ref: PortRef | object): string | undefined =>
   'componentId' in ref ? (ref as PortRef).componentId : undefined;
 
-function internalConnections(diagram: Diagram, ids: ReadonlySet<string>): Set<string> {
+const junctionOf = (ref: PortRef | object): string | undefined =>
+  'junctionId' in ref ? (ref as { junctionId: string }).junctionId : undefined;
+
+/**
+ * Abzweigpunkte, deren Leitungen alle (ggf. über weitere Abzweige) nur zu
+ * Bauteilen der Gruppe führen: Sie wandern mit der Gruppe mit.
+ */
+function internalJunctions(diagram: Diagram, ids: ReadonlySet<string>): Set<string> {
+  const inside = new Set(diagram.junctions.map((j) => j.id));
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const l of diagram.connections) {
+      const ends = [l.from, l.to];
+      const outside = ends.some((e) => {
+        const c = componentOf(e);
+        const j = junctionOf(e);
+        return c !== undefined ? !ids.has(c) : j === undefined || !inside.has(j);
+      });
+      if (!outside) continue;
+      for (const e of ends) {
+        const j = junctionOf(e);
+        if (j !== undefined && inside.delete(j)) changed = true;
+      }
+    }
+  }
+  return inside;
+}
+
+function internalConnections(diagram: Diagram, ids: ReadonlySet<string>, junctions: ReadonlySet<string>): Set<string> {
   const inGroup = (ref: PortRef | object) => {
     const id = componentOf(ref);
-    return id !== undefined && ids.has(id);
+    if (id !== undefined) return ids.has(id);
+    const j = junctionOf(ref);
+    return j !== undefined && junctions.has(j);
   };
   return new Set(diagram.connections.filter((l) => inGroup(l.from) && inGroup(l.to)).map((l) => l.id));
 }
@@ -53,7 +83,8 @@ function transformGroup(
   orient: (c: ComponentInstance) => Pick<ComponentInstance, 'rotation' | 'mirrored'>,
 ): Diagram {
   const set = new Set(ids);
-  const internal = internalConnections(diagram, set);
+  const junctions = internalJunctions(diagram, set);
+  const internal = internalConnections(diagram, set, junctions);
   return {
     ...diagram,
     components: diagram.components.map((c) => {
@@ -67,6 +98,7 @@ function transformGroup(
     connections: diagram.connections.map((l) =>
       internal.has(l.id) ? { ...l, waypoints: l.waypoints.map((p) => map(p)) } : l,
     ),
+    junctions: diagram.junctions.map((j) => (junctions.has(j.id) ? { ...j, position: map(j.position) } : j)),
   };
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { exampleHydraulicDiagram } from './example.ts';
-import { connectionPath, junctions, moveSegment, obstaclesOf, orthogonalize, route, type Box } from './routing.ts';
+import { connectionPath, branchDots, moveSegment, obstaclesOf, orthogonalize, route, type Box } from './routing.ts';
 import type { Point } from './types.ts';
 
 const isOrthogonal = (path: Point[]) =>
@@ -66,7 +66,7 @@ describe('Beispielschaltplan', () => {
   it('setzt einen Verbindungspunkt, wo sich zwei Leitungen vom selben Anschluss trennen', () => {
     const d = exampleHydraulicDiagram();
     const paths = new Map(d.connections.map((l) => [l.id, connectionPath(d, l)]));
-    expect(junctions(d.connections, paths).length).toBeGreaterThan(0);
+    expect(branchDots(d.connections, paths).length).toBeGreaterThan(0);
   });
 });
 

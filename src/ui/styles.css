@@ -189,3 +189,10 @@ select {
 .band { fill: color-mix(in srgb, var(--accent) 10%, transparent); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
 .diagram.pan-ready { cursor: grab; }
 .row.align button { flex: 1 1 30%; padding: 4px 2px; white-space: nowrap; }
+
+/* Abzweigpunkte */
+.junction-node { cursor: move; }
+.junction-node .hit { fill: transparent; }
+.junction-node .junction { fill: var(--line); }
+.junction-node.selected .junction { fill: var(--accent); r: 3; }
+.segment-hit.target { cursor: crosshair; }

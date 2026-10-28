@@ -5,10 +5,11 @@ import type {
   Diagram,
   DiagramMeta,
   Domain,
+  Endpoint,
+  Junction,
   LineKind,
   Orientation,
   Point,
-  PortRef,
   Rotation,
   Sheet,
   SheetFormat,
@@ -18,13 +19,13 @@ import { SHEET_FORMATS, smallestSheetFor } from '../model/sheet.ts';
 /**
  * Dateiformat (.fluidplan.json):
  *
- *   { "format": "fluidplan", "version": 2, "diagram": { ... } }
+ *   { "format": "fluidplan", "version": 3, "diagram": { ... } }
  *
  * `version` wird erhöht, sobald sich das Format inkompatibel ändert.
  * Ältere Versionen werden dann beim Laden in `migrate` hochgezogen.
  */
 export const FILE_FORMAT = 'fluidplan';
-export const FILE_VERSION = 2;
+export const FILE_VERSION = 3;
 export const FILE_EXTENSION = '.fluidplan.json';
 
 interface FileEnvelope {
@@ -82,7 +83,8 @@ function upgradeLegacyTypes(diagram: Diagram): Diagram {
     return { ...c, type: legacy.type, config: structuredClone(legacy.config) };
   });
   if (renamed.size === 0) return diagram;
-  const fix = (ref: PortRef): PortRef => {
+  const fix = (ref: Endpoint): Endpoint => {
+    if ('junctionId' in ref) return ref;
     const map = renamed.get(ref.componentId);
     return map?.[ref.portId] ? { ...ref, portId: map[ref.portId]! } : ref;
   };
@@ -97,10 +99,12 @@ function upgradeLegacyTypes(diagram: Diagram): Diagram {
  * Hebt ältere Dateiversionen schrittweise auf FILE_VERSION.
  * 1 → 2: Zeichenblatt (`sheet`) eingeführt. Alte Pläne bekommen das kleinste
  *        Querformat-Blatt mit Rahmen, auf das ihre Bauteile passen.
+ * 2 → 3: Abzweigpunkte (`junctions`); Leitungsenden können auf sie verweisen.
  */
 function migrate(version: number, diagram: unknown): unknown {
   let d = diagram;
   if (version < 2 && isObject(d)) d = { ...d, sheet: sheetForV1(d) };
+  if (version < 3 && isObject(d)) d = { ...d, junctions: [] };
   return d;
 }
 
@@ -141,8 +145,20 @@ function readDiagram(v: unknown, errors: string[]): Diagram | undefined {
   const sheet = readSheet(v.sheet, errors);
   const components = readArray(v.components, 'diagram.components', errors, readComponent);
   const connections = readArray(v.connections, 'diagram.connections', errors, readConnection);
-  if (!domain || !meta || !sheet || !components || !connections) return undefined;
-  return { domain, meta, sheet, components, connections };
+  const junctions = readArray(v.junctions, 'diagram.junctions', errors, readJunction);
+  if (!domain || !meta || !sheet || !components || !connections || !junctions) return undefined;
+  return { domain, meta, sheet, components, connections, junctions };
+}
+
+function readJunction(v: unknown, path: string, errors: string[]): Junction | undefined {
+  if (!isObject(v)) {
+    errors.push(`${path}: Objekt erwartet`);
+    return undefined;
+  }
+  const id = nonEmpty(v.id, `${path}.id`, errors);
+  const position = point(v.position, `${path}.position`, errors);
+  if (id === undefined || !position) return undefined;
+  return { id, position };
 }
 
 function readSheet(v: unknown, errors: string[]): Sheet | undefined {
@@ -153,8 +169,11 @@ function readSheet(v: unknown, errors: string[]): Sheet | undefined {
   const format = oneOf(v.format, SHEET_FORMAT_KEYS, 'diagram.sheet.format', errors);
   const orientation = oneOf(v.orientation, ORIENTATIONS, 'diagram.sheet.orientation', errors);
   const frame = bool(v.frame, 'diagram.sheet.frame', errors);
-  if (!format || !orientation || frame === undefined) return undefined;
-  return { format, orientation, frame };
+  const lineJumps = v.lineJumps === undefined ? undefined : bool(v.lineJumps, 'diagram.sheet.lineJumps', errors);
+  if (!format || !orientation || frame === undefined || (v.lineJumps !== undefined && lineJumps === undefined)) {
+    return undefined;
+  }
+  return { format, orientation, frame, ...(lineJumps !== undefined ? { lineJumps } : {}) };
 }
 
 function readMeta(v: unknown, errors: string[]): DiagramMeta | undefined {
@@ -206,18 +225,22 @@ function readConnection(v: unknown, path: string, errors: string[]): Connection 
     return undefined;
   }
   const id = nonEmpty(v.id, `${path}.id`, errors);
-  const from = portRef(v.from, `${path}.from`, errors);
-  const to = portRef(v.to, `${path}.to`, errors);
+  const from = endpoint(v.from, `${path}.from`, errors);
+  const to = endpoint(v.to, `${path}.to`, errors);
   const kind = oneOf(v.kind, LINE_KINDS, `${path}.kind`, errors);
   const waypoints = readArray(v.waypoints, `${path}.waypoints`, errors, point);
   if (id === undefined || !from || !to || !kind || !waypoints) return undefined;
   return { id, from, to, kind, waypoints };
 }
 
-function portRef(v: unknown, path: string, errors: string[]): PortRef | undefined {
+function endpoint(v: unknown, path: string, errors: string[]): Endpoint | undefined {
   if (!isObject(v)) {
     errors.push(`${path}: Objekt erwartet`);
     return undefined;
+  }
+  if ('junctionId' in v) {
+    const junctionId = nonEmpty(v.junctionId, `${path}.junctionId`, errors);
+    return junctionId === undefined ? undefined : { junctionId };
   }
   const componentId = nonEmpty(v.componentId, `${path}.componentId`, errors);
   const portId = nonEmpty(v.portId, `${path}.portId`, errors);
@@ -298,11 +321,23 @@ function checkReferences(diagram: Diagram, errors: string[]): void {
     if (!isKnownType(c.type)) errors.push(`Bauteil "${c.id}": unbekannter Typ "${c.type}"`);
   }
 
+  const junctionLines = new Map<string, number>();
+  for (const j of diagram.junctions) {
+    if (junctionLines.has(j.id)) errors.push(`Abzweig-ID "${j.id}" ist doppelt vergeben`);
+    junctionLines.set(j.id, 0);
+  }
+
   const connectionIds = new Set<string>();
   for (const l of diagram.connections) {
     if (connectionIds.has(l.id)) errors.push(`Leitungs-ID "${l.id}" ist doppelt vergeben`);
     connectionIds.add(l.id);
     for (const end of [l.from, l.to]) {
+      if ('junctionId' in end) {
+        const n = junctionLines.get(end.junctionId);
+        if (n === undefined) errors.push(`Leitung "${l.id}": Abzweigpunkt "${end.junctionId}" existiert nicht`);
+        else junctionLines.set(end.junctionId, n + 1);
+        continue;
+      }
       const component = components.get(end.componentId);
       if (component === undefined) {
         errors.push(`Leitung "${l.id}": Bauteil "${end.componentId}" existiert nicht`);
@@ -313,5 +348,8 @@ function checkReferences(diagram: Diagram, errors: string[]): void {
         errors.push(`Leitung "${l.id}": Bauteil "${end.componentId}" hat keinen Anschluss "${end.portId}"`);
       }
     }
+  }
+  for (const [id, n] of junctionLines) {
+    if (n > 4) errors.push(`Abzweigpunkt "${id}": mehr als 4 Leitungen`);
   }
 }

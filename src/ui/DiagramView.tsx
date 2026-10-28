@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { portPosition, transformLocalPoint } from '../model/diagram.ts';
+import { endpointPosition, sameEndpoint, transformLocalPoint } from '../model/diagram.ts';
 import { definitionOf } from '../model/library.ts';
 import { MM_PER_UNIT, drawingArea, sheetSize, titleBlock } from '../model/sheet.ts';
 import {
   componentBox,
-  junctions,
+  branchDots,
+  crossings,
+  endpointDirection,
+  linePathData,
   moveSegment,
   obstaclesOf,
   orthogonalize,
-  portDirection,
   route,
   routeAll,
 } from '../model/routing.ts';
 import { EMPTY_SELECTION, toggle, union, type Selection } from '../model/selection.ts';
-import type { ComponentInstance, Diagram, LineKind, Point, PortRef } from '../model/types.ts';
+import type { ComponentInstance, Diagram, Endpoint, LineKind, Point } from '../model/types.ts';
 import { ComponentSymbol, hasSymbol } from './symbols.tsx';
 
 export type { Selection };
@@ -35,15 +37,18 @@ interface Props {
   /** Verschiebt Bauteile um `delta` (seit dem letzten Aufruf, im Raster). */
   onMove: (ids: string[], delta: Point) => void;
   /** Neue Leitung; `waypoints` leer = automatisch führen. */
-  onConnect: (from: PortRef, to: PortRef, waypoints: Point[]) => void;
+  onConnect: (from: Endpoint, to: Endpoint, waypoints: Point[]) => void;
+  /** Neue Leitung, die auf einer bestehenden Leitung endet: dort entsteht ein Abzweig. */
+  onConnectToLine: (from: Endpoint, lineId: string, path: Point[], point: Point, waypoints: Point[]) => void;
   onRouteChange: (id: string, waypoints: Point[]) => void;
+  onMoveJunction: (id: string, position: Point) => void;
   /** Ziehen beendet; fasst die Zwischenschritte für Rückgängig zu einem Schritt zusammen. */
   onGestureEnd?: () => void;
 }
 
 /** Leitung, die gerade gezeichnet wird. */
 interface Draft {
-  from: PortRef;
+  from: Endpoint;
   /** Per Klick gesetzte Zwischenpunkte. */
   waypoints: Point[];
   cursor: Point;
@@ -60,7 +65,8 @@ type Drag =
   | { kind: 'move'; ids: string[]; start: Point; moved: Point }
   | { kind: 'band'; start: Point; end: Point; additive: boolean; moved: boolean }
   | { kind: 'pan'; startX: number; startY: number; origin: View; moved: boolean }
-  | { kind: 'segment'; id: string; index: number; path: Point[]; start: Point; offset: number };
+  | { kind: 'segment'; id: string; index: number; path: Point[]; start: Point; offset: number }
+  | { kind: 'junction'; id: string; start: Point; origin: Point; last: Point };
 
 const clampScale = (s: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
 
@@ -71,14 +77,24 @@ const clampScale = (s: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
  * Bauteile mit Schaltzeichen (symbols.tsx) erscheinen als ISO-1219-Symbol,
  * alle übrigen vorerst als beschriftete Rahmen mit Anschlusspunkten.
  */
-export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, onRouteChange, onGestureEnd }: Props) {
+export function DiagramView({
+  diagram,
+  selection,
+  onSelect,
+  onMove,
+  onConnect,
+  onConnectToLine,
+  onRouteChange,
+  onMoveJunction,
+  onGestureEnd,
+}: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<Drag | null>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [view, setView] = useState<View | null>(null);
   const [panning, setPanning] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [hoverPort, setHoverPort] = useState<PortRef | null>(null);
+  const [hoverPort, setHoverPort] = useState<Endpoint | null>(null);
   const [band, setBand] = useState<{ start: Point; end: Point } | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
 
@@ -180,7 +196,8 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
 
   const obstacles = obstaclesOf(diagram);
   const paths = routeAll(diagram);
-  const dots = junctions(diagram.connections, paths);
+  const dots = branchDots(diagram.connections, paths);
+  const jumps = sheet.lineJumps ? crossings(paths) : new Map<string, Point[]>();
 
   /** Alles, was ganz im Rahmen zwischen a und b liegt. */
   const inBand = (a: Point, b: Point): Selection => {
@@ -198,34 +215,49 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
         })
         .map((c) => c.id),
       connections: diagram.connections.filter((l) => paths.get(l.id)!.every(inside)).map((l) => l.id),
+      junctions: diagram.junctions.filter((j) => inside(j.position)).map((j) => j.id),
     };
   };
 
-  const samePort = (a: PortRef, b: PortRef) => a.componentId === b.componentId && a.portId === b.portId;
+  const samePort = sameEndpoint;
+
+  /** Knickpunkte der fertigen Leitung aus den beim Zeichnen geklickten Punkten. */
+  const draftWaypoints = (d: Draft, end: Point, endDir?: Point): Point[] => {
+    if (!d.waypoints.length) return [];
+    const start = endpointPosition(diagram, d.from);
+    return orthogonalize([start, ...d.waypoints, end], endpointDirection(diagram, d.from), endDir).slice(1, -1);
+  };
 
   /** Klick bzw. Loslassen auf einem Anschluss: Leitung beginnen oder abschließen. */
-  const portClicked = (ref: PortRef) => {
+  const portClicked = (ref: Endpoint) => {
     if (!draft) {
-      setDraft({ from: ref, waypoints: [], cursor: portPosition(diagram, ref) });
+      setDraft({ from: ref, waypoints: [], cursor: endpointPosition(diagram, ref) });
       onSelect(EMPTY_SELECTION);
     } else if (!samePort(draft.from, ref)) {
-      const start = portPosition(diagram, draft.from);
-      const end = portPosition(diagram, ref);
-      const waypoints = draft.waypoints.length
-        ? orthogonalize([start, ...draft.waypoints, end], portDirection(diagram, draft.from), portDirection(diagram, ref)).slice(1, -1)
-        : [];
+      const waypoints = draftWaypoints(draft, endpointPosition(diagram, ref), endpointDirection(diagram, ref));
       setDraft(null);
       onConnect(draft.from, ref, waypoints);
     }
   };
 
+  /** Beim Zeichnen auf eine Leitung geklickt: dort abzweigen. */
+  const lineClicked = (lineId: string, a: Point, b: Point, cursor: Point) => {
+    if (!draft) return;
+    const path = paths.get(lineId)!;
+    const clamp = (v: number, s: number, t: number) => Math.min(Math.max(v, Math.min(s, t)), Math.max(s, t));
+    const point = a.y === b.y ? { x: clamp(snap(cursor.x), a.x, b.x), y: a.y } : { x: a.x, y: clamp(snap(cursor.y), a.y, b.y) };
+    const waypoints = draftWaypoints(draft, point);
+    setDraft(null);
+    onConnectToLine(draft.from, lineId, path, point, waypoints);
+  };
+
   /** Vorschau der Leitung, die gerade gezeichnet wird. */
   const draftPath = (d: Draft): Point[] => {
-    const start = portPosition(diagram, d.from);
-    const startDir = portDirection(diagram, d.from);
+    const start = endpointPosition(diagram, d.from);
+    const startDir = endpointDirection(diagram, d.from);
     const target = hoverPort && !samePort(hoverPort, d.from) ? hoverPort : null;
-    const end = target ? portPosition(diagram, target) : snapPoint(d.cursor);
-    const endDir = target ? portDirection(diagram, target) : undefined;
+    const end = target ? endpointPosition(diagram, target) : snapPoint(d.cursor);
+    const endDir = target ? endpointDirection(diagram, target) : undefined;
     if (d.waypoints.length === 0) return route({ start, startDir, end, endDir, obstacles });
     return orthogonalize([start, ...d.waypoints, end], startDir, endDir);
   };
@@ -279,6 +311,13 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
               d.offset = offset;
               onRouteChange(d.id, moveSegment(d.path, d.index, offset));
             }
+          } else if (d.kind === 'junction') {
+            const p = toDiagram(e);
+            const to = { x: snap(d.origin.x + p.x - d.start.x), y: snap(d.origin.y + p.y - d.start.y) };
+            if (to.x !== d.last.x || to.y !== d.last.y) {
+              d.last = to;
+              onMoveJunction(d.id, to);
+            }
           } else if (d.kind === 'move') {
             const p = toDiagram(e);
             const total = { x: snap(p.x - d.start.x), y: snap(p.y - d.start.y) };
@@ -301,7 +340,7 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
           const d = drag.current;
           drag.current = null;
           setPanning(false);
-          if (d?.kind === 'move' || d?.kind === 'segment') onGestureEnd?.();
+          if (d?.kind === 'move' || d?.kind === 'segment' || d?.kind === 'junction') onGestureEnd?.();
           setBand(null);
           if (d?.kind === 'band') {
             const picked = d.moved ? inBand(d.start, d.end) : EMPTY_SELECTION;
@@ -335,21 +374,30 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
           const selected = selection.connections.includes(l.id);
           return (
             <g key={l.id} className={selected ? 'connection selected' : 'connection'}>
-              <polyline className="line" points={toPoints(path)} strokeDasharray={DASH[l.kind]} />
-              {!draft &&
-                path.slice(1).map((b, i) => {
+              <path className="line" d={linePathData(path, jumps.get(l.id))} strokeDasharray={DASH[l.kind]} />
+              {path.slice(1).map((b, i) => {
                   const a = path[i]!;
                   return (
                     <line
                       key={i}
-                      className={a.y === b.y ? 'segment-hit horizontal' : 'segment-hit vertical'}
+                      className={
+                        draft ? 'segment-hit target' : a.y === b.y ? 'segment-hit horizontal' : 'segment-hit vertical'
+                      }
                       x1={a.x}
                       y1={a.y}
                       x2={b.x}
                       y2={b.y}
+                      onPointerUp={(e) => {
+                        // Ziehen vom Anschluss auf eine Leitung: Loslassen setzt den Abzweig.
+                        if (draft && !drag.current) lineClicked(l.id, a, b, toDiagram(e));
+                      }}
                       onPointerDown={(e) => {
                         if (e.button !== 0) return;
                         e.stopPropagation();
+                        if (draft) {
+                          lineClicked(l.id, a, b, toDiagram(e));
+                          return;
+                        }
                         if (e.shiftKey || e.ctrlKey || e.metaKey) {
                           onSelect(toggle(selection, { ...EMPTY_SELECTION, connections: [l.id] }));
                           return;
@@ -367,6 +415,38 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
         {dots.map((p) => (
           <circle key={`${p.x},${p.y}`} className="junction" cx={p.x} cy={p.y} r={2} />
         ))}
+        {diagram.junctions.map((j) => {
+          const ref = { junctionId: j.id };
+          const selected = selection.junctions.includes(j.id);
+          return (
+            <g
+              key={j.id}
+              className={selected ? 'junction-node selected' : 'junction-node'}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return;
+                e.stopPropagation();
+                if (draft) {
+                  portClicked(ref);
+                  return;
+                }
+                if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                  onSelect(toggle(selection, { ...EMPTY_SELECTION, junctions: [j.id] }));
+                  return;
+                }
+                e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
+                onSelect({ ...EMPTY_SELECTION, junctions: [j.id] });
+                drag.current = { kind: 'junction', id: j.id, start: toDiagram(e), origin: j.position, last: j.position };
+              }}
+              onPointerUp={() => draft && !samePort(draft.from, ref) && portClicked(ref)}
+              onPointerEnter={() => setHoverPort(ref)}
+              onPointerLeave={() => setHoverPort(null)}
+            >
+              <title>Abzweig: ziehen zum Verschieben</title>
+              <circle cx={j.position.x} cy={j.position.y} r={6} className="hit" />
+              <circle cx={j.position.x} cy={j.position.y} r={2} className="junction" />
+            </g>
+          );
+        })}
 
         {diagram.components.map((c) => (
           <ComponentShape

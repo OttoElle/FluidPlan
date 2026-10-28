@@ -94,7 +94,7 @@ describe('Schaltplan bearbeiten', () => {
     const valveId = d.components.find((c) => c.label === '1V1')!.id;
     const after = removeComponent(d, valveId);
     expect(after.components.some((c) => c.id === valveId)).toBe(false);
-    expect(after.connections.some((l) => l.from.componentId === valveId || l.to.componentId === valveId)).toBe(false);
+    expect(after.connections.some((l) => JSON.stringify(l).includes(`"${valveId}"`))).toBe(false);
     expect(after.connections.length).toBe(d.connections.length - 4);
   });
 

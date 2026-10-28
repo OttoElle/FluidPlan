@@ -94,17 +94,35 @@ export interface PortRef {
 }
 
 /**
+ * Abzweigpunkt (T-Verteiler) im Leitungsnetz. Er entsteht, wenn eine Leitung
+ * auf einer anderen endet, und wird mit einem Punkt gezeichnet.
+ * An einem Abzweig hängen 3 oder 4 Leitungen.
+ */
+export interface Junction {
+  id: string;
+  position: Point;
+}
+
+/** Ende einer Leitung am Abzweigpunkt. */
+export interface JunctionRef {
+  junctionId: string;
+}
+
+/** Ende einer Leitung: ein Bauteilanschluss oder ein Abzweigpunkt. */
+export type Endpoint = PortRef | JunctionRef;
+
+/**
  * Linienart nach ISO 1219-1:
  * working = Arbeitsleitung (durchgezogen), pilot = Steuerleitung (gestrichelt),
  * drain = Leckageleitung (gestrichelt, fein).
  */
 export type LineKind = 'working' | 'pilot' | 'drain';
 
-/** Leitung zwischen zwei Anschlüssen. */
+/** Leitung zwischen zwei Anschlüssen bzw. Abzweigpunkten. */
 export interface Connection {
   id: string;
-  from: PortRef;
-  to: PortRef;
+  from: Endpoint;
+  to: Endpoint;
   kind: LineKind;
   /** Optionale Knickpunkte zwischen den beiden Anschlüssen. */
   waypoints: Point[];
@@ -128,6 +146,8 @@ export interface Sheet {
   orientation: Orientation;
   /** Zeichnungsrahmen mit Schriftfeld nach DIN EN ISO 5457. */
   frame: boolean;
+  /** Leitungssprünge (kleine Bögen) an Kreuzungen ohne Verbindung. */
+  lineJumps?: boolean;
 }
 
 /** Ein kompletter Schaltplan. */
@@ -137,4 +157,5 @@ export interface Diagram {
   sheet: Sheet;
   components: ComponentInstance[];
   connections: Connection[];
+  junctions: Junction[];
 }

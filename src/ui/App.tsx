@@ -6,6 +6,8 @@ import {
   connect,
   createDiagram,
   lineKindFor,
+  moveJunction,
+  splitConnection,
   touch,
   updateComponent,
   updateConnection,
@@ -116,6 +118,7 @@ export function App() {
   const single = current.components.length + current.connections.length + current.junctions.length === 1;
   const selected = single ? diagram.components.find((c) => c.id === current.components[0]) : undefined;
   const selectedLine = single ? diagram.connections.find((l) => l.id === current.connections[0]) : undefined;
+  const selectedJunction = single ? diagram.junctions.find((j) => j.id === current.junctions[0]) : undefined;
   const selectedIds = current.components;
   const selectedLines = diagram.connections.filter((l) => current.connections.includes(l.id));
 
@@ -253,7 +256,21 @@ export function App() {
               setMessage(err.message);
             }
           }}
+          onConnectToLine={(from, lineId, path, point, waypoints) => {
+            try {
+              const split = splitConnection(diagram, lineId, path, point);
+              const to = { junctionId: split.junction.id };
+              const r = connect(split.diagram, from, to, lineKindFor(split.diagram, from, to), waypoints);
+              edit(r.diagram);
+              setSelection(selectConnection(r.connection.id));
+              setMessage(null);
+            } catch (err) {
+              if (!(err instanceof DiagramError)) throw err;
+              setMessage(err.message);
+            }
+          }}
           onRouteChange={(id, waypoints) => edit((d) => updateConnection(d, id, { waypoints }), `route:${id}`)}
+          onMoveJunction={(id, position) => edit((d) => moveJunction(d, id, position), `junction:${id}`)}
           onGestureEnd={history.seal}
         />
       </main>
@@ -301,6 +318,16 @@ export function App() {
             <p className="hint">
               Ein Teilstück der Leitung ziehen, um es zu verschieben. Entf löscht die Leitung.
             </p>
+          </>
+        ) : selectedJunction ? (
+          <>
+            <p className="hint">
+              Abzweigpunkt. Ziehen verschiebt ihn. Löschen entfernt ihn mit allen daran hängenden Leitungen; bleiben an
+              einem Abzweig nur zwei Leitungen übrig, werden sie wieder zu einer.
+            </p>
+            <div className="row">
+              <button onClick={deleteSelection}>Löschen</button>
+            </div>
           </>
         ) : !isEmpty(current) ? (
           <>
@@ -351,7 +378,8 @@ export function App() {
             </p>
             <p className="hint">
               Leitung zeichnen: von einem Anschluss zum anderen ziehen, oder Anschluss anklicken, bei Bedarf Knickpunkte
-              auf die Fläche klicken und den Zielanschluss anklicken. Esc bricht ab.
+              auf die Fläche klicken und den Zielanschluss anklicken. Endet die Leitung auf einer anderen Leitung, entsteht
+              dort ein Abzweig. Esc bricht ab.
             </p>
             <h2>Blatt</h2>
             <SheetFields sheet={diagram.sheet} onChange={(sheet) => edit((d) => ({ ...d, sheet }))} />

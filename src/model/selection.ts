@@ -1,4 +1,4 @@
-import { removeComponent, removeConnection } from './diagram.ts';
+import { removeComponent, removeConnection, removeJunction } from './diagram.ts';
 import type { Diagram } from './types.ts';
 
 /**
@@ -28,7 +28,7 @@ export function selectAll(diagram: Diagram): Selection {
   return {
     components: diagram.components.map((c) => c.id),
     connections: diagram.connections.map((l) => l.id),
-    junctions: [],
+    junctions: diagram.junctions.map((j) => j.id),
   };
 }
 
@@ -58,8 +58,15 @@ export function union(a: Selection, b: Selection): Selection {
 export function prune(diagram: Diagram, s: Selection): Selection {
   const components = s.components.filter((id) => diagram.components.some((c) => c.id === id));
   const connections = s.connections.filter((id) => diagram.connections.some((l) => l.id === id));
-  if (components.length === s.components.length && connections.length === s.connections.length) return s;
-  return { ...s, components, connections };
+  const junctions = s.junctions.filter((id) => diagram.junctions.some((j) => j.id === id));
+  if (
+    components.length === s.components.length &&
+    connections.length === s.connections.length &&
+    junctions.length === s.junctions.length
+  ) {
+    return s;
+  }
+  return { components, connections, junctions };
 }
 
 /** Löscht alles Ausgewählte; Leitungen an gelöschten Bauteilen fallen mit weg. */
@@ -67,5 +74,7 @@ export function deleteSelected(diagram: Diagram, s: Selection): Diagram {
   let d = diagram;
   for (const id of s.connections) d = removeConnection(d, id);
   for (const id of s.components) d = removeComponent(d, id);
+  // Abzweige können beim Löschen schon verschmolzen bzw. entfallen sein.
+  for (const id of s.junctions) if (d.junctions.some((j) => j.id === id)) d = removeJunction(d, id);
   return d;
 }

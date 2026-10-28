@@ -6,6 +6,9 @@ import type {
   Connection,
   Diagram,
   Domain,
+  Endpoint,
+  Junction,
+  JunctionRef,
   LineKind,
   Point,
   PortRef,
@@ -36,6 +39,7 @@ export function createDiagram(
     sheet: { ...sheet },
     components: [],
     connections: [],
+    junctions: [],
   };
 }
 
@@ -111,28 +115,42 @@ export function configureComponent(diagram: Diagram, id: string, config: Compone
   if (!isConfigurable(component.type)) throw new DiagramError(`Bauteil "${id}" ist nicht konfigurierbar`);
   const updated = { ...component, config };
   const ports = new Set(requireDefinition(updated).ports.map((p) => p.id));
-  const dangling = (ref: PortRef) => ref.componentId === id && !ports.has(ref.portId);
-  return {
+  const dangling = (ref: Endpoint) => !isJunctionRef(ref) && ref.componentId === id && !ports.has(ref.portId);
+  return normalizeJunctions({
     ...diagram,
     components: diagram.components.map((c) => (c.id === id ? updated : c)),
     connections: diagram.connections.filter((l) => !dangling(l.from) && !dangling(l.to)),
-  };
+  });
 }
 
 /** Entfernt ein Bauteil samt aller daran angeschlossenen Leitungen. */
 export function removeComponent(diagram: Diagram, id: string): Diagram {
-  return {
+  const at = (e: Endpoint) => !isJunctionRef(e) && e.componentId === id;
+  return normalizeJunctions({
     ...diagram,
     components: diagram.components.filter((c) => c.id !== id),
-    connections: diagram.connections.filter(
-      (l) => l.from.componentId !== id && l.to.componentId !== id,
-    ),
-  };
+    connections: diagram.connections.filter((l) => !at(l.from) && !at(l.to)),
+  });
 }
 
-function samePort(a: PortRef, b: PortRef): boolean {
+export function isJunctionRef(e: Endpoint): e is JunctionRef {
+  return 'junctionId' in e;
+}
+
+/** Gleicher Anschluss bzw. gleicher Abzweigpunkt. */
+export function sameEndpoint(a: Endpoint, b: Endpoint): boolean {
+  if (isJunctionRef(a) || isJunctionRef(b)) {
+    return isJunctionRef(a) && isJunctionRef(b) && a.junctionId === b.junctionId;
+  }
   return a.componentId === b.componentId && a.portId === b.portId;
 }
+
+/** Eindeutiger Schlüssel eines Leitungsendes, z. B. "c1/P" oder "j:j2". */
+export function endpointKey(e: Endpoint): string {
+  return isJunctionRef(e) ? `j:${e.junctionId}` : `${e.componentId}/${e.portId}`;
+}
+
+const samePort = sameEndpoint;
 
 function requirePort(diagram: Diagram, ref: PortRef): void {
   const component = diagram.components.find((c) => c.id === ref.componentId);
@@ -143,15 +161,28 @@ function requirePort(diagram: Diagram, ref: PortRef): void {
   }
 }
 
+/** Höchstzahl Leitungen an einem Abzweigpunkt (je Richtung eine). */
+export const MAX_LINES_PER_JUNCTION = 4;
+
+function requireEndpoint(diagram: Diagram, ref: Endpoint): void {
+  if (!isJunctionRef(ref)) return requirePort(diagram, ref);
+  if (!diagram.junctions.some((j) => j.id === ref.junctionId)) {
+    throw new DiagramError(`Abzweigpunkt "${ref.junctionId}" existiert nicht`);
+  }
+  if (connectionsAt(diagram, ref).length >= MAX_LINES_PER_JUNCTION) {
+    throw new DiagramError(`An einem Abzweigpunkt treffen höchstens ${MAX_LINES_PER_JUNCTION} Leitungen zusammen`);
+  }
+}
+
 export function connect(
   diagram: Diagram,
-  from: PortRef,
-  to: PortRef,
+  from: Endpoint,
+  to: Endpoint,
   kind: LineKind = 'working',
   waypoints: Point[] = [],
 ): { diagram: Diagram; connection: Connection } {
-  requirePort(diagram, from);
-  requirePort(diagram, to);
+  requireEndpoint(diagram, from);
+  requireEndpoint(diagram, to);
   if (samePort(from, to)) throw new DiagramError('Ein Anschluss kann nicht mit sich selbst verbunden werden');
   const duplicate = diagram.connections.some(
     (l) => (samePort(l.from, from) && samePort(l.to, to)) || (samePort(l.from, to) && samePort(l.to, from)),
@@ -183,8 +214,16 @@ export function updateConnection(
 }
 
 /** Passende Linienart für eine neue Leitung zwischen zwei Anschlüssen. */
-export function lineKindFor(diagram: Diagram, a: PortRef, b: PortRef): LineKind {
+export function lineKindFor(diagram: Diagram, a: Endpoint, b: Endpoint): LineKind {
+  // Am Abzweig übernimmt die neue Leitung die Art der vorhandenen.
+  for (const ref of [a, b]) {
+    if (isJunctionRef(ref)) {
+      const existing = connectionsAt(diagram, ref)[0];
+      if (existing) return existing.kind;
+    }
+  }
   const kinds = [a, b].map((ref) => {
+    if (isJunctionRef(ref)) return undefined;
     const component = diagram.components.find((c) => c.id === ref.componentId);
     return component && definitionOf(component)?.ports.find((p) => p.id === ref.portId)?.kind;
   });
@@ -194,12 +233,129 @@ export function lineKindFor(diagram: Diagram, a: PortRef, b: PortRef): LineKind 
 }
 
 export function removeConnection(diagram: Diagram, id: string): Diagram {
-  return { ...diagram, connections: diagram.connections.filter((l) => l.id !== id) };
+  return normalizeJunctions({ ...diagram, connections: diagram.connections.filter((l) => l.id !== id) });
 }
 
-/** Alle Leitungen, die an einem Anschluss hängen. */
-export function connectionsAt(diagram: Diagram, ref: PortRef): Connection[] {
+/** Alle Leitungen, die an einem Anschluss bzw. Abzweigpunkt hängen. */
+export function connectionsAt(diagram: Pick<Diagram, 'connections'>, ref: Endpoint): Connection[] {
   return diagram.connections.filter((l) => samePort(l.from, ref) || samePort(l.to, ref));
+}
+
+// --- Abzweigpunkte ----------------------------------------------------------
+
+/**
+ * Teilt eine Leitung an `point` und setzt dort einen Abzweigpunkt.
+ * `path` ist der gezeichnete Verlauf der Leitung (routing.ts), `point` muss
+ * darauf liegen. Selbst geführte Leitungen behalten ihren Verlauf, automatisch
+ * geführte bleiben automatisch.
+ */
+export function splitConnection(
+  diagram: Diagram,
+  id: string,
+  path: Point[],
+  point: Point,
+): { diagram: Diagram; junction: Junction } {
+  const line = diagram.connections.find((l) => l.id === id);
+  if (!line) throw new DiagramError(`Leitung "${id}" existiert nicht`);
+  const index = path.findIndex((a, i) => i + 1 < path.length && onSegment(point, a, path[i + 1]!));
+  if (index < 0) throw new DiagramError('Der Punkt liegt nicht auf der Leitung');
+  const ends = [path[0]!, path[path.length - 1]!];
+  if (ends.some((e) => e.x === point.x && e.y === point.y)) {
+    throw new DiagramError('Ein Abzweig am Leitungsende ist nicht möglich');
+  }
+
+  const junction: Junction = { id: nextId('j', diagram.junctions), position: { ...point } };
+  const ref: JunctionRef = { junctionId: junction.id };
+  const auto = line.waypoints.length === 0;
+  const first: Connection = {
+    ...line,
+    to: ref,
+    waypoints: auto ? [] : path.slice(1, index + 1).map((p) => ({ ...p })),
+  };
+  const second: Connection = {
+    ...line,
+    id: nextId('l', diagram.connections),
+    from: ref,
+    waypoints: auto ? [] : path.slice(index + 1, -1).map((p) => ({ ...p })),
+  };
+  return {
+    diagram: {
+      ...diagram,
+      junctions: [...diagram.junctions, junction],
+      connections: [...diagram.connections.map((l) => (l.id === id ? first : l)), second],
+    },
+    junction,
+  };
+}
+
+function onSegment(p: Point, a: Point, b: Point): boolean {
+  const within = (v: number, s: number, t: number) => v >= Math.min(s, t) && v <= Math.max(s, t);
+  return (a.x === b.x && p.x === a.x && within(p.y, a.y, b.y)) || (a.y === b.y && p.y === a.y && within(p.x, a.x, b.x));
+}
+
+export function moveJunction(diagram: Diagram, id: string, position: Point): Diagram {
+  return { ...diagram, junctions: diagram.junctions.map((j) => (j.id === id ? { ...j, position: { ...position } } : j)) };
+}
+
+/** Entfernt einen Abzweigpunkt samt aller daran hängenden Leitungen. */
+export function removeJunction(diagram: Diagram, id: string): Diagram {
+  const ref: JunctionRef = { junctionId: id };
+  return normalizeJunctions({
+    ...diagram,
+    connections: diagram.connections.filter((l) => !samePort(l.from, ref) && !samePort(l.to, ref)),
+  });
+}
+
+/**
+ * Räumt Abzweigpunkte auf, nachdem Leitungen weggefallen sind:
+ * Mit zwei Leitungen ist es kein Abzweig mehr, sie werden zu einer verschmolzen.
+ * Mit einer Leitung endet diese im Nichts und entfällt mit dem Punkt.
+ */
+export function normalizeJunctions(diagram: Diagram): Diagram {
+  let d = diagram;
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const j of d.junctions) {
+      const ref: JunctionRef = { junctionId: j.id };
+      const lines = connectionsAt(d, ref);
+      if (lines.length >= 3) continue;
+      changed = true;
+      const rest = d.junctions.filter((k) => k.id !== j.id);
+      const others = d.connections.filter((l) => !lines.includes(l));
+      if (lines.length === 2) {
+        // Erste Leitung so drehen, dass sie am Abzweig endet, die zweite so, dass sie dort beginnt.
+        const [a, b] = lines as [Connection, Connection];
+        const into = samePort(a.to, ref) ? a : reverse(a);
+        const out = samePort(b.from, ref) ? b : reverse(b);
+        const auto = into.waypoints.length === 0 && out.waypoints.length === 0;
+        const merged: Connection = {
+          ...a,
+          from: into.from,
+          to: out.to,
+          waypoints: auto ? [] : [...into.waypoints, { ...j.position }, ...out.waypoints],
+        };
+        // Schleife auf denselben Anschluss ergibt keine sinnvolle Leitung.
+        const loop = samePort(merged.from, merged.to);
+        d = { ...d, junctions: rest, connections: loop ? others : [...others, merged] };
+      } else {
+        d = { ...d, junctions: rest, connections: others };
+      }
+      break;
+    }
+  }
+  return d;
+}
+
+function reverse(l: Connection): Connection {
+  return { ...l, from: l.to, to: l.from, waypoints: [...l.waypoints].reverse() };
+}
+
+/** Position eines Leitungsendes. */
+export function endpointPosition(diagram: Diagram, ref: Endpoint): Point {
+  if (!isJunctionRef(ref)) return portPosition(diagram, ref);
+  const j = diagram.junctions.find((k) => k.id === ref.junctionId);
+  if (!j) throw new DiagramError(`Abzweigpunkt "${ref.junctionId}" existiert nicht`);
+  return j.position;
 }
 
 /**

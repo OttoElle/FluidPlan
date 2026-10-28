@@ -37,6 +37,14 @@ export function SheetFields({ sheet, onChange }: { sheet: Sheet; onChange: (shee
         <input type="checkbox" checked={sheet.frame} onChange={(e) => onChange({ ...sheet, frame: e.target.checked })} />
         Rahmen und Schriftfeld
       </label>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={sheet.lineJumps ?? false}
+          onChange={(e) => onChange({ ...sheet, lineJumps: e.target.checked })}
+        />
+        Leitungssprünge an Kreuzungen
+      </label>
     </>
   );
 }
