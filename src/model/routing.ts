@@ -1,4 +1,4 @@
-import { getDefinition } from './library.ts';
+import { definitionOf } from './library.ts';
 import { portPosition, transformLocalPoint } from './diagram.ts';
 import type { ComponentInstance, Connection, Diagram, Point, PortRef } from './types.ts';
 
@@ -33,7 +33,7 @@ export interface Box {
 
 /** Umriss eines Bauteils im Schaltplan, nach Drehung und Spiegelung. */
 export function componentBox(component: ComponentInstance): Box | undefined {
-  const def = getDefinition(component.type);
+  const def = definitionOf(component);
   if (!def) return undefined;
   const a = transformLocalPoint(component, def, { x: 0, y: 0 });
   const b = transformLocalPoint(component, def, { x: def.size.width, y: def.size.height });
@@ -46,7 +46,7 @@ export function componentBox(component: ComponentInstance): Box | undefined {
  */
 export function portDirection(diagram: Diagram, ref: PortRef): Direction {
   const component = diagram.components.find((c) => c.id === ref.componentId);
-  const def = component && getDefinition(component.type);
+  const def = component && definitionOf(component);
   const port = def?.ports.find((p) => p.id === ref.portId);
   if (!component || !def || !port) return DOWN;
   const { x, y } = port.offset;

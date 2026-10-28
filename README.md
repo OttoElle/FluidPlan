@@ -3,8 +3,17 @@
 Leichtgewichtiger Editor für einfache **Hydraulik- und Pneumatik-Schaltpläne** im Browser.
 
 Stand: Projektgerüst mit Datenmodell, Bauteilbibliothek und Speichern/Laden als JSON.
-Erste Schaltzeichen nach DIN ISO 1219-1: Hydropumpe, Kompressor, 4/2-Wegeventil und
-doppeltwirkender Zylinder. Die übrigen Bauteile erscheinen noch als beschriftete Rahmen.
+Schaltzeichen nach DIN ISO 1219-1 für die Grundbauteile: Pumpen, Kompressor, Motoren,
+Tank, Speicher, Filter, Wartungseinheit, Druck-, Strom- und Sperrventile, Manometer.
+
+**Wegeventile und Zylinder sind konfigurierbar.** In der Bauteilliste stehen übliche
+Vorlagen (4/2, 4/3, 5/2, …); nach dem Auswählen legt man im Eigenschaftenbereich fest:
+Anzahl Anschlüsse und Schaltstellungen (X/Y), die Wege in jeder Stellung (aus Vorlagen
+wie „Umlauf“ oder „Schwimmstellung“ oder Weg für Weg), die Ruhestellung und die
+Betätigungen links und rechts (Magnet, Feder, Druck, Druckknopf, Hebel, Pedal, Rolle, …).
+Beim Zylinder: einfach-/doppeltwirkend, einseitige oder durchgehende Stange, Feder,
+Endlagendämpfung (fest/einstellbar) je Seite. Leitungen an Anschlüssen, die dabei
+wegfallen, werden entfernt.
 
 Leitungen verlaufen rechtwinklig im Raster. Gezeichnet wird von Anschluss zu Anschluss
 (ziehen, oder Anschluss anklicken, optional Knickpunkte auf die Fläche klicken, Ziel
@@ -16,7 +25,11 @@ erscheint ein Verbindungspunkt. Entf löscht die ausgewählte Leitung bzw. das B
 
 Symbole sind im Modul M gezeichnet, ein Rasterschritt der Zeichenfläche ist 1M (10 Einheiten).
 Anschlüsse liegen in jeder Drehung und Spiegelung auf dem Raster, benachbarte Anschlüsse
-sind wie in der Norm 2M auseinander.
+sind wie in der Norm 2M auseinander. Wegeventile und Zylinder folgen den Maßen der Norm
+(Abschnitt 8.4, 8.5 und 9.2): Schaltfeld 4M (bei 5 Anschlüssen 6M breit), Anschlussleitungen
+2M, Betätigungen mit Mittellinie 1M über der Feld-Unterkante und weiteren Elementen im
+Abstand 2M darüber (Reihenfolge Druck, Magnet, Feder, Hand), Magnet 3M × 2M, Feder 2,5M,
+Zylinderrahmen 9M × 4M mit 2M breitem Kolben; ihre Anschlüsse liegen auf dem 2M-Raster.
 
 Gezeichnet wird auf einem Blatt (A4 bis A1, hoch oder quer, wahlweise mit Rahmen und
 Schriftfeld nach DIN EN ISO 5457), festgelegt beim Anlegen über „Neu…“ und später in der
@@ -52,7 +65,9 @@ npm run build      # Typprüfung und Produktions-Build nach dist/
 src/
   model/
     types.ts         Datenmodell: Diagram, ComponentInstance, Connection, Ports
-    library.ts       Bauteilbibliothek (Definitionen mit Anschlüssen)
+    library.ts       Bauteilbibliothek (feste und konfigurierbare Bauteile, Bauteilliste)
+    valve.ts         Konfigurierbares Wegeventil: Konfiguration, Geometrie, Vorlagen
+    cylinder.ts      Konfigurierbarer Zylinder
     diagram.ts       Reine Funktionen zum Bearbeiten (hinzufügen, verbinden, löschen, Anschlussposition)
     routing.ts       Rechtwinklige Leitungsführung im Raster (A*-Suche, Teilstücke verschieben)
     example.ts       Beispielschaltplan
@@ -63,15 +78,24 @@ src/
     App.tsx          Oberfläche: Werkzeugleiste, Bauteilliste, Eigenschaften
     DiagramView.tsx  SVG-Zeichenfläche
     symbols.tsx      Schaltzeichen nach ISO 1219 (im Modul M gezeichnet)
+    symbolParts.tsx  Grundelemente (Pfeil, Dreieck, Feder, Drossel, Rückschlagelement)
+    valveSymbol.tsx  Wegeventil aus seiner Konfiguration
+    cylinderSymbol.tsx Zylinder aus seiner Konfiguration
+    Configurator.tsx Konfigurator für Wegeventil und Zylinder
 ```
 
 ## Datenmodell
 
-- **Bauteildefinition** (in der Bibliothek): Typ-Schlüssel wie `valve.4-3`, Name, Medium
+- **Bauteildefinition** (in der Bibliothek): Typ-Schlüssel wie `valve.check`, Name, Medium
   (Hydraulik/Pneumatik), Größe und Anschlüsse. Anschlüsse heißen wie im Normsymbol:
   Hydraulik `P`, `T`, `A`, `B`; Pneumatik `1`, `2`, `3`, `4`, `5`, `12`, `14`.
 - **Bauteil** (im Schaltplan): ID, Typ-Verweis, Position, Drehung (0/90/180/270),
   Spiegelung, Betriebsmittelkennzeichen (z. B. `1V1`) und freie Kennwerte.
+  Konfigurierbare Bauteile (`valve.directional`, `actuator.cylinder`) tragen zusätzlich
+  `config`; Größe und Anschlüsse werden daraus berechnet (`definitionOf`). Ventilanschlüsse
+  heißen intern immer `P`, `T`, `A`, `B`, `R`, `S`, `X`, `Y` und werden in der Pneumatik
+  als `1`, `3`, `2`, `4`, `3`, `5`, `14`, `12` angezeigt. Ältere Dateien mit festen Typen
+  wie `valve.4-2` werden beim Laden umgestellt.
 - **Leitung**: verbindet zwei Anschlüsse (`{ componentId, portId }`), hat eine Linienart
   (`working` Arbeitsleitung, `pilot` Steuerleitung, `drain` Leckageleitung) und optionale Knickpunkte.
   Leere Knickpunktliste = automatisch geführt.

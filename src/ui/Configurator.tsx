@@ -1,0 +1,251 @@
+import {
+  ACTION_NAMES,
+  CUSHION_NAMES,
+  normalizeCylinder,
+  ROD_NAMES,
+  SPRING_NAMES,
+  type Cushion,
+  type CylinderConfig,
+} from '../model/cylinder.ts';
+import type { ComponentConfig } from '../model/types.ts';
+import {
+  ACTUATOR_NAMES,
+  ACTUATORS,
+  MAX_ACTUATORS,
+  normalizeValve,
+  PORT_COUNTS,
+  portLabel,
+  POSITION_COUNTS,
+  positionNames,
+  positionTemplates,
+  resizeValve,
+  rolesOf,
+  type Actuator,
+  type DirectionalValveConfig,
+  type PathKind,
+  type ValvePath,
+  type ValveRole,
+} from '../model/valve.ts';
+
+/** Konfigurator für Wegeventile und Zylinder im Eigenschaftenbereich. */
+export function Configurator({ config, onChange }: { config: ComponentConfig; onChange: (c: ComponentConfig) => void }) {
+  return config.kind === 'directional-valve' ? (
+    <ValveConfigurator config={config} onChange={onChange} />
+  ) : (
+    <CylinderConfigurator config={config} onChange={onChange} />
+  );
+}
+
+const PATH_KIND_SYMBOL: Record<PathKind, string> = { flow: '→', both: '↔', open: '—' };
+
+function ValveConfigurator({
+  config,
+  onChange,
+}: {
+  config: DirectionalValveConfig;
+  onChange: (c: DirectionalValveConfig) => void;
+}) {
+  const set = (c: DirectionalValveConfig) => onChange(normalizeValve(c));
+  const roles = rolesOf(config.ports);
+  const names = positionNames(config.positions.length);
+  const label = (r: ValveRole) => portLabel(config, r);
+  const templates = positionTemplates(config.ports);
+
+  const setPaths = (index: number, paths: ValvePath[]) =>
+    set({ ...config, positions: config.positions.map((p, i) => (i === index ? { paths } : p)) });
+
+  return (
+    <div className="configurator">
+      <h2>Wegeventil</h2>
+      <div className="row">
+        <label>
+          Anschlüsse
+          <select
+            value={config.ports}
+            onChange={(e) => set(resizeValve(config, Number(e.target.value) as DirectionalValveConfig['ports'], config.positions.length))}
+          >
+            {PORT_COUNTS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Stellungen
+          <select value={config.positions.length} onChange={(e) => set(resizeValve(config, config.ports, Number(e.target.value)))}>
+            {POSITION_COUNTS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Ruhestellung
+          <select value={config.rest} onChange={(e) => set({ ...config, rest: Number(e.target.value) })}>
+            {names.map((n, i) => (
+              <option key={n} value={i}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {config.positions.map((pos, i) => (
+        <fieldset key={i} className="position">
+          <legend>
+            Stellung {names[i]}
+            {i === config.rest ? ' (Ruhestellung)' : ''}
+          </legend>
+          <select
+            aria-label={`Vorlage für Stellung ${names[i]}`}
+            value=""
+            onChange={(e) => {
+              const t = templates[Number(e.target.value)];
+              if (t) setPaths(i, t.paths.map((p) => ({ ...p })));
+            }}
+          >
+            <option value="">Vorlage wählen…</option>
+            {templates.map((t, k) => (
+              <option key={t.name} value={k}>
+                {t.name.replace(/\b([PTABRS])\b/g, (m) => label(m as ValveRole))}
+              </option>
+            ))}
+          </select>
+          {pos.paths.map((p, k) => (
+            <div key={k} className="row path">
+              <RoleSelect value={p.from} roles={roles} label={label} onChange={(from) => setPaths(i, replace(pos.paths, k, { ...p, from }))} />
+              <select
+                aria-label="Art des Weges"
+                value={p.kind}
+                onChange={(e) => setPaths(i, replace(pos.paths, k, { ...p, kind: e.target.value as PathKind }))}
+              >
+                {(Object.keys(PATH_KIND_SYMBOL) as PathKind[]).map((kind) => (
+                  <option key={kind} value={kind}>
+                    {PATH_KIND_SYMBOL[kind]}
+                  </option>
+                ))}
+              </select>
+              <RoleSelect value={p.to} roles={roles} label={label} onChange={(to) => setPaths(i, replace(pos.paths, k, { ...p, to }))} />
+              <button aria-label="Weg entfernen" onClick={() => setPaths(i, pos.paths.filter((_, j) => j !== k))}>
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => {
+              // Erstes noch freies Anschlusspaar vorschlagen.
+              const used = new Set(pos.paths.flatMap((p) => [p.from, p.to]));
+              const free = roles.filter((r) => !used.has(r));
+              const from = free[0] ?? roles[0]!;
+              const to = free.find((r) => r !== from) ?? roles.find((r) => r !== from)!;
+              setPaths(i, [...pos.paths, { from, to, kind: 'flow' }]);
+            }}
+          >
+            + Weg
+          </button>
+          {pos.paths.length === 0 && <p className="hint">Alle Anschlüsse gesperrt.</p>}
+        </fieldset>
+      ))}
+
+      <ActuatorList title="Betätigung links" list={config.left} onChange={(left) => set({ ...config, left })} />
+      <ActuatorList title="Betätigung rechts" list={config.right} onChange={(right) => set({ ...config, right })} />
+    </div>
+  );
+}
+
+function replace<T>(list: T[], index: number, item: T): T[] {
+  return list.map((x, i) => (i === index ? item : x));
+}
+
+function RoleSelect({
+  value,
+  roles,
+  label,
+  onChange,
+}: {
+  value: ValveRole;
+  roles: ValveRole[];
+  label: (r: ValveRole) => string;
+  onChange: (r: ValveRole) => void;
+}) {
+  return (
+    <select aria-label="Anschluss" value={value} onChange={(e) => onChange(e.target.value as ValveRole)}>
+      {roles.map((r) => (
+        <option key={r} value={r}>
+          {label(r)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function ActuatorList({ title, list, onChange }: { title: string; list: Actuator[]; onChange: (l: Actuator[]) => void }) {
+  const available = ACTUATORS.filter((a) => !list.includes(a));
+  return (
+    <fieldset className="actuators">
+      <legend>{title}</legend>
+      {list.map((a) => (
+        <div key={a} className="row chip">
+          <span>{ACTUATOR_NAMES[a]}</span>
+          <button aria-label={`${ACTUATOR_NAMES[a]} entfernen`} onClick={() => onChange(list.filter((x) => x !== a))}>
+            ✕
+          </button>
+        </div>
+      ))}
+      {list.length < MAX_ACTUATORS && (
+        <select
+          aria-label={`${title} hinzufügen`}
+          value=""
+          onChange={(e) => e.target.value && onChange([...list, e.target.value as Actuator])}
+        >
+          <option value="">+ hinzufügen…</option>
+          {available.map((a) => (
+            <option key={a} value={a}>
+              {ACTUATOR_NAMES[a]}
+            </option>
+          ))}
+        </select>
+      )}
+    </fieldset>
+  );
+}
+
+function CylinderConfigurator({ config, onChange }: { config: CylinderConfig; onChange: (c: CylinderConfig) => void }) {
+  const set = (c: CylinderConfig) => onChange(normalizeCylinder(c));
+  const choice = <K extends string>(
+    title: string,
+    value: K,
+    names: Record<K, string>,
+    apply: (v: K) => void,
+  ) => (
+    <label>
+      {title}
+      <select value={value} onChange={(e) => apply(e.target.value as K)}>
+        {(Object.keys(names) as K[]).map((k) => (
+          <option key={k} value={k}>
+            {names[k]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  return (
+    <div className="configurator">
+      <h2>Zylinder</h2>
+      {choice('Wirkungsweise', config.action, ACTION_NAMES, (action) =>
+        set({ ...config, action, spring: action === 'single' && config.spring === 'none' ? 'rod' : config.spring }),
+      )}
+      {choice('Kolbenstange', config.rod, ROD_NAMES, (rod) => set({ ...config, rod }))}
+      {config.action === 'single' && choice('Rückstellung', config.spring, SPRING_NAMES, (spring) => set({ ...config, spring }))}
+      {choice<Cushion>('Dämpfung kolbenseitig', config.cushion.piston, CUSHION_NAMES, (piston) =>
+        set({ ...config, cushion: { ...config.cushion, piston } }),
+      )}
+      {choice<Cushion>('Dämpfung stangenseitig', config.cushion.rod, CUSHION_NAMES, (rod) =>
+        set({ ...config, cushion: { ...config.cushion, rod } }),
+      )}
+    </div>
+  );
+}

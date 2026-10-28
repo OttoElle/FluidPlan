@@ -13,6 +13,7 @@ import {
 } from './diagram.ts';
 import { COMPONENT_LIBRARY, definitionsFor } from './library.ts';
 import { exampleHydraulicDiagram } from './example.ts';
+import { defaultValveConfig } from './valve.ts';
 
 describe('Bauteilbibliothek', () => {
   it('hat eindeutige Typen und eindeutige Anschlüsse je Bauteil', () => {
@@ -63,7 +64,7 @@ describe('Schaltplan bearbeiten', () => {
 
   it('fügt Bauteile hinzu, ohne das Original zu verändern', () => {
     const empty = createDiagram('pneumatic');
-    const { diagram, component } = addComponent(empty, 'valve.5-2', { x: 10, y: 20 }, { label: '1V1' });
+    const { diagram, component } = addComponent(empty, 'supply.compressor', { x: 10, y: 20 }, { label: '1V1' });
     expect(empty.components).toHaveLength(0);
     expect(diagram.components).toEqual([component]);
     expect(component).toMatchObject({ id: 'c1', rotation: 0, mirrored: false, label: '1V1' });
@@ -121,9 +122,11 @@ describe('Anschlussposition', () => {
   });
 
   it('berücksichtigt die Spiegelung', () => {
-    let d = addComponent(createDiagram('pneumatic'), 'valve.3-2', { x: 0, y: 0 }).diagram;
+    const config = { ...defaultValveConfig('pneumatic', 3, 2), left: ['pilot' as const], right: ['spring' as const] };
+    let d = addComponent(createDiagram('pneumatic'), 'valve.directional', { x: 0, y: 0 }, { config }).diagram;
     d = updateComponent(d, 'c1', { mirrored: true });
-    // Anschluss 12 liegt links (0, 20) und wandert gespiegelt nach rechts.
-    expect(portPosition(d, { componentId: 'c1', portId: '12' })).toEqual({ x: 80, y: 20 });
+    // 16M × 8M; Steueranschluss X (14) liegt links 1M über der Feld-Unterkante
+    // bei (0, 50) und wandert gespiegelt nach rechts.
+    expect(portPosition(d, { componentId: 'c1', portId: 'X' })).toEqual({ x: 160, y: 50 });
   });
 });

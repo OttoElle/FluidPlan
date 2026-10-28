@@ -1,4 +1,4 @@
-import { getDefinition } from '../model/library.ts';
+import { definitionOf, getDefinition, isConfigurable, isKnownType, LEGACY_TYPES, readConfig } from '../model/library.ts';
 import type {
   ComponentInstance,
   Connection,
@@ -64,8 +64,33 @@ export function parseDiagram(text: string): ParseResult {
 
   const diagram = readDiagram(migrate(raw.version, raw.diagram), errors);
   if (errors.length > 0 || !diagram) return { ok: false, errors };
-  checkReferences(diagram, errors);
-  return errors.length > 0 ? { ok: false, errors } : { ok: true, diagram };
+  const upgraded = upgradeLegacyTypes(diagram);
+  checkReferences(upgraded, errors);
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, diagram: upgraded };
+}
+
+/**
+ * Stellt Bauteiltypen aus früheren Ständen (z. B. "valve.4-2") auf die heutigen
+ * konfigurierbaren Typen um und übersetzt die Anschluss-IDs ihrer Leitungen.
+ */
+function upgradeLegacyTypes(diagram: Diagram): Diagram {
+  const renamed = new Map<string, Record<string, string>>();
+  const components = diagram.components.map((c) => {
+    const legacy = LEGACY_TYPES[c.type];
+    if (!legacy) return c;
+    renamed.set(c.id, legacy.ports);
+    return { ...c, type: legacy.type, config: structuredClone(legacy.config) };
+  });
+  if (renamed.size === 0) return diagram;
+  const fix = (ref: PortRef): PortRef => {
+    const map = renamed.get(ref.componentId);
+    return map?.[ref.portId] ? { ...ref, portId: map[ref.portId]! } : ref;
+  };
+  return {
+    ...diagram,
+    components,
+    connections: diagram.connections.map((l) => ({ ...l, from: fix(l.from), to: fix(l.to) })),
+  };
 }
 
 /**
@@ -159,13 +184,20 @@ function readComponent(v: unknown, path: string, errors: string[]): ComponentIns
   const mirrored = bool(v.mirrored, `${path}.mirrored`, errors);
   const label = str(v.label, `${path}.label`, errors);
   const properties = stringRecord(v.properties, `${path}.properties`, errors);
+  // Konfiguration nur prüfen, wenn der Typ bekannt und konfigurierbar ist;
+  // unbekannte Typen meldet checkReferences.
+  const config =
+    v.config === undefined || type === undefined || !isConfigurable(type)
+      ? undefined
+      : readConfig(type, v.config, `${path}.config`, errors);
   if (
     id === undefined || type === undefined || !position || rotation === undefined ||
-    mirrored === undefined || label === undefined || !properties
+    mirrored === undefined || label === undefined || !properties ||
+    (v.config !== undefined && type !== undefined && isConfigurable(type) && !config)
   ) {
     return undefined;
   }
-  return { id, type, position, rotation, mirrored, label, properties };
+  return { id, type, position, rotation, mirrored, label, properties, ...(config ? { config } : {}) };
 }
 
 function readConnection(v: unknown, path: string, errors: string[]): Connection | undefined {
@@ -259,11 +291,11 @@ function stringRecord(v: unknown, path: string, errors: string[]): Record<string
 // --- Inhaltliche Prüfung ---------------------------------------------------
 
 function checkReferences(diagram: Diagram, errors: string[]): void {
-  const componentTypes = new Map<string, string>();
+  const components = new Map<string, ComponentInstance>();
   for (const c of diagram.components) {
-    if (componentTypes.has(c.id)) errors.push(`Bauteil-ID "${c.id}" ist doppelt vergeben`);
-    componentTypes.set(c.id, c.type);
-    if (!getDefinition(c.type)) errors.push(`Bauteil "${c.id}": unbekannter Typ "${c.type}"`);
+    if (components.has(c.id)) errors.push(`Bauteil-ID "${c.id}" ist doppelt vergeben`);
+    components.set(c.id, c);
+    if (!isKnownType(c.type)) errors.push(`Bauteil "${c.id}": unbekannter Typ "${c.type}"`);
   }
 
   const connectionIds = new Set<string>();
@@ -271,12 +303,12 @@ function checkReferences(diagram: Diagram, errors: string[]): void {
     if (connectionIds.has(l.id)) errors.push(`Leitungs-ID "${l.id}" ist doppelt vergeben`);
     connectionIds.add(l.id);
     for (const end of [l.from, l.to]) {
-      const type = componentTypes.get(end.componentId);
-      if (type === undefined) {
+      const component = components.get(end.componentId);
+      if (component === undefined) {
         errors.push(`Leitung "${l.id}": Bauteil "${end.componentId}" existiert nicht`);
         continue;
       }
-      const def = getDefinition(type);
+      const def = definitionOf(component);
       if (def && !def.ports.some((p) => p.id === end.portId)) {
         errors.push(`Leitung "${l.id}": Bauteil "${end.componentId}" hat keinen Anschluss "${end.portId}"`);
       }

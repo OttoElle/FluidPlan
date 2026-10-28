@@ -6,7 +6,11 @@
  * Welche Anschlüsse ein Bauteil hat, legt seine Definition in der
  * Bauteilbibliothek fest (siehe library.ts); eine Instanz verweist nur per
  * `type` darauf. So bleibt die gespeicherte JSON-Datei klein und stabil.
+ * Konfigurierbare Bauteile tragen zusätzlich ihre Einstellungen (`config`).
  */
+
+import type { DirectionalValveConfig } from './valve.ts';
+import type { CylinderConfig } from './cylinder.ts';
 
 /** Medium eines Bauteils bzw. Schaltplans. */
 export type Domain = 'hydraulic' | 'pneumatic';
@@ -37,6 +41,12 @@ export interface PortDefinition {
   kind: PortKind;
   /** Position relativ zum Bauteilursprung (oben links), ungedreht. */
   offset: Point;
+  /**
+   * Angezeigte Bezeichnung, falls sie von `id` abweicht. Konfigurierbare
+   * Bauteile benennen ihre Anschlüsse intern nach ISO 1219 (P, A, …) und
+   * zeigen sie in der Pneumatik nach ISO 5599 an (1, 2, …).
+   */
+  label?: string;
 }
 
 /** Eintrag der Bauteilbibliothek. */
@@ -51,6 +61,12 @@ export interface ComponentDefinition {
   size: { width: number; height: number };
   ports: readonly PortDefinition[];
 }
+
+/**
+ * Einstellungen eines konfigurierbaren Bauteils (Wegeventil, Zylinder).
+ * Aus ihnen ergeben sich Symbol, Größe und Anschlüsse; siehe library.ts.
+ */
+export type ComponentConfig = DirectionalValveConfig | CylinderConfig;
 
 /** Ein im Schaltplan platziertes Bauteil. */
 export interface ComponentInstance {
@@ -67,6 +83,8 @@ export interface ComponentInstance {
   label: string;
   /** Freie Kennwerte, z. B. { "Druck": "160 bar" }. */
   properties: Record<string, string>;
+  /** Nur bei konfigurierbaren Bauteiltypen. */
+  config?: ComponentConfig;
 }
 
 /** Ende einer Leitung: ein bestimmter Anschluss eines bestimmten Bauteils. */

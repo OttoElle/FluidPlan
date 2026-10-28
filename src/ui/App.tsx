@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   DiagramError,
   addComponent,
+  configureComponent,
   connect,
   createDiagram,
   lineKindFor,
@@ -12,10 +13,11 @@ import {
   updateConnection,
 } from '../model/diagram.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
-import { definitionsFor } from '../model/library.ts';
+import { PALETTE_GROUPS, paletteFor, type PaletteEntry } from '../model/library.ts';
 import { drawingArea } from '../model/sheet.ts';
 import type { Diagram, LineKind } from '../model/types.ts';
 import { downloadDiagram, readDiagramFile } from '../io/browser.ts';
+import { Configurator } from './Configurator.tsx';
 import { DiagramView, type Selection } from './DiagramView.tsx';
 
 const LINE_KIND_NAMES: Record<LineKind, string> = {
@@ -56,13 +58,15 @@ export function App() {
     downloadDiagram(saved);
   };
 
-  const add = (type: string) => {
+  const add = (entry: PaletteEntry) => {
     const offset = (diagram.components.length % 10) * 10;
     const area = drawingArea(diagram.sheet);
-    const { diagram: next, component } = addComponent(diagram, type, {
-      x: area.x + 40 + offset,
-      y: area.y + 40 + offset,
-    });
+    const { diagram: next, component } = addComponent(
+      diagram,
+      entry.type,
+      { x: area.x + 40 + offset, y: area.y + 40 + offset },
+      { config: entry.config },
+    );
     setDiagram(next);
     setSelection({ kind: 'component', id: component.id });
   };
@@ -128,11 +132,20 @@ export function App() {
 
       <aside className="palette">
         <h2>Bauteile</h2>
-        {definitionsFor(diagram.domain).map((def) => (
-          <button key={def.type} onClick={() => add(def.type)}>
-            {def.name}
-          </button>
-        ))}
+        {PALETTE_GROUPS.map((group) => {
+          const entries = paletteFor(diagram.domain).filter((e) => e.group === group);
+          if (entries.length === 0) return null;
+          return (
+            <details key={group} open className="palette-group">
+              <summary>{group}</summary>
+              {entries.map((entry) => (
+                <button key={entry.key} onClick={() => add(entry)}>
+                  {entry.name}
+                </button>
+              ))}
+            </details>
+          );
+        })}
       </aside>
 
       <main className="canvas">
@@ -184,6 +197,12 @@ export function App() {
               </button>
               <button onClick={deleteSelection}>Löschen</button>
             </div>
+            {selected.config && (
+              <Configurator
+                config={selected.config}
+                onChange={(config) => setDiagram((d) => configureComponent(d, selected.id, config))}
+              />
+            )}
           </>
         ) : selectedLine ? (
           <>

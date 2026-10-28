@@ -10,8 +10,8 @@ export function exampleHydraulicDiagram(now = new Date()): Diagram {
     d = r.diagram;
     return r.component.id;
   };
-  const cylinder = add('actuator.cylinder-double', 140, 40, '1A1');
-  const valve = add('valve.4-2', 80, 140, '1V1');
+  const cylinder = add('actuator.cylinder', 140, 40, '1A1');
+  const valve = add('valve.directional', 80, 140, '1V1');
   const pump = add('supply.pump', 90, 250, '0P1');
   const relief = add('valve.pressure-relief', 250, 240, '0V1');
   const tank = add('supply.tank', 240, 370, '0Z1');

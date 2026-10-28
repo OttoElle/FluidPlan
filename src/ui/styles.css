@@ -36,7 +36,7 @@ body { margin: 0; }
 
 .app {
   display: grid;
-  grid-template-columns: 200px 1fr 220px;
+  grid-template-columns: 200px 1fr 260px;
   grid-template-rows: auto auto 1fr;
   grid-template-areas:
     'toolbar toolbar toolbar'
@@ -169,3 +169,18 @@ select {
 .port .port-hit { fill: transparent; }
 .port:hover circle:not(.port-hit) { r: 3.5; }
 .component.drawing { cursor: crosshair; }
+
+/* Bauteilliste und Konfigurator */
+.palette-group { display: flex; flex-direction: column; gap: 4px; }
+.palette-group summary { font-size: 12px; color: var(--muted); cursor: pointer; margin: 4px 0; }
+.palette-group button { display: block; width: 100%; margin-top: 4px; }
+.configurator { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.configurator .row { flex-wrap: nowrap; }
+.configurator .row label { flex: 1 1 0; min-width: 0; font-size: 12px; }
+.configurator select { width: 100%; min-width: 0; }
+.configurator .path select { flex: 1 1 0; width: auto; }
+.configurator .path button, .configurator .chip button { flex: none; padding: 2px 6px; }
+.configurator fieldset { border: 1px solid var(--border); border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.configurator legend { font-size: 12px; color: var(--muted); }
+.configurator .path { flex-wrap: nowrap; align-items: center; }
+.configurator .chip { justify-content: space-between; align-items: center; font-size: 13px; }

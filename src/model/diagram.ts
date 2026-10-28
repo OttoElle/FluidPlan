@@ -1,5 +1,6 @@
-import { getDefinition } from './library.ts';
+import { defaultConfigFor, definitionOf, isConfigurable, isKnownType } from './library.ts';
 import type {
+  ComponentConfig,
   ComponentDefinition,
   ComponentInstance,
   Connection,
@@ -50,9 +51,9 @@ export function nextId(prefix: string, existing: Iterable<{ id: string }>): stri
   return `${prefix}${max + 1}`;
 }
 
-function requireDefinition(type: string): ComponentDefinition {
-  const def = getDefinition(type);
-  if (!def) throw new DiagramError(`Unbekannter Bauteiltyp "${type}"`);
+function requireDefinition(component: Pick<ComponentInstance, 'type' | 'config'>): ComponentDefinition {
+  const def = definitionOf(component);
+  if (!def) throw new DiagramError(`Unbekannter Bauteiltyp "${component.type}"`);
   return def;
 }
 
@@ -61,6 +62,8 @@ export interface AddComponentOptions {
   mirrored?: boolean;
   label?: string;
   properties?: Record<string, string>;
+  /** Nur für konfigurierbare Typen; fehlt sie, gilt die Startkonfiguration. */
+  config?: ComponentConfig;
 }
 
 export function addComponent(
@@ -69,7 +72,8 @@ export function addComponent(
   position: Point,
   options: AddComponentOptions = {},
 ): { diagram: Diagram; component: ComponentInstance } {
-  requireDefinition(type);
+  if (!isKnownType(type)) throw new DiagramError(`Unbekannter Bauteiltyp "${type}"`);
+  const config = isConfigurable(type) ? structuredClone(options.config ?? defaultConfigFor(type, diagram.domain)) : undefined;
   const component: ComponentInstance = {
     id: nextId('c', diagram.components),
     type,
@@ -78,6 +82,7 @@ export function addComponent(
     mirrored: options.mirrored ?? false,
     label: options.label ?? '',
     properties: { ...options.properties },
+    ...(config ? { config } : {}),
   };
   return { diagram: { ...diagram, components: [...diagram.components, component] }, component };
 }
@@ -85,7 +90,7 @@ export function addComponent(
 export function updateComponent(
   diagram: Diagram,
   id: string,
-  changes: Partial<Omit<ComponentInstance, 'id' | 'type'>>,
+  changes: Partial<Omit<ComponentInstance, 'id' | 'type' | 'config'>>,
 ): Diagram {
   if (!diagram.components.some((c) => c.id === id)) {
     throw new DiagramError(`Bauteil "${id}" existiert nicht`);
@@ -93,6 +98,24 @@ export function updateComponent(
   return {
     ...diagram,
     components: diagram.components.map((c) => (c.id === id ? { ...c, ...changes } : c)),
+  };
+}
+
+/**
+ * Setzt die Konfiguration eines konfigurierbaren Bauteils. Leitungen an
+ * Anschlüssen, die es danach nicht mehr gibt, werden entfernt.
+ */
+export function configureComponent(diagram: Diagram, id: string, config: ComponentConfig): Diagram {
+  const component = diagram.components.find((c) => c.id === id);
+  if (!component) throw new DiagramError(`Bauteil "${id}" existiert nicht`);
+  if (!isConfigurable(component.type)) throw new DiagramError(`Bauteil "${id}" ist nicht konfigurierbar`);
+  const updated = { ...component, config };
+  const ports = new Set(requireDefinition(updated).ports.map((p) => p.id));
+  const dangling = (ref: PortRef) => ref.componentId === id && !ports.has(ref.portId);
+  return {
+    ...diagram,
+    components: diagram.components.map((c) => (c.id === id ? updated : c)),
+    connections: diagram.connections.filter((l) => !dangling(l.from) && !dangling(l.to)),
   };
 }
 
@@ -114,7 +137,7 @@ function samePort(a: PortRef, b: PortRef): boolean {
 function requirePort(diagram: Diagram, ref: PortRef): void {
   const component = diagram.components.find((c) => c.id === ref.componentId);
   if (!component) throw new DiagramError(`Bauteil "${ref.componentId}" existiert nicht`);
-  const def = requireDefinition(component.type);
+  const def = requireDefinition(component);
   if (!def.ports.some((p) => p.id === ref.portId)) {
     throw new DiagramError(`Bauteil "${ref.componentId}" hat keinen Anschluss "${ref.portId}"`);
   }
@@ -163,7 +186,7 @@ export function updateConnection(
 export function lineKindFor(diagram: Diagram, a: PortRef, b: PortRef): LineKind {
   const kinds = [a, b].map((ref) => {
     const component = diagram.components.find((c) => c.id === ref.componentId);
-    return component && getDefinition(component.type)?.ports.find((p) => p.id === ref.portId)?.kind;
+    return component && definitionOf(component)?.ports.find((p) => p.id === ref.portId)?.kind;
   });
   if (kinds.includes('pilot')) return 'pilot';
   if (kinds.includes('drain')) return 'drain';
@@ -186,7 +209,7 @@ export function connectionsAt(diagram: Diagram, ref: PortRef): Connection[] {
 export function portPosition(diagram: Diagram, ref: PortRef): Point {
   requirePort(diagram, ref);
   const component = diagram.components.find((c) => c.id === ref.componentId)!;
-  const def = requireDefinition(component.type);
+  const def = requireDefinition(component);
   const port = def.ports.find((p) => p.id === ref.portId)!;
   return transformLocalPoint(component, def, port.offset);
 }

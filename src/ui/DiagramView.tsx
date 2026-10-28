@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { portPosition, transformLocalPoint } from '../model/diagram.ts';
-import { getDefinition } from '../model/library.ts';
+import { definitionOf } from '../model/library.ts';
 import { MM_PER_UNIT, drawingArea, sheetSize, titleBlock } from '../model/sheet.ts';
 import {
   junctions,
@@ -401,7 +401,7 @@ function ComponentShape({
   onPortPointerUp: (portId: string) => void;
   onPortHover: (portId: string | null) => void;
 }) {
-  const def = getDefinition(component.type);
+  const def = definitionOf(component);
   if (!def) return null;
   const corners = [
     { x: 0, y: 0 },
@@ -425,7 +425,7 @@ function ComponentShape({
         <>
           <rect x={x} y={y} width={w} height={h} className="hit" />
           <g transform={transform}>
-            <ComponentSymbol type={def.type} />
+            <ComponentSymbol component={component} />
           </g>
         </>
       ) : (
@@ -456,7 +456,7 @@ function ComponentShape({
             <circle cx={p.x} cy={p.y} r={6} className="port-hit" />
             <circle cx={p.x} cy={p.y} r={2.5} />
             <text x={p.x + 4} y={p.y - 3}>
-              {port.id}
+              {port.label ?? port.id}
             </text>
           </g>
         );
