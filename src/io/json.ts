@@ -6,21 +6,25 @@ import type {
   DiagramMeta,
   Domain,
   LineKind,
+  Orientation,
   Point,
   PortRef,
   Rotation,
+  Sheet,
+  SheetFormat,
 } from '../model/types.ts';
+import { SHEET_FORMATS, smallestSheetFor } from '../model/sheet.ts';
 
 /**
  * Dateiformat (.fluidplan.json):
  *
- *   { "format": "fluidplan", "version": 1, "diagram": { ... } }
+ *   { "format": "fluidplan", "version": 2, "diagram": { ... } }
  *
  * `version` wird erhöht, sobald sich das Format inkompatibel ändert.
  * Ältere Versionen werden dann beim Laden in `migrate` hochgezogen.
  */
 export const FILE_FORMAT = 'fluidplan';
-export const FILE_VERSION = 1;
+export const FILE_VERSION = 2;
 export const FILE_EXTENSION = '.fluidplan.json';
 
 interface FileEnvelope {
@@ -64,9 +68,28 @@ export function parseDiagram(text: string): ParseResult {
   return errors.length > 0 ? { ok: false, errors } : { ok: true, diagram };
 }
 
-/** Hebt ältere Dateiversionen auf FILE_VERSION. Bisher gibt es nur Version 1. */
-function migrate(_version: number, diagram: unknown): unknown {
-  return diagram;
+/**
+ * Hebt ältere Dateiversionen schrittweise auf FILE_VERSION.
+ * 1 → 2: Zeichenblatt (`sheet`) eingeführt. Alte Pläne bekommen das kleinste
+ *        Querformat-Blatt mit Rahmen, auf das ihre Bauteile passen.
+ */
+function migrate(version: number, diagram: unknown): unknown {
+  let d = diagram;
+  if (version < 2 && isObject(d)) d = { ...d, sheet: sheetForV1(d) };
+  return d;
+}
+
+function sheetForV1(d: Obj): Sheet {
+  let right = 0;
+  let bottom = 0;
+  for (const c of Array.isArray(d.components) ? d.components : []) {
+    if (!isObject(c) || !isObject(c.position)) continue;
+    const def = typeof c.type === 'string' ? getDefinition(c.type) : undefined;
+    const extent = def ? Math.max(def.size.width, def.size.height) : 0;
+    right = Math.max(right, Number(c.position.x) + extent || 0);
+    bottom = Math.max(bottom, Number(c.position.y) + extent || 0);
+  }
+  return smallestSheetFor(right, bottom);
 }
 
 // --- Strukturprüfung -------------------------------------------------------
@@ -80,6 +103,8 @@ function isObject(v: unknown): v is Obj {
 const DOMAINS: readonly Domain[] = ['hydraulic', 'pneumatic'];
 const ROTATIONS: readonly Rotation[] = [0, 90, 180, 270];
 const LINE_KINDS: readonly LineKind[] = ['working', 'pilot', 'drain'];
+const SHEET_FORMAT_KEYS = Object.keys(SHEET_FORMATS) as SheetFormat[];
+const ORIENTATIONS: readonly Orientation[] = ['portrait', 'landscape'];
 
 function readDiagram(v: unknown, errors: string[]): Diagram | undefined {
   if (!isObject(v)) {
@@ -88,10 +113,23 @@ function readDiagram(v: unknown, errors: string[]): Diagram | undefined {
   }
   const domain = oneOf(v.domain, DOMAINS, 'diagram.domain', errors);
   const meta = readMeta(v.meta, errors);
+  const sheet = readSheet(v.sheet, errors);
   const components = readArray(v.components, 'diagram.components', errors, readComponent);
   const connections = readArray(v.connections, 'diagram.connections', errors, readConnection);
-  if (!domain || !meta || !components || !connections) return undefined;
-  return { domain, meta, components, connections };
+  if (!domain || !meta || !sheet || !components || !connections) return undefined;
+  return { domain, meta, sheet, components, connections };
+}
+
+function readSheet(v: unknown, errors: string[]): Sheet | undefined {
+  if (!isObject(v)) {
+    errors.push('diagram.sheet: Objekt erwartet');
+    return undefined;
+  }
+  const format = oneOf(v.format, SHEET_FORMAT_KEYS, 'diagram.sheet.format', errors);
+  const orientation = oneOf(v.orientation, ORIENTATIONS, 'diagram.sheet.orientation', errors);
+  const frame = bool(v.frame, 'diagram.sheet.frame', errors);
+  if (!format || !orientation || frame === undefined) return undefined;
+  return { format, orientation, frame };
 }
 
 function readMeta(v: unknown, errors: string[]): DiagramMeta | undefined {

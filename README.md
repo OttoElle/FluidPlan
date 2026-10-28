@@ -11,6 +11,12 @@ Symbole sind im Modul M gezeichnet, ein Rasterschritt der Zeichenfläche ist 1M 
 Anschlüsse liegen in jeder Drehung und Spiegelung auf dem Raster, benachbarte Anschlüsse
 sind wie in der Norm 2M auseinander.
 
+Gezeichnet wird auf einem Blatt (A4 bis A1, hoch oder quer, wahlweise mit Rahmen und
+Schriftfeld nach DIN EN ISO 5457), festgelegt beim Anlegen über „Neu…“ und später in der
+Seitenleiste änderbar. Maßstab: 1 Einheit = 0,25 mm, also 1M = 2,5 mm auf dem Papier.
+Mausrad zoomt um den Mauszeiger, Ziehen auf freier Fläche oder mit der mittleren Maustaste
+verschiebt die Ansicht; 100 % entspricht der Papiergröße.
+
 ## Schnellstart
 
 Voraussetzung: Node.js 22 oder neuer.

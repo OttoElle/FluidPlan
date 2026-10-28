@@ -11,7 +11,10 @@
 /** Medium eines Bauteils bzw. Schaltplans. */
 export type Domain = 'hydraulic' | 'pneumatic';
 
-/** Punkt in Schaltplan-Koordinaten (Einheit: Rasterpunkte à 1 mm, y nach unten). */
+/**
+ * Punkt in Schaltplan-Koordinaten (y nach unten). 10 Einheiten = 1 Rasterschritt = 1 M;
+ * auf dem Blatt entspricht eine Einheit 0,25 mm (siehe sheet.ts).
+ */
 export interface Point {
   x: number;
   y: number;
@@ -98,10 +101,22 @@ export interface DiagramMeta {
   modified: string;
 }
 
+export type SheetFormat = 'A4' | 'A3' | 'A2' | 'A1';
+export type Orientation = 'portrait' | 'landscape';
+
+/** Zeichenblatt, auf dem der Schaltplan liegt. */
+export interface Sheet {
+  format: SheetFormat;
+  orientation: Orientation;
+  /** Zeichnungsrahmen mit Schriftfeld nach DIN EN ISO 5457. */
+  frame: boolean;
+}
+
 /** Ein kompletter Schaltplan. */
 export interface Diagram {
   domain: Domain;
   meta: DiagramMeta;
+  sheet: Sheet;
   components: ComponentInstance[];
   connections: Connection[];
 }

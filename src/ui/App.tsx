@@ -2,20 +2,22 @@ import { useRef, useState } from 'react';
 import { addComponent, createDiagram, removeComponent, touch, updateComponent } from '../model/diagram.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
 import { definitionsFor } from '../model/library.ts';
-import type { Diagram, Domain } from '../model/types.ts';
+import { drawingArea } from '../model/sheet.ts';
+import type { Diagram } from '../model/types.ts';
 import { downloadDiagram, readDiagramFile } from '../io/browser.ts';
 import { DiagramView } from './DiagramView.tsx';
-
-const DOMAIN_NAMES: Record<Domain, string> = { hydraulic: 'Hydraulik', pneumatic: 'Pneumatik' };
+import { DOMAIN_NAMES, NewDocumentDialog, SheetFields, type NewDocument } from './SheetSettings.tsx';
 
 export function App() {
   const [diagram, setDiagram] = useState<Diagram>(() => exampleHydraulicDiagram());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [newDialogOpen, setNewDialogOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const startNew = (domain: Domain) => {
-    setDiagram(createDiagram(domain));
+  const startNew = ({ domain, title, sheet }: NewDocument) => {
+    setNewDialogOpen(false);
+    setDiagram(createDiagram(domain, title, new Date(), sheet));
     setSelectedId(null);
     setMessage(null);
   };
@@ -39,7 +41,11 @@ export function App() {
 
   const add = (type: string) => {
     const offset = (diagram.components.length % 10) * 10;
-    const { diagram: next, component } = addComponent(diagram, type, { x: 40 + offset, y: 40 + offset });
+    const area = drawingArea(diagram.sheet);
+    const { diagram: next, component } = addComponent(diagram, type, {
+      x: area.x + 40 + offset,
+      y: area.y + 40 + offset,
+    });
     setDiagram(next);
     setSelectedId(component.id);
   };
@@ -50,8 +56,7 @@ export function App() {
     <div className="app">
       <header className="toolbar">
         <strong className="brand">FluidPlan</strong>
-        <button onClick={() => startNew('hydraulic')}>Neu: Hydraulik</button>
-        <button onClick={() => startNew('pneumatic')}>Neu: Pneumatik</button>
+        <button onClick={() => setNewDialogOpen(true)}>Neu…</button>
         <button onClick={() => fileInput.current?.click()}>Öffnen…</button>
         <button onClick={save}>Speichern</button>
         <input
@@ -73,6 +78,8 @@ export function App() {
         />
         <span className="domain">{DOMAIN_NAMES[diagram.domain]}</span>
       </header>
+
+      <NewDocumentDialog open={newDialogOpen} onCreate={startNew} onClose={() => setNewDialogOpen(false)} />
 
       {message && (
         <pre className="message" role="alert" onClick={() => setMessage(null)}>
@@ -135,7 +142,21 @@ export function App() {
             </div>
           </>
         ) : (
-          <p className="hint">Bauteil anklicken, um es zu bearbeiten. Ziehen verschiebt es.</p>
+          <>
+            <p className="hint">
+              Bauteil anklicken, um es zu bearbeiten. Ziehen verschiebt es. Mausrad zoomt, Ziehen auf freier Fläche
+              verschiebt die Ansicht.
+            </p>
+            <h2>Blatt</h2>
+            <SheetFields sheet={diagram.sheet} onChange={(sheet) => setDiagram({ ...diagram, sheet })} />
+            <label>
+              Erstellt von
+              <input
+                value={diagram.meta.author}
+                onChange={(e) => setDiagram({ ...diagram, meta: { ...diagram.meta, author: e.target.value } })}
+              />
+            </label>
+          </>
         )}
       </aside>
     </div>

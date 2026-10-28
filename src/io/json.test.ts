@@ -74,3 +74,28 @@ describe('JSON speichern und laden', () => {
     expect(fileNameFor('   ')).toBe('schaltplan.fluidplan.json');
   });
 });
+
+describe('Migration', () => {
+  it('ergänzt bei Version-1-Dateien ein passendes Blatt', () => {
+    const v1 = mutate((f) => {
+      f.version = 1;
+      delete f.diagram.sheet;
+    });
+    const r = parseDiagram(v1);
+    expect(r.ok && r.diagram.sheet).toEqual({ format: 'A4', orientation: 'landscape', frame: true });
+  });
+
+  it('wählt ein größeres Blatt, wenn die Bauteile sonst nicht passen', () => {
+    const v1 = mutate((f) => {
+      f.version = 1;
+      delete f.diagram.sheet;
+      f.diagram.components[0].position = { x: 1500, y: 900 };
+    });
+    const r = parseDiagram(v1);
+    expect(r.ok && r.diagram.sheet.format).toBe('A3');
+  });
+
+  it('meldet ein ungültiges Blatt', () => {
+    expect(errorsOf(mutate((f) => (f.diagram.sheet.format = 'B5')))[0]).toMatch(/diagram.sheet.format/);
+  });
+});

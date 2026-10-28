@@ -9,7 +9,9 @@ import type {
   Point,
   PortRef,
   Rotation,
+  Sheet,
 } from './types.ts';
+import { DEFAULT_SHEET } from './sheet.ts';
 
 /**
  * Reine Funktionen zum Bearbeiten eines Schaltplans.
@@ -20,11 +22,17 @@ import type {
 
 export class DiagramError extends Error {}
 
-export function createDiagram(domain: Domain, title = 'Neuer Schaltplan', now = new Date()): Diagram {
+export function createDiagram(
+  domain: Domain,
+  title = 'Neuer Schaltplan',
+  now = new Date(),
+  sheet: Sheet = DEFAULT_SHEET,
+): Diagram {
   const stamp = now.toISOString();
   return {
     domain,
     meta: { title, author: '', created: stamp, modified: stamp },
+    sheet: { ...sheet },
     components: [],
     connections: [],
   };

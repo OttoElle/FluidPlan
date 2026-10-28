@@ -4,8 +4,9 @@ import type { Diagram } from './types.ts';
 /** Kleiner Beispielschaltplan: Pumpe, DBV, 4/2-Wegeventil und Zylinder. */
 export function exampleHydraulicDiagram(now = new Date()): Diagram {
   let d = createDiagram('hydraulic', 'Beispiel: Zylindersteuerung', now);
+  // Verschoben, damit der Plan innerhalb des Zeichnungsrahmens liegt.
   const add = (type: string, x: number, y: number, label: string) => {
-    const r = addComponent(d, type, { x, y }, { label });
+    const r = addComponent(d, type, { x: x + 120, y: y + 60 }, { label });
     d = r.diagram;
     return r.component.id;
   };

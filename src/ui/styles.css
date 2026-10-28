@@ -7,6 +7,9 @@
   --accent: #1f6feb;
   --line: #1f2328;
   --error-bg: #ffebe9;
+  --desk: #e4e7eb;
+  --paper: #ffffff;
+  --frame: #1f2328;
   font-family: system-ui, sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -22,6 +25,9 @@
     --accent: #4493f8;
     --line: #e6edf3;
     --error-bg: #3c1618;
+    --desk: #010409;
+    --paper: #161b22;
+    --frame: #8d96a0;
   }
 }
 
@@ -88,9 +94,56 @@ button, input {
 }
 button:hover { border-color: var(--accent); }
 
-.canvas { grid-area: canvas; overflow: auto; }
-.diagram { width: 100%; height: 100%; display: block; user-select: none; }
-.grid-dot { fill: var(--border); }
+.canvas { grid-area: canvas; overflow: hidden; min-width: 0; min-height: 0; }
+.diagram-wrap { position: relative; width: 100%; height: 100%; background: var(--desk); }
+.diagram { width: 100%; height: 100%; display: block; user-select: none; touch-action: none; }
+.diagram.panning { cursor: grabbing; }
+.paper { fill: var(--paper); filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.25)); }
+.grid-dot { fill: var(--muted); opacity: 0.5; }
+.sheet-frame .frame { fill: none; stroke: var(--frame); stroke-width: 2; }
+.sheet-frame line { stroke: var(--frame); stroke-width: 1; }
+.sheet-frame text { fill: var(--text); }
+.sheet-frame .caption { font-size: 8px; fill: var(--muted); }
+.sheet-frame .value { font-size: 12px; }
+.sheet-frame .value.big { font-size: 18px; font-weight: 600; }
+
+.zoom-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.zoom-level { min-width: 64px; font-variant-numeric: tabular-nums; }
+
+dialog {
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 280px;
+}
+dialog::backdrop { background: rgb(0 0 0 / 0.3); }
+dialog form { display: flex; flex-direction: column; gap: 10px; }
+dialog h2 { margin: 0; }
+fieldset { border: 0; padding: 0; margin: 0; display: flex; gap: 12px; font-size: 13px; }
+fieldset legend { font-size: 13px; margin-bottom: 4px; padding: 0; }
+.check { flex-direction: row; align-items: center; gap: 6px; }
+.dialog-buttons { display: flex; gap: 6px; justify-content: flex-end; }
+select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
 .line { fill: none; stroke: var(--line); stroke-width: 1.5; }
 
 .component { cursor: move; }
