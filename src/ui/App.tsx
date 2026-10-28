@@ -19,6 +19,7 @@ import type { Diagram, LineKind } from '../model/types.ts';
 import { downloadDiagram, readDiagramFile } from '../io/browser.ts';
 import { Configurator } from './Configurator.tsx';
 import { DiagramView, type Selection } from './DiagramView.tsx';
+import { useHistory } from './useHistory.ts';
 
 const LINE_KIND_NAMES: Record<LineKind, string> = {
   working: 'Arbeitsleitung',
@@ -28,7 +29,8 @@ const LINE_KIND_NAMES: Record<LineKind, string> = {
 import { DOMAIN_NAMES, NewDocumentDialog, SheetFields, type NewDocument } from './SheetSettings.tsx';
 
 export function App() {
-  const [diagram, setDiagram] = useState<Diagram>(() => exampleHydraulicDiagram());
+  const history = useHistory<Diagram>(exampleHydraulicDiagram);
+  const { present: diagram, edit } = history;
   const [selection, setSelection] = useState<Selection>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
@@ -36,7 +38,7 @@ export function App() {
 
   const startNew = ({ domain, title, sheet }: NewDocument) => {
     setNewDialogOpen(false);
-    setDiagram(createDiagram(domain, title, new Date(), sheet));
+    history.reset(createDiagram(domain, title, new Date(), sheet));
     setSelection(null);
     setMessage(null);
   };
@@ -44,7 +46,7 @@ export function App() {
   const open = async (file: File) => {
     const result = await readDiagramFile(file);
     if (result.ok) {
-      setDiagram(result.diagram);
+      history.reset(result.diagram);
       setSelection(null);
       setMessage(null);
     } else {
@@ -54,7 +56,7 @@ export function App() {
 
   const save = () => {
     const saved = touch(diagram);
-    setDiagram(saved);
+    history.replace(saved);
     downloadDiagram(saved);
   };
 
@@ -67,7 +69,7 @@ export function App() {
       { x: area.x + 40 + offset, y: area.y + 40 + offset },
       { config: entry.config },
     );
-    setDiagram(next);
+    edit(next);
     setSelection({ kind: 'component', id: component.id });
   };
 
@@ -76,17 +78,30 @@ export function App() {
     selection?.kind === 'connection' ? diagram.connections.find((l) => l.id === selection.id) : undefined;
 
   const deleteSelection = () => {
-    if (selection?.kind === 'component') setDiagram((d) => removeComponent(d, selection.id));
-    if (selection?.kind === 'connection') setDiagram((d) => removeConnection(d, selection.id));
+    if (selection?.kind === 'component') edit((d) => removeComponent(d, selection.id));
+    if (selection?.kind === 'connection') edit((d) => removeConnection(d, selection.id));
     setSelection(null);
   };
 
-  // Entf bzw. Rücktaste löscht die Auswahl, außer beim Tippen in ein Eingabefeld.
+  // Nach Rückgängig/Wiederholen kann das Ausgewählte verschwunden sein.
+  useEffect(() => {
+    if (selection && !selected && !selectedLine) setSelection(null);
+  }, [selection, selected, selectedLine]);
+
+  // Tastatur: Strg+Z / Strg+Y (bzw. Strg+Umschalt+Z) und Entf.
+  // In Eingabefeldern bleiben die Tasten beim Feld (dort wirkt das Rückgängig des Browsers).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       const t = e.target as HTMLElement;
       if (t.closest('input, textarea, select, [contenteditable]')) return;
+      const key = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === 'z' || key === 'y')) {
+        e.preventDefault();
+        if (key === 'y' || e.shiftKey) history.redo();
+        else history.undo();
+        return;
+      }
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       if (!selection) return;
       e.preventDefault();
       deleteSelection();
@@ -102,6 +117,12 @@ export function App() {
         <button onClick={() => setNewDialogOpen(true)}>Neu…</button>
         <button onClick={() => fileInput.current?.click()}>Öffnen…</button>
         <button onClick={save}>Speichern</button>
+        <button onClick={history.undo} disabled={!history.canUndo} title="Rückgängig (Strg+Z)">
+          ↶
+        </button>
+        <button onClick={history.redo} disabled={!history.canRedo} title="Wiederholen (Strg+Y)">
+          ↷
+        </button>
         <input
           ref={fileInput}
           type="file"
@@ -117,7 +138,10 @@ export function App() {
           className="title"
           aria-label="Titel"
           value={diagram.meta.title}
-          onChange={(e) => setDiagram({ ...diagram, meta: { ...diagram.meta, title: e.target.value } })}
+          onChange={(e) => {
+            const title = e.target.value;
+            edit((d) => ({ ...d, meta: { ...d.meta, title } }), 'title');
+          }}
         />
         <span className="domain">{DOMAIN_NAMES[diagram.domain]}</span>
       </header>
@@ -153,11 +177,11 @@ export function App() {
           diagram={diagram}
           selection={selection}
           onSelect={setSelection}
-          onMove={(id, position) => setDiagram((d) => updateComponent(d, id, { position }))}
+          onMove={(id, position) => edit((d) => updateComponent(d, id, { position }), `move:${id}`)}
           onConnect={(from, to, waypoints) => {
             try {
               const r = connect(diagram, from, to, lineKindFor(diagram, from, to), waypoints);
-              setDiagram(r.diagram);
+              edit(r.diagram);
               setSelection({ kind: 'connection', id: r.connection.id });
               setMessage(null);
             } catch (err) {
@@ -165,7 +189,8 @@ export function App() {
               setMessage(err.message);
             }
           }}
-          onRouteChange={(id, waypoints) => setDiagram((d) => updateConnection(d, id, { waypoints }))}
+          onRouteChange={(id, waypoints) => edit((d) => updateConnection(d, id, { waypoints }), `route:${id}`)}
+          onGestureEnd={history.seal}
         />
       </main>
 
@@ -177,13 +202,13 @@ export function App() {
               Kennzeichen
               <input
                 value={selected.label}
-                onChange={(e) => setDiagram(updateComponent(diagram, selected.id, { label: e.target.value }))}
+                onChange={(e) => edit(updateComponent(diagram, selected.id, { label: e.target.value }), `label:${selected.id}`)}
               />
             </label>
             <div className="row">
               <button
                 onClick={() =>
-                  setDiagram(
+                  edit(
                     updateComponent(diagram, selected.id, {
                       rotation: ((selected.rotation + 90) % 360) as 0 | 90 | 180 | 270,
                     }),
@@ -192,7 +217,7 @@ export function App() {
               >
                 Drehen
               </button>
-              <button onClick={() => setDiagram(updateComponent(diagram, selected.id, { mirrored: !selected.mirrored }))}>
+              <button onClick={() => edit(updateComponent(diagram, selected.id, { mirrored: !selected.mirrored }))}>
                 Spiegeln
               </button>
               <button onClick={deleteSelection}>Löschen</button>
@@ -200,7 +225,7 @@ export function App() {
             {selected.config && (
               <Configurator
                 config={selected.config}
-                onChange={(config) => setDiagram((d) => configureComponent(d, selected.id, config))}
+                onChange={(config) => edit((d) => configureComponent(d, selected.id, config))}
               />
             )}
           </>
@@ -211,7 +236,7 @@ export function App() {
               <select
                 value={selectedLine.kind}
                 onChange={(e) =>
-                  setDiagram(updateConnection(diagram, selectedLine.id, { kind: e.target.value as LineKind }))
+                  edit(updateConnection(diagram, selectedLine.id, { kind: e.target.value as LineKind }))
                 }
               >
                 {(Object.keys(LINE_KIND_NAMES) as LineKind[]).map((k) => (
@@ -225,7 +250,7 @@ export function App() {
               <button
                 disabled={selectedLine.waypoints.length === 0}
                 title="Eigene Knicke verwerfen und die Leitung automatisch führen"
-                onClick={() => setDiagram(updateConnection(diagram, selectedLine.id, { waypoints: [] }))}
+                onClick={() => edit(updateConnection(diagram, selectedLine.id, { waypoints: [] }))}
               >
                 Automatisch führen
               </button>
@@ -246,12 +271,15 @@ export function App() {
               auf die Fläche klicken und den Zielanschluss anklicken. Esc bricht ab.
             </p>
             <h2>Blatt</h2>
-            <SheetFields sheet={diagram.sheet} onChange={(sheet) => setDiagram({ ...diagram, sheet })} />
+            <SheetFields sheet={diagram.sheet} onChange={(sheet) => edit((d) => ({ ...d, sheet }))} />
             <label>
               Erstellt von
               <input
                 value={diagram.meta.author}
-                onChange={(e) => setDiagram({ ...diagram, meta: { ...diagram.meta, author: e.target.value } })}
+                onChange={(e) => {
+                  const author = e.target.value;
+                  edit((d) => ({ ...d, meta: { ...d.meta, author } }), 'author');
+                }}
               />
             </label>
           </>

@@ -35,6 +35,8 @@ interface Props {
   /** Neue Leitung; `waypoints` leer = automatisch führen. */
   onConnect: (from: PortRef, to: PortRef, waypoints: Point[]) => void;
   onRouteChange: (id: string, waypoints: Point[]) => void;
+  /** Ziehen beendet; fasst die Zwischenschritte für Rückgängig zu einem Schritt zusammen. */
+  onGestureEnd?: () => void;
 }
 
 /** Leitung, die gerade gezeichnet wird. */
@@ -53,7 +55,7 @@ interface View {
 }
 
 type Drag =
-  | { kind: 'move'; id: string; start: Point; origin: Point }
+  | { kind: 'move'; id: string; start: Point; origin: Point; last: Point }
   | { kind: 'pan'; startX: number; startY: number; origin: View; moved: boolean }
   | { kind: 'segment'; id: string; index: number; path: Point[]; start: Point; offset: number };
 
@@ -66,7 +68,7 @@ const clampScale = (s: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
  * Bauteile mit Schaltzeichen (symbols.tsx) erscheinen als ISO-1219-Symbol,
  * alle übrigen vorerst als beschriftete Rahmen mit Anschlusspunkten.
  */
-export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, onRouteChange }: Props) {
+export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, onRouteChange, onGestureEnd }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<Drag | null>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
@@ -231,7 +233,11 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
             }
           } else if (d.kind === 'move') {
             const p = toDiagram(e);
-            onMove(d.id, { x: snap(d.origin.x + p.x - d.start.x), y: snap(d.origin.y + p.y - d.start.y) });
+            const to = { x: snap(d.origin.x + p.x - d.start.x), y: snap(d.origin.y + p.y - d.start.y) };
+            if (to.x !== d.last.x || to.y !== d.last.y) {
+              d.last = to;
+              onMove(d.id, to);
+            }
           } else {
             const dx = e.clientX - d.startX;
             const dy = e.clientY - d.startY;
@@ -243,6 +249,7 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
           const d = drag.current;
           drag.current = null;
           setPanning(false);
+          if (d?.kind === 'move' || d?.kind === 'segment') onGestureEnd?.();
           // Ein Klick ohne Verschieben auf freie Fläche hebt die Auswahl auf.
           if (d?.kind === 'pan' && !d.moved) onSelect(null);
         }}
@@ -311,7 +318,7 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
               e.stopPropagation();
               (e.currentTarget.ownerSVGElement ?? e.currentTarget).setPointerCapture?.(e.pointerId);
               onSelect({ kind: 'component', id: c.id });
-              drag.current = { kind: 'move', id: c.id, start: toDiagram(e), origin: c.position };
+              drag.current = { kind: 'move', id: c.id, start: toDiagram(e), origin: c.position, last: c.position };
             }}
             onPortPointerDown={(portId, e) => {
               if (e.button !== 0) return;
