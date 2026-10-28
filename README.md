@@ -111,6 +111,11 @@ src/
   (`working` Arbeitsleitung, `pilot` Steuerleitung, `drain` Leckageleitung) und optionale Knickpunkte.
   Leere Knickpunktliste = automatisch geführt. Ein Leitungsende kann statt eines Anschlusses
   auch ein **Abzweigpunkt** sein (`{ junctionId }`, Liste `junctions` im Schaltplan, ab Dateiversion 3).
+- **Grafik** (`annotations`, ab Dateiversion 4): freier Text, Linie oder Rechteck
+  (`solid`, `dashed`, `dashdot`; Strich-Punkt = Baugruppen-Umrandung nach ISO 1219-1).
+  Schrifthöhe in Einheiten (14 = 3,5 mm). Funktionen in `annotations.ts`.
+- **Schriftfeld**: Titel, Zeichnungsnummer, Firma, Erstellt/Geprüft von und Änderungsstand
+  stehen in `meta`; Datum und Format füllt das Programm.
 
 Das Datenmodell wird nur über die Funktionen in `diagram.ts` verändert. Sie geben jeweils
 einen neuen Schaltplan zurück, was Undo/Redo später einfach macht.
@@ -122,10 +127,10 @@ Schaltpläne werden als `*.fluidplan.json` gespeichert:
 ```json
 {
   "format": "fluidplan",
-  "version": 3,
+  "version": 4,
   "diagram": {
     "domain": "hydraulic",
-    "meta": { "title": "…", "author": "", "created": "…", "modified": "…" },
+    "meta": { "title": "…", "author": "", "drawingNumber": "", "organization": "", "checkedBy": "", "revision": "", "created": "…", "modified": "…" },
     "sheet": { "format": "A4", "orientation": "landscape", "frame": true },
     "components": [
       { "id": "c1", "type": "actuator.cylinder-double", "position": { "x": 140, "y": 40 },
@@ -137,7 +142,12 @@ Schaltpläne werden als `*.fluidplan.json` gespeichert:
       { "id": "l2", "from": { "componentId": "c3", "portId": "P" },
         "to": { "junctionId": "j1" }, "kind": "working", "waypoints": [] }
     ],
-    "junctions": [{ "id": "j1", "position": { "x": 100, "y": 200 } }]
+    "junctions": [{ "id": "j1", "position": { "x": 100, "y": 200 } }],
+    "annotations": [
+      { "id": "a1", "kind": "text", "position": { "x": 300, "y": 80 }, "text": "Hubeinheit", "size": 14 },
+      { "id": "a2", "kind": "rect", "position": { "x": 120, "y": 20 }, "width": 260, "height": 200, "style": "dashdot" },
+      { "id": "a3", "kind": "line", "from": { "x": 0, "y": 0 }, "to": { "x": 100, "y": 0 }, "style": "dashed" }
+    ]
   }
 }
 ```

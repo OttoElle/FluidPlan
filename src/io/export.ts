@@ -39,10 +39,13 @@ const PRINT_STYLE: [selector: string, attributes: Record<string, string>][] = [
   ['.port text', { 'font-size': '6', fill: '#000000' }],
   ['.sheet-frame .frame', { fill: 'none', stroke: '#000000', 'stroke-width': '2' }],
   ['.sheet-frame line', { stroke: '#000000', 'stroke-width': '1' }],
+  ['.sheet-frame .cell', { fill: 'none', stroke: '#000000', 'stroke-width': '1' }],
   ['.sheet-frame text', { fill: '#000000' }],
   ['.sheet-frame .caption', { 'font-size': '8', fill: '#555555' }],
   ['.sheet-frame .value', { 'font-size': '12' }],
   ['.sheet-frame .value.big', { 'font-size': '18', 'font-weight': 'bold' }],
+  ['.note-line', { fill: 'none', stroke: '#000000', 'stroke-width': '1' }],
+  ['.note', { fill: '#000000' }],
 ];
 
 /** Nur für die Bearbeitung: wird beim Export entfernt. */
@@ -52,6 +55,9 @@ const EDITOR_ONLY = [
   'rect[fill="url(#grid)"]',
   '.segment-hit',
   '.hit',
+  '.stroke-hit',
+  '.handle',
+  '.title-cell',
   '.band',
   '.port circle',
   '.draft',

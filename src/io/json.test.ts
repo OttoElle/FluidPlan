@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { addAnnotation } from '../model/annotations.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
 import { FILE_VERSION, parseDiagram, serializeDiagram } from './json.ts';
 import { fileNameFor } from './browser.ts';
@@ -22,6 +23,28 @@ describe('JSON speichern und laden', () => {
     const original = exampleHydraulicDiagram(fixedDate);
     const result = parseDiagram(serializeDiagram(original));
     expect(result).toEqual({ ok: true, diagram: original });
+  });
+
+  it('speichert Text, Linien und Rechtecke', () => {
+    let d = exampleHydraulicDiagram(fixedDate);
+    d = addAnnotation(d, { kind: 'text', position: { x: 100, y: 100 }, text: 'Hub\nSenken', size: 14 }).diagram;
+    d = addAnnotation(d, { kind: 'line', from: { x: 0, y: 0 }, to: { x: 50, y: 0 }, style: 'dashed' }).diagram;
+    d = addAnnotation(d, { kind: 'rect', position: { x: 10, y: 10 }, width: 80, height: 40, style: 'dashdot' }).diagram;
+    d = { ...d, meta: { ...d.meta, drawingNumber: 'FP-001', revision: 'B' } };
+    expect(parseDiagram(serializeDiagram(d))).toEqual({ ok: true, diagram: d });
+  });
+
+  it('meldet fehlerhafte Grafik', () => {
+    const errors = errorsOf(
+      mutate((f) => {
+        f.diagram.annotations = [
+          { id: 'a1', kind: 'rect', position: { x: 0, y: 0 }, width: 0, height: 10, style: 'solid' },
+          { id: 'a1', kind: 'kreis' },
+        ];
+      }),
+    );
+    expect(errors).toContain('diagram.annotations[0].width: positive Zahl erwartet');
+    expect(errors).toContain('diagram.annotations[1].kind: einer von "text", "line", "rect" erwartet');
   });
 
   it('schreibt Format und Version in die Datei', () => {
@@ -93,6 +116,19 @@ describe('Migration', () => {
     });
     const r = parseDiagram(v1);
     expect(r.ok && r.diagram.sheet.format).toBe('A3');
+  });
+
+  it('ergänzt bei Version-3-Dateien Grafikliste und Schriftfeld-Angaben', () => {
+    const v3 = mutate((f) => {
+      f.version = 3;
+      delete f.diagram.annotations;
+      f.diagram.meta = { title: 'Alt', author: 'Otto', created: 'x', modified: 'y' };
+    });
+    const r = parseDiagram(v3);
+    expect(r.ok && r.diagram.annotations).toEqual([]);
+    expect(r.ok && r.diagram.meta).toEqual({
+      title: 'Alt', author: 'Otto', drawingNumber: '', organization: '', checkedBy: '', revision: '', created: 'x', modified: 'y',
+    });
   });
 
   it('meldet ein ungültiges Blatt', () => {

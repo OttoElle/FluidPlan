@@ -12,17 +12,25 @@ import {
   updateComponent,
   updateConnection,
 } from '../model/diagram.ts';
+import {
+  DEFAULT_TEXT_SIZE,
+  TEXT_SIZES,
+  addAnnotation,
+  moveAnnotations,
+  updateAnnotation,
+  type NewAnnotation,
+} from '../model/annotations.ts';
 import { checkDiagram, type Issue } from '../model/check.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
 import { autoLabel } from '../model/labels.ts';
 import { PALETTE_GROUPS, paletteFor, type PaletteEntry } from '../model/library.ts';
-import { drawingArea } from '../model/sheet.ts';
-import type { Diagram, LineKind } from '../model/types.ts';
+import { drawingArea, type TitleField } from '../model/sheet.ts';
+import type { Diagram, DiagramMeta, LineKind, StrokeStyle } from '../model/types.ts';
 import { downloadDiagram, readDiagramFile } from '../io/browser.ts';
 import { exportDiagram, type ExportFormat, type ExportOptions } from '../io/export.ts';
 import { CheckPanel } from './CheckPanel.tsx';
 import { Configurator } from './Configurator.tsx';
-import { DiagramView } from './DiagramView.tsx';
+import { DiagramView, type AnnotationTool } from './DiagramView.tsx';
 import { alignComponents, mirrorComponents, moveComponents, rotateComponents, type Alignment } from '../model/arrange.ts';
 import {
   EMPTY_SELECTION,
@@ -30,8 +38,10 @@ import {
   isEmpty,
   prune,
   selectAll,
+  selectAnnotation,
   selectComponent,
   selectConnection,
+  selectionCount,
   type Selection,
 } from '../model/selection.ts';
 import { ExportDialog } from './ExportDialog.tsx';
@@ -50,6 +60,36 @@ const lineKindOptions = (Object.keys(LINE_KIND_NAMES) as LineKind[]).map((k) => 
   </option>
 ));
 
+const STROKE_STYLE_NAMES: Record<StrokeStyle, string> = {
+  solid: 'Volllinie',
+  dashed: 'Strichlinie',
+  dashdot: 'Strich-Punkt (Baugruppe)',
+};
+
+const TOOLS: [AnnotationTool, string, string][] = [
+  ['text', 'Text', 'Klick auf das Blatt setzt einen Text'],
+  ['line', 'Linie', 'Linie auf dem Blatt aufziehen'],
+  ['rect', 'Rechteck', 'Rechteck aufziehen, z. B. als Baugruppen-Umrandung (Strich-Punkt)'],
+];
+
+/** Bearbeitbare Felder des Schriftfelds; Datum und Format füllt das Programm. */
+const TITLE_FIELDS: [Exclude<TitleField, 'date' | 'format'>, string][] = [
+  ['title', 'Titel'],
+  ['drawingNumber', 'Zeichnungsnummer'],
+  ['organization', 'Firma / Abteilung'],
+  ['author', 'Erstellt von'],
+  ['checkedBy', 'Geprüft von'],
+  ['revision', 'Änderungsstand'],
+];
+
+/** Fokussiert ein Eingabefeld der Seitenleiste, sobald es gerendert ist. */
+const focusField = (id: string) =>
+  requestAnimationFrame(() => {
+    const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
+    el?.focus();
+    el?.select();
+  });
+
 const ALIGNMENTS: [Alignment, string, string][] = [
   ['left', '⇤ Links', 'Linke Kanten bündig'],
   ['center', '↔ Mitte', 'Waagerecht mittig (senkrechte Achse)'],
@@ -66,6 +106,7 @@ function describe(s: Selection): string {
   n(s.components.length, 'Bauteil', 'Bauteile');
   n(s.connections.length, 'Leitung', 'Leitungen');
   n(s.junctions.length, 'Abzweig', 'Abzweige');
+  n(s.annotations.length, 'Grafik', 'Grafiken');
   return parts.join(', ');
 }
 
@@ -77,6 +118,7 @@ export function App() {
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [tool, setTool] = useState<AnnotationTool | null>(null);
   const issues = useMemo(() => (checking ? checkDiagram(diagram) : []), [checking, diagram]);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -146,12 +188,29 @@ export function App() {
     if (current !== selection) setSelection(current);
   }, [current, selection]);
 
-  const single = current.components.length + current.connections.length + current.junctions.length === 1;
+  const single = selectionCount(current) === 1;
   const selected = single ? diagram.components.find((c) => c.id === current.components[0]) : undefined;
   const selectedLine = single ? diagram.connections.find((l) => l.id === current.connections[0]) : undefined;
   const selectedJunction = single ? diagram.junctions.find((j) => j.id === current.junctions[0]) : undefined;
+  const selectedAnnotation = single ? diagram.annotations.find((a) => a.id === current.annotations[0]) : undefined;
   const selectedIds = current.components;
   const selectedLines = diagram.connections.filter((l) => current.connections.includes(l.id));
+
+  const createAnnotation = (a: NewAnnotation) => {
+    const r = addAnnotation(diagram, a);
+    edit(r.diagram);
+    setSelection(selectAnnotation(r.annotation.id));
+    setTool(null);
+    if (a.kind === 'text') focusField('annotation-text');
+  };
+
+  const setMeta = (field: keyof DiagramMeta, value: string) =>
+    edit((d) => ({ ...d, meta: { ...d.meta, [field]: value } }), `meta:${field}`);
+
+  const editTitleField = (field: TitleField) => {
+    setSelection(EMPTY_SELECTION);
+    focusField(`title-${field}`);
+  };
 
   const deleteSelection = () => {
     edit((d) => deleteSelected(d, current));
@@ -197,7 +256,10 @@ export function App() {
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === 'Escape') setSelection(EMPTY_SELECTION);
+      if (e.key === 'Escape') {
+        if (tool) setTool(null);
+        else setSelection(EMPTY_SELECTION);
+      }
       if (key === 'r' && selectedIds.length > 0) rotate();
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       if (isEmpty(current)) return;
@@ -245,7 +307,7 @@ export function App() {
           value={diagram.meta.title}
           onChange={(e) => {
             const title = e.target.value;
-            edit((d) => ({ ...d, meta: { ...d.meta, title } }), 'title');
+            setMeta('title', title);
           }}
         />
         <span className="domain">{DOMAIN_NAMES[diagram.domain]}</span>
@@ -266,6 +328,14 @@ export function App() {
       )}
 
       <aside className="palette">
+        <h2>Zeichnen</h2>
+        <div className="palette-tools">
+          {TOOLS.map(([t, name, title]) => (
+            <button key={t} title={title} aria-pressed={tool === t} onClick={() => setTool(tool === t ? null : t)}>
+              {name}
+            </button>
+          ))}
+        </div>
         <h2>Bauteile</h2>
         {PALETTE_GROUPS.map((group) => {
           const entries = paletteFor(diagram.domain).filter((e) => e.group === group);
@@ -288,7 +358,14 @@ export function App() {
           diagram={diagram}
           selection={current}
           onSelect={setSelection}
-          onMove={(ids, delta) => edit((d) => moveComponents(d, ids, delta), 'move')}
+          onMove={(target, delta) =>
+            edit((d) => moveAnnotations(moveComponents(d, target.components, delta), target.annotations, delta), 'move')
+          }
+          tool={tool}
+          onCreateAnnotation={createAnnotation}
+          onReshapeAnnotation={(id, changes) => edit((d) => updateAnnotation(d, id, changes), `shape:${id}`)}
+          onEditText={() => focusField('annotation-text')}
+          onEditTitleField={editTitleField}
           onConnect={(from, to, waypoints) => {
             try {
               const r = connect(diagram, from, to, lineKindFor(diagram, from, to), waypoints);
@@ -364,6 +441,65 @@ export function App() {
               Ein Teilstück der Leitung ziehen, um es zu verschieben. Entf löscht die Leitung.
             </p>
           </>
+        ) : selectedAnnotation ? (
+          <>
+            {selectedAnnotation.kind === 'text' ? (
+              <>
+                <label>
+                  Text
+                  <textarea
+                    id="annotation-text"
+                    rows={3}
+                    value={selectedAnnotation.text}
+                    onChange={(e) =>
+                      edit(updateAnnotation(diagram, selectedAnnotation.id, { text: e.target.value }), `text:${selectedAnnotation.id}`)
+                    }
+                  />
+                </label>
+                <label>
+                  Schrifthöhe
+                  <select
+                    value={selectedAnnotation.size}
+                    onChange={(e) => edit(updateAnnotation(diagram, selectedAnnotation.id, { size: Number(e.target.value) }))}
+                  >
+                    {TEXT_SIZES.some((t) => t.size === selectedAnnotation.size) ? null : (
+                      <option value={selectedAnnotation.size}>{selectedAnnotation.size / 4} mm</option>
+                    )}
+                    {TEXT_SIZES.map((t) => (
+                      <option key={t.size} value={t.size}>
+                        {t.name}
+                        {t.size === DEFAULT_TEXT_SIZE ? ' (Standard)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            ) : (
+              <label>
+                Linienart
+                <select
+                  value={selectedAnnotation.style}
+                  onChange={(e) =>
+                    edit(updateAnnotation(diagram, selectedAnnotation.id, { style: e.target.value as StrokeStyle }))
+                  }
+                >
+                  {(Object.keys(STROKE_STYLE_NAMES) as StrokeStyle[]).map((k) => (
+                    <option key={k} value={k}>
+                      {STROKE_STYLE_NAMES[k]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <div className="row">
+              <button onClick={deleteSelection}>Löschen</button>
+            </div>
+            <p className="hint">
+              {selectedAnnotation.kind === 'text'
+                ? 'Ziehen verschiebt den Text, Doppelklick springt zum Textfeld. Zeilenumbruch mit Enter.'
+                : 'Ziehen verschiebt das Objekt, die Anfasser ändern Lage und Größe.'}
+            </p>
+          </>
         ) : selectedJunction ? (
           <>
             <p className="hint">
@@ -428,16 +564,14 @@ export function App() {
             </p>
             <h2>Blatt</h2>
             <SheetFields sheet={diagram.sheet} onChange={(sheet) => edit((d) => ({ ...d, sheet }))} />
-            <label>
-              Erstellt von
-              <input
-                value={diagram.meta.author}
-                onChange={(e) => {
-                  const author = e.target.value;
-                  edit((d) => ({ ...d, meta: { ...d.meta, author } }), 'author');
-                }}
-              />
-            </label>
+            <h2>Schriftfeld</h2>
+            {TITLE_FIELDS.map(([field, caption]) => (
+              <label key={field}>
+                {caption}
+                <input id={`title-${field}`} value={diagram.meta[field]} onChange={(e) => setMeta(field, e.target.value)} />
+              </label>
+            ))}
+            <p className="hint">Datum und Format füllt das Programm. Ein Klick ins Schriftfeld springt zum passenden Feld.</p>
           </>
         )}
       </aside>

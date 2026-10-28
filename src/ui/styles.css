@@ -221,3 +221,27 @@ select {
 .check-panel .badge { flex: none; font-size: 11px; padding: 1px 5px; border-radius: 4px; background: var(--bg); color: var(--muted); height: fit-content; }
 .check-panel .error .badge { background: var(--error-bg); color: var(--text); }
 fieldset.column { flex-direction: column; gap: 4px; }
+
+/* Freier Text und Grafik */
+.diagram.placing { cursor: crosshair; }
+.annotation { cursor: move; }
+.annotation .hit { fill: transparent; }
+.annotation .stroke-hit { fill: none; stroke: transparent; stroke-width: 8; pointer-events: stroke; }
+.note-line { fill: none; stroke: var(--line); stroke-width: 1; }
+.note { fill: var(--text); white-space: pre; }
+.annotation.selected .note-line { stroke: var(--accent); }
+.annotation.selected .note { fill: var(--accent); }
+.annotation.text.selected .hit { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.note-line.creating { stroke: var(--accent); stroke-dasharray: 4 3; pointer-events: none; }
+.handle { fill: var(--panel); stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.handle.from, .handle.to { cursor: move; }
+.handle.nw, .handle.se { cursor: nwse-resize; }
+.handle.ne, .handle.sw { cursor: nesw-resize; }
+
+/* Schriftfeld */
+.sheet-frame .cell { fill: none; stroke: var(--frame); stroke-width: 1; }
+.sheet-frame .title-cell { fill: transparent; stroke: none; cursor: text; }
+.sheet-frame .title-cell:hover { fill: color-mix(in srgb, var(--accent) 10%, transparent); }
+.palette-tools { display: flex; flex-direction: column; gap: 4px; }
+.palette-tools button[aria-pressed='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+textarea { font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; resize: vertical; }

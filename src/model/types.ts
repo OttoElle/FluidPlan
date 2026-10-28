@@ -128,9 +128,22 @@ export interface Connection {
   waypoints: Point[];
 }
 
+/**
+ * Angaben im Schriftfeld (vereinfacht nach DIN EN ISO 7200). Datum und
+ * Blattformat ergeben sich von selbst und werden nicht gespeichert.
+ */
 export interface DiagramMeta {
   title: string;
+  /** Ersteller ("Erstellt von"). */
   author: string;
+  /** Zeichnungs- bzw. Sachnummer. */
+  drawingNumber: string;
+  /** Firma bzw. Abteilung. */
+  organization: string;
+  /** Geprüft von. */
+  checkedBy: string;
+  /** Änderungsstand, z. B. "A". */
+  revision: string;
   /** ISO-8601-Zeitstempel. */
   created: string;
   /** ISO-8601-Zeitstempel. */
@@ -150,6 +163,47 @@ export interface Sheet {
   lineJumps?: boolean;
 }
 
+/**
+ * Linienart freier Grafik: durchgezogen, gestrichelt oder Strich-Punkt.
+ * Strich-Punkt umrandet nach ISO 1219-1 eine Baugruppe.
+ */
+export type StrokeStyle = 'solid' | 'dashed' | 'dashdot';
+
+/** Freier Text; `position` ist der linke Rand der Grundlinie der ersten Zeile. */
+export interface TextAnnotation {
+  id: string;
+  kind: 'text';
+  position: Point;
+  /** Mehrzeilig mit "\n". */
+  text: string;
+  /** Schrifthöhe in Einheiten (14 = 3,5 mm). */
+  size: number;
+}
+
+export interface LineAnnotation {
+  id: string;
+  kind: 'line';
+  from: Point;
+  to: Point;
+  style: StrokeStyle;
+}
+
+export interface RectAnnotation {
+  id: string;
+  kind: 'rect';
+  /** Linke obere Ecke. */
+  position: Point;
+  width: number;
+  height: number;
+  style: StrokeStyle;
+}
+
+/**
+ * Freier Text und einfache Grafik auf dem Blatt (z. B. Baugruppen-Umrandung).
+ * Sie gehören zu keinem Bauteil und haben keine Anschlüsse.
+ */
+export type Annotation = TextAnnotation | LineAnnotation | RectAnnotation;
+
 /** Ein kompletter Schaltplan. */
 export interface Diagram {
   domain: Domain;
@@ -158,4 +212,5 @@ export interface Diagram {
   components: ComponentInstance[];
   connections: Connection[];
   junctions: Junction[];
+  annotations: Annotation[];
 }

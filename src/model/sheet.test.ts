@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawingArea, sheetSize, smallestSheetFor, titleBlock } from './sheet.ts';
+import { drawingArea, sheetSize, smallestSheetFor, titleBlock, titleCells } from './sheet.ts';
 
 describe('Zeichenblatt', () => {
   it('rechnet Blattgrößen in Einheiten à 0,25 mm um', () => {
@@ -14,7 +14,21 @@ describe('Zeichenblatt', () => {
 
   it('setzt das Schriftfeld in die untere rechte Rahmenecke', () => {
     const block = titleBlock({ format: 'A4', orientation: 'landscape', frame: true });
-    expect(block).toEqual({ x: 668, y: 700, width: 480, height: 100 });
+    expect(block).toEqual({ x: 588, y: 692, width: 560, height: 108 });
+  });
+
+  it('teilt das Schriftfeld lückenlos in Felder auf', () => {
+    const sheet = { format: 'A4', orientation: 'landscape', frame: true } as const;
+    const block = titleBlock(sheet);
+    const cells = titleCells(sheet);
+    expect(cells.map((c) => c.field)).toEqual([
+      'title', 'drawingNumber', 'organization', 'author', 'checkedBy', 'date', 'format', 'revision',
+    ]);
+    expect(cells.reduce((sum, c) => sum + c.width * c.height, 0)).toBe(block.width * block.height);
+    for (const c of cells) {
+      expect(c.x + c.width).toBeLessThanOrEqual(block.x + block.width);
+      expect(c.y + c.height).toBeLessThanOrEqual(block.y + block.height);
+    }
   });
 
   it('nimmt ohne Rahmen das ganze Blatt', () => {

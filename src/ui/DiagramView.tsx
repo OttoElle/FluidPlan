@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { endpointPosition, sameEndpoint, transformLocalPoint } from '../model/diagram.ts';
 import { definitionOf } from '../model/library.ts';
-import { MM_PER_UNIT, drawingArea, sheetSize, titleBlock } from '../model/sheet.ts';
+import {
+  LINE_HEIGHT,
+  STROKE_DASH,
+  annotationBox,
+  rectFromCorners,
+  textLines,
+  type NewAnnotation,
+} from '../model/annotations.ts';
+import { MM_PER_UNIT, drawingArea, sheetSize, titleBlock, titleCells, type TitleField } from '../model/sheet.ts';
 import {
   componentBox,
   branchDots,
@@ -15,10 +23,23 @@ import {
   routeAll,
 } from '../model/routing.ts';
 import { EMPTY_SELECTION, toggle, union, type Selection } from '../model/selection.ts';
-import type { ComponentInstance, Diagram, Endpoint, LineKind, Point } from '../model/types.ts';
+import type { Annotation, ComponentInstance, Diagram, Endpoint, LineKind, Point } from '../model/types.ts';
 import { ComponentSymbol, hasSymbol } from './symbols.tsx';
 
 export type { Selection };
+
+/** Zeichenwerkzeug für freie Grafik; `null` = Auswählen. */
+export type AnnotationTool = 'text' | 'line' | 'rect';
+
+/** Was beim Verschieben mitwandert. */
+export type MoveTarget = Pick<Selection, 'components' | 'annotations'>;
+
+/** Anfasser einer Linie (Anfang, Ende) bzw. eines Rechtecks (Ecken). */
+type Handle = 'from' | 'to' | 'nw' | 'ne' | 'sw' | 'se';
+
+/** Größe von Linie und Rechteck, wenn nur geklickt statt gezogen wird. */
+const DEFAULT_LINE = 100;
+const DEFAULT_RECT = { width: 200, height: 120 };
 
 const GRID = 10;
 const DASH: Record<LineKind, string | undefined> = { working: undefined, pilot: '6 4', drain: '2 3' };
@@ -34,8 +55,17 @@ interface Props {
   diagram: Diagram;
   selection: Selection;
   onSelect: (selection: Selection) => void;
-  /** Verschiebt Bauteile um `delta` (seit dem letzten Aufruf, im Raster). */
-  onMove: (ids: string[], delta: Point) => void;
+  /** Verschiebt Bauteile und Grafik um `delta` (seit dem letzten Aufruf, im Raster). */
+  onMove: (target: MoveTarget, delta: Point) => void;
+  /** Aktives Zeichenwerkzeug; ein Klick bzw. Ziehen auf dem Blatt legt das Objekt an. */
+  tool?: AnnotationTool | null;
+  onCreateAnnotation?: (annotation: NewAnnotation) => void;
+  /** Linie bzw. Rechteck über einen Anfasser verändert. */
+  onReshapeAnnotation?: (id: string, changes: Partial<Annotation>) => void;
+  /** Doppelklick auf einen Text: Text bearbeiten. */
+  onEditText?: (id: string) => void;
+  /** Klick auf ein Feld im Schriftfeld. */
+  onEditTitleField?: (field: TitleField) => void;
   /** Neue Leitung; `waypoints` leer = automatisch führen. */
   onConnect: (from: Endpoint, to: Endpoint, waypoints: Point[]) => void;
   /** Neue Leitung, die auf einer bestehenden Leitung endet: dort entsteht ein Abzweig. */
@@ -62,7 +92,9 @@ interface View {
 }
 
 type Drag =
-  | { kind: 'move'; ids: string[]; start: Point; moved: Point }
+  | { kind: 'move'; target: MoveTarget; start: Point; moved: Point }
+  | { kind: 'create'; tool: 'line' | 'rect'; start: Point; end: Point }
+  | { kind: 'handle'; annotation: Annotation; handle: Handle; start: Point; last: Point }
   | { kind: 'band'; start: Point; end: Point; additive: boolean; moved: boolean }
   | { kind: 'pan'; startX: number; startY: number; origin: View; moved: boolean }
   | { kind: 'segment'; id: string; index: number; path: Point[]; start: Point; offset: number }
@@ -87,6 +119,11 @@ export function DiagramView({
   onRouteChange,
   onMoveJunction,
   onGestureEnd,
+  tool = null,
+  onCreateAnnotation,
+  onReshapeAnnotation,
+  onEditText,
+  onEditTitleField,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<Drag | null>(null);
@@ -97,6 +134,7 @@ export function DiagramView({
   const [hoverPort, setHoverPort] = useState<Endpoint | null>(null);
   const [band, setBand] = useState<{ start: Point; end: Point } | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
+  const [creating, setCreating] = useState<{ tool: 'line' | 'rect'; start: Point; end: Point } | null>(null);
 
   // Leertaste gedrückt halten: Ziehen mit der linken Maustaste verschiebt die Ansicht.
   useEffect(() => {
@@ -216,6 +254,12 @@ export function DiagramView({
         .map((c) => c.id),
       connections: diagram.connections.filter((l) => paths.get(l.id)!.every(inside)).map((l) => l.id),
       junctions: diagram.junctions.filter((j) => inside(j.position)).map((j) => j.id),
+      annotations: diagram.annotations
+        .filter((a) => {
+          const box = annotationBox(a);
+          return inside({ x: box.minX, y: box.minY }) && inside({ x: box.maxX, y: box.maxY });
+        })
+        .map((a) => a.id),
     };
   };
 
@@ -272,7 +316,7 @@ export function DiagramView({
     <div className="diagram-wrap">
       <svg
         ref={svgRef}
-        className={panning ? 'diagram panning' : spaceDown ? 'diagram pan-ready' : 'diagram'}
+        className={panning ? 'diagram panning' : spaceDown ? 'diagram pan-ready' : tool ? 'diagram placing' : 'diagram'}
         viewBox={view && size ? `${view.x} ${view.y} ${size.width / view.scale} ${size.height / view.scale}` : undefined}
         onPointerDown={(e) => {
           if (draft && e.button === 0) {
@@ -288,6 +332,16 @@ export function DiagramView({
           if (!view || (e.button !== 0 && e.button !== 1)) return;
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
+          if (e.button === 0 && !spaceDown && tool) {
+            const p = snapPoint(toDiagram(e));
+            if (tool === 'text') {
+              onCreateAnnotation?.({ kind: 'text', position: p, text: 'Text', size: 14 });
+              return;
+            }
+            drag.current = { kind: 'create', tool, start: p, end: p };
+            setCreating({ tool, start: p, end: p });
+            return;
+          }
           if (e.button === 0 && !spaceDown) {
             // Linke Maustaste auf freier Fläche: Auswahlrahmen aufziehen.
             const p = toDiagram(e);
@@ -322,8 +376,18 @@ export function DiagramView({
             const p = toDiagram(e);
             const total = { x: snap(p.x - d.start.x), y: snap(p.y - d.start.y) };
             if (total.x !== d.moved.x || total.y !== d.moved.y) {
-              onMove(d.ids, { x: total.x - d.moved.x, y: total.y - d.moved.y });
+              onMove(d.target, { x: total.x - d.moved.x, y: total.y - d.moved.y });
               d.moved = total;
+            }
+          } else if (d.kind === 'create') {
+            d.end = snapPoint(toDiagram(e));
+            setCreating({ tool: d.tool, start: d.start, end: d.end });
+          } else if (d.kind === 'handle') {
+            const p = toDiagram(e);
+            const delta = { x: snap(p.x - d.start.x), y: snap(p.y - d.start.y) };
+            if (delta.x !== d.last.x || delta.y !== d.last.y) {
+              d.last = delta;
+              onReshapeAnnotation?.(d.annotation.id, reshape(d.annotation, d.handle, delta));
             }
           } else if (d.kind === 'band') {
             d.end = toDiagram(e);
@@ -340,8 +404,12 @@ export function DiagramView({
           const d = drag.current;
           drag.current = null;
           setPanning(false);
-          if (d?.kind === 'move' || d?.kind === 'segment' || d?.kind === 'junction') onGestureEnd?.();
+          if (d?.kind === 'move' || d?.kind === 'segment' || d?.kind === 'junction' || d?.kind === 'handle') {
+            onGestureEnd?.();
+          }
           setBand(null);
+          setCreating(null);
+          if (d?.kind === 'create') onCreateAnnotation?.(createdShape(d.tool, d.start, d.end));
           if (d?.kind === 'band') {
             const picked = d.moved ? inBand(d.start, d.end) : EMPTY_SELECTION;
             // Ein Klick ohne Ziehen auf freie Fläche hebt die Auswahl auf (außer mit Umschalt).
@@ -367,7 +435,40 @@ export function DiagramView({
             pointerEvents="none"
           />
         )}
-        {sheet.frame && <SheetFrame diagram={diagram} />}
+        {sheet.frame && <SheetFrame diagram={diagram} onPick={draft || tool ? undefined : onEditTitleField} />}
+
+        {diagram.annotations.map((a) => {
+          const selected = selection.annotations.includes(a.id);
+          return (
+            <AnnotationShape
+              key={a.id}
+              annotation={a}
+              selected={selected}
+              handles={selected && selection.annotations.length === 1}
+              onPointerDown={(e) => {
+                if (e.button !== 0 || draft || tool) return;
+                e.stopPropagation();
+                if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                  onSelect(toggle(selection, { ...EMPTY_SELECTION, annotations: [a.id] }));
+                  return;
+                }
+                e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
+                const target = selected
+                  ? { components: selection.components, annotations: selection.annotations }
+                  : { components: [], annotations: [a.id] };
+                if (!selected) onSelect({ ...EMPTY_SELECTION, annotations: [a.id] });
+                drag.current = { kind: 'move', target, start: toDiagram(e), moved: { x: 0, y: 0 } };
+              }}
+              onHandlePointerDown={(handle, e) => {
+                if (e.button !== 0) return;
+                e.stopPropagation();
+                (e.currentTarget as SVGElement).ownerSVGElement?.setPointerCapture(e.pointerId);
+                drag.current = { kind: 'handle', annotation: a, handle, start: toDiagram(e), last: { x: 0, y: 0 } };
+              }}
+              onDoubleClick={() => a.kind === 'text' && onEditText?.(a.id)}
+            />
+          );
+        })}
 
         {diagram.connections.map((l) => {
           const path = paths.get(l.id)!;
@@ -463,9 +564,11 @@ export function DiagramView({
               }
               (e.currentTarget.ownerSVGElement ?? e.currentTarget).setPointerCapture?.(e.pointerId);
               // Ziehen an einem ausgewählten Bauteil verschiebt die ganze Auswahl.
-              const ids = selection.components.includes(c.id) ? selection.components : [c.id];
+              const target = selection.components.includes(c.id)
+                ? { components: selection.components, annotations: selection.annotations }
+                : { components: [c.id], annotations: [] };
               if (!selection.components.includes(c.id)) onSelect({ ...EMPTY_SELECTION, components: [c.id] });
-              drag.current = { kind: 'move', ids, start: toDiagram(e), moved: { x: 0, y: 0 } };
+              drag.current = { kind: 'move', target, start: toDiagram(e), moved: { x: 0, y: 0 } };
             }}
             onPortPointerDown={(portId, e) => {
               if (e.button !== 0) return;
@@ -483,6 +586,18 @@ export function DiagramView({
         ))}
 
         {draft && <polyline className="line draft" points={toPoints(draftPath(draft))} />}
+        {creating &&
+          (creating.tool === 'line' ? (
+            <line
+              className="note-line creating"
+              x1={creating.start.x}
+              y1={creating.start.y}
+              x2={creating.end.x}
+              y2={creating.end.y}
+            />
+          ) : (
+            <rect className="note-line creating" {...rectProps(rectFromCorners(creating.start, creating.end))} />
+          ))}
         {band && (
           <rect
             className="band"
@@ -511,34 +626,169 @@ export function DiagramView({
 }
 
 /** Zeichnungsrahmen und vereinfachtes Schriftfeld nach DIN EN ISO 5457 / 7200. */
-function SheetFrame({ diagram }: { diagram: Diagram }) {
+function SheetFrame({ diagram, onPick }: { diagram: Diagram; onPick?: (field: TitleField) => void }) {
   const area = drawingArea(diagram.sheet);
   const block = titleBlock(diagram.sheet);
   const { sheet, meta } = diagram;
-  const row = block.height / 2;
-  const col = block.width / 3;
-  const date = meta.modified.slice(0, 10);
-  const cell = (x: number, y: number, caption: string, value: string, big = false) => (
-    <>
-      <text x={x + 6} y={y + 12} className="caption">
-        {caption}
-      </text>
-      <text x={x + 6} y={y + row - 8} className={big ? 'value big' : 'value'}>
-        {value}
-      </text>
-    </>
-  );
+  const value = (field: TitleField): string =>
+    field === 'date'
+      ? meta.modified.slice(0, 10)
+      : field === 'format'
+        ? `${sheet.format} ${ORIENTATION_NAMES[sheet.orientation]}`
+        : meta[field];
+  const editable = (field: TitleField) => field !== 'date' && field !== 'format';
   return (
     <g className="sheet-frame" pointerEvents="none">
       <rect x={area.x} y={area.y} width={area.width} height={area.height} className="frame" />
+      {titleCells(sheet).map((c) => (
+        <g key={c.field}>
+          <rect x={c.x} y={c.y} width={c.width} height={c.height} className="cell" />
+          <text x={c.x + 6} y={c.y + 11} className="caption">
+            {c.caption}
+          </text>
+          <text x={c.x + 6} y={c.y + c.height - 7} className={c.big ? 'value big' : 'value'}>
+            {value(c.field)}
+          </text>
+          {onPick && editable(c.field) && (
+            <rect
+              x={c.x}
+              y={c.y}
+              width={c.width}
+              height={c.height}
+              className="title-cell"
+              pointerEvents="all"
+              onPointerDown={(e) => {
+                if (e.button !== 0) return;
+                e.stopPropagation();
+                onPick(c.field);
+              }}
+            >
+              <title>{c.caption} bearbeiten</title>
+            </rect>
+          )}
+        </g>
+      ))}
       <rect x={block.x} y={block.y} width={block.width} height={block.height} className="frame" />
-      <line x1={block.x} y1={block.y + row} x2={block.x + block.width} y2={block.y + row} />
-      <line x1={block.x + col} y1={block.y + row} x2={block.x + col} y2={block.y + block.height} />
-      <line x1={block.x + 2 * col} y1={block.y + row} x2={block.x + 2 * col} y2={block.y + block.height} />
-      {cell(block.x, block.y, 'Titel', meta.title, true)}
-      {cell(block.x, block.y + row, 'Erstellt von', meta.author)}
-      {cell(block.x + col, block.y + row, 'Datum', date)}
-      {cell(block.x + 2 * col, block.y + row, 'Format', `${sheet.format} ${ORIENTATION_NAMES[sheet.orientation]}`)}
+    </g>
+  );
+}
+
+const rectProps = (r: { position: Point; width: number; height: number }) => ({
+  x: r.position.x,
+  y: r.position.y,
+  width: r.width,
+  height: r.height,
+});
+
+/** Neue Linie bzw. neues Rechteck aus dem aufgezogenen Bereich; ein bloßer Klick ergibt eine Standardgröße. */
+function createdShape(tool: 'line' | 'rect', start: Point, end: Point): NewAnnotation {
+  const clicked = start.x === end.x && start.y === end.y;
+  if (tool === 'line') {
+    return { kind: 'line', from: start, to: clicked ? { x: start.x + DEFAULT_LINE, y: start.y } : end, style: 'solid' };
+  }
+  const corner = clicked ? { x: start.x + DEFAULT_RECT.width, y: start.y + DEFAULT_RECT.height } : end;
+  return { kind: 'rect', ...rectFromCorners(start, corner), style: 'dashdot' };
+}
+
+/** Neue Lage nach Ziehen eines Anfassers um `delta` (seit Beginn des Ziehens). */
+function reshape(a: Annotation, handle: Handle, delta: Point): Partial<Annotation> {
+  const add = (p: Point) => ({ x: p.x + delta.x, y: p.y + delta.y });
+  if (a.kind === 'line') return handle === 'from' ? { from: add(a.from) } : { to: add(a.to) };
+  if (a.kind !== 'rect') return {};
+  const x0 = a.position.x;
+  const y0 = a.position.y;
+  const x1 = x0 + a.width;
+  const y1 = y0 + a.height;
+  // Gezogene Ecke bewegen, die gegenüberliegende bleibt stehen.
+  const moved = {
+    nw: [add({ x: x0, y: y0 }), { x: x1, y: y1 }],
+    ne: [add({ x: x1, y: y0 }), { x: x0, y: y1 }],
+    sw: [add({ x: x0, y: y1 }), { x: x1, y: y0 }],
+    se: [add({ x: x1, y: y1 }), { x: x0, y: y0 }],
+  }[handle as 'nw' | 'ne' | 'sw' | 'se'];
+  const r = rectFromCorners(moved[0]!, moved[1]!);
+  // Ein Rechteck ohne Fläche wäre nicht mehr anzufassen.
+  return r.width > 0 && r.height > 0 ? r : {};
+}
+
+function AnnotationShape({
+  annotation: a,
+  selected,
+  handles,
+  onPointerDown,
+  onHandlePointerDown,
+  onDoubleClick,
+}: {
+  annotation: Annotation;
+  selected: boolean;
+  handles: boolean;
+  onPointerDown: (e: React.PointerEvent<SVGGElement>) => void;
+  onHandlePointerDown: (handle: Handle, e: React.PointerEvent) => void;
+  onDoubleClick: () => void;
+}) {
+  const handle = (h: Handle, p: Point) => (
+    <rect
+      key={h}
+      className={`handle ${h}`}
+      x={p.x - 3}
+      y={p.y - 3}
+      width={6}
+      height={6}
+      onPointerDown={(e) => onHandlePointerDown(h, e)}
+    />
+  );
+  let shape: React.ReactNode;
+  let grips: React.ReactNode = null;
+  if (a.kind === 'text') {
+    const box = annotationBox(a);
+    shape = (
+      <>
+        <rect x={box.minX} y={box.minY} width={box.maxX - box.minX} height={box.maxY - box.minY} className="hit" />
+        <text className="note" x={a.position.x} y={a.position.y} fontSize={a.size}>
+          {textLines(a).map((line, i) => (
+            <tspan key={i} x={a.position.x} dy={i === 0 ? 0 : a.size * LINE_HEIGHT}>
+              {/* Leere Zeilen brauchen Inhalt, sonst zählt dy nicht. */}
+              {line || '\u00a0'}
+            </tspan>
+          ))}
+        </text>
+      </>
+    );
+  } else if (a.kind === 'line') {
+    const ends = { x1: a.from.x, y1: a.from.y, x2: a.to.x, y2: a.to.y };
+    shape = (
+      <>
+        <line {...ends} className="stroke-hit" />
+        <line {...ends} className="note-line" strokeDasharray={STROKE_DASH[a.style]} />
+      </>
+    );
+    if (handles) grips = [handle('from', a.from), handle('to', a.to)];
+  } else {
+    const r = rectProps(a);
+    shape = (
+      <>
+        <rect {...r} className="stroke-hit" />
+        <rect {...r} className="note-line" strokeDasharray={STROKE_DASH[a.style]} />
+      </>
+    );
+    const { x, y } = a.position;
+    if (handles) {
+      grips = [
+        handle('nw', { x, y }),
+        handle('ne', { x: x + a.width, y }),
+        handle('sw', { x, y: y + a.height }),
+        handle('se', { x: x + a.width, y: y + a.height }),
+      ];
+    }
+  }
+  return (
+    <g
+      className={`annotation ${a.kind}${selected ? ' selected' : ''}`}
+      onPointerDown={onPointerDown}
+      onDoubleClick={onDoubleClick}
+    >
+      {shape}
+      {grips}
     </g>
   );
 }

@@ -1,5 +1,6 @@
 import { definitionOf, getDefinition, isConfigurable, isKnownType, LEGACY_TYPES, readConfig } from '../model/library.ts';
 import type {
+  Annotation,
   ComponentInstance,
   Connection,
   Diagram,
@@ -13,19 +14,20 @@ import type {
   Rotation,
   Sheet,
   SheetFormat,
+  StrokeStyle,
 } from '../model/types.ts';
 import { SHEET_FORMATS, smallestSheetFor } from '../model/sheet.ts';
 
 /**
  * Dateiformat (.fluidplan.json):
  *
- *   { "format": "fluidplan", "version": 3, "diagram": { ... } }
+ *   { "format": "fluidplan", "version": 4, "diagram": { ... } }
  *
  * `version` wird erhöht, sobald sich das Format inkompatibel ändert.
  * Ältere Versionen werden dann beim Laden in `migrate` hochgezogen.
  */
 export const FILE_FORMAT = 'fluidplan';
-export const FILE_VERSION = 3;
+export const FILE_VERSION = 4;
 export const FILE_EXTENSION = '.fluidplan.json';
 
 interface FileEnvelope {
@@ -100,13 +102,21 @@ function upgradeLegacyTypes(diagram: Diagram): Diagram {
  * 1 → 2: Zeichenblatt (`sheet`) eingeführt. Alte Pläne bekommen das kleinste
  *        Querformat-Blatt mit Rahmen, auf das ihre Bauteile passen.
  * 2 → 3: Abzweigpunkte (`junctions`); Leitungsenden können auf sie verweisen.
+ * 3 → 4: Freier Text und Grafik (`annotations`) sowie weitere Schriftfeld-Angaben
+ *        in `meta` (Zeichnungsnummer, Firma, Geprüft von, Änderungsstand).
  */
 function migrate(version: number, diagram: unknown): unknown {
   let d = diagram;
   if (version < 2 && isObject(d)) d = { ...d, sheet: sheetForV1(d) };
   if (version < 3 && isObject(d)) d = { ...d, junctions: [] };
+  if (version < 4 && isObject(d)) {
+    const meta = isObject(d.meta) ? { ...META_DEFAULTS, ...d.meta } : d.meta;
+    d = { ...d, meta, annotations: [] };
+  }
   return d;
 }
+
+const META_DEFAULTS = { drawingNumber: '', organization: '', checkedBy: '', revision: '' };
 
 function sheetForV1(d: Obj): Sheet {
   let right = 0;
@@ -134,6 +144,8 @@ const ROTATIONS: readonly Rotation[] = [0, 90, 180, 270];
 const LINE_KINDS: readonly LineKind[] = ['working', 'pilot', 'drain'];
 const SHEET_FORMAT_KEYS = Object.keys(SHEET_FORMATS) as SheetFormat[];
 const ORIENTATIONS: readonly Orientation[] = ['portrait', 'landscape'];
+const STROKE_STYLES: readonly StrokeStyle[] = ['solid', 'dashed', 'dashdot'];
+const ANNOTATION_KINDS: readonly Annotation['kind'][] = ['text', 'line', 'rect'];
 
 function readDiagram(v: unknown, errors: string[]): Diagram | undefined {
   if (!isObject(v)) {
@@ -146,8 +158,46 @@ function readDiagram(v: unknown, errors: string[]): Diagram | undefined {
   const components = readArray(v.components, 'diagram.components', errors, readComponent);
   const connections = readArray(v.connections, 'diagram.connections', errors, readConnection);
   const junctions = readArray(v.junctions, 'diagram.junctions', errors, readJunction);
-  if (!domain || !meta || !sheet || !components || !connections || !junctions) return undefined;
-  return { domain, meta, sheet, components, connections, junctions };
+  const annotations = readArray(v.annotations, 'diagram.annotations', errors, readAnnotation);
+  if (!domain || !meta || !sheet || !components || !connections || !junctions || !annotations) return undefined;
+  return { domain, meta, sheet, components, connections, junctions, annotations };
+}
+
+function readAnnotation(v: unknown, path: string, errors: string[]): Annotation | undefined {
+  if (!isObject(v)) {
+    errors.push(`${path}: Objekt erwartet`);
+    return undefined;
+  }
+  const id = nonEmpty(v.id, `${path}.id`, errors);
+  const kind = oneOf(v.kind, ANNOTATION_KINDS, `${path}.kind`, errors);
+  if (id === undefined || kind === undefined) return undefined;
+  if (kind === 'text') {
+    const position = point(v.position, `${path}.position`, errors);
+    const text = str(v.text, `${path}.text`, errors);
+    const size = positive(v.size, `${path}.size`, errors);
+    if (!position || text === undefined || size === undefined) return undefined;
+    return { id, kind, position, text, size };
+  }
+  const style = oneOf(v.style, STROKE_STYLES, `${path}.style`, errors);
+  if (kind === 'line') {
+    const from = point(v.from, `${path}.from`, errors);
+    const to = point(v.to, `${path}.to`, errors);
+    if (!from || !to || !style) return undefined;
+    return { id, kind, from, to, style };
+  }
+  const position = point(v.position, `${path}.position`, errors);
+  const width = positive(v.width, `${path}.width`, errors);
+  const height = positive(v.height, `${path}.height`, errors);
+  if (!position || width === undefined || height === undefined || !style) return undefined;
+  return { id, kind, position, width, height, style };
+}
+
+function positive(v: unknown, path: string, errors: string[]): number | undefined {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) {
+    errors.push(`${path}: positive Zahl erwartet`);
+    return undefined;
+  }
+  return v;
 }
 
 function readJunction(v: unknown, path: string, errors: string[]): Junction | undefined {
@@ -181,14 +231,12 @@ function readMeta(v: unknown, errors: string[]): DiagramMeta | undefined {
     errors.push('diagram.meta: Objekt erwartet');
     return undefined;
   }
-  const title = str(v.title, 'diagram.meta.title', errors);
-  const author = str(v.author, 'diagram.meta.author', errors);
-  const created = str(v.created, 'diagram.meta.created', errors);
-  const modified = str(v.modified, 'diagram.meta.modified', errors);
-  if (title === undefined || author === undefined || created === undefined || modified === undefined) {
-    return undefined;
-  }
-  return { title, author, created, modified };
+  const keys = [
+    'title', 'author', 'drawingNumber', 'organization', 'checkedBy', 'revision', 'created', 'modified',
+  ] as const satisfies readonly (keyof DiagramMeta)[];
+  const before = errors.length;
+  const meta = Object.fromEntries(keys.map((k) => [k, str(v[k], `diagram.meta.${k}`, errors)]));
+  return errors.length === before ? (meta as unknown as DiagramMeta) : undefined;
 }
 
 function readComponent(v: unknown, path: string, errors: string[]): ComponentInstance | undefined {
@@ -351,5 +399,11 @@ function checkReferences(diagram: Diagram, errors: string[]): void {
   }
   for (const [id, n] of junctionLines) {
     if (n > 4) errors.push(`Abzweigpunkt "${id}": mehr als 4 Leitungen`);
+  }
+
+  const annotationIds = new Set<string>();
+  for (const a of diagram.annotations) {
+    if (annotationIds.has(a.id)) errors.push(`Grafik-ID "${a.id}" ist doppelt vergeben`);
+    annotationIds.add(a.id);
   }
 }

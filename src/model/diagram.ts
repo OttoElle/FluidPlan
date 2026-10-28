@@ -35,11 +35,12 @@ export function createDiagram(
   const stamp = now.toISOString();
   return {
     domain,
-    meta: { title, author: '', created: stamp, modified: stamp },
+    meta: { title, author: '', drawingNumber: '', organization: '', checkedBy: '', revision: '', created: stamp, modified: stamp },
     sheet: { ...sheet },
     components: [],
     connections: [],
     junctions: [],
+    annotations: [],
   };
 }
 
