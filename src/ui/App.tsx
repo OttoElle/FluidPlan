@@ -6,8 +6,6 @@ import {
   connect,
   createDiagram,
   lineKindFor,
-  removeComponent,
-  removeConnection,
   touch,
   updateComponent,
   updateConnection,
@@ -18,7 +16,18 @@ import { drawingArea } from '../model/sheet.ts';
 import type { Diagram, LineKind } from '../model/types.ts';
 import { downloadDiagram, readDiagramFile } from '../io/browser.ts';
 import { Configurator } from './Configurator.tsx';
-import { DiagramView, type Selection } from './DiagramView.tsx';
+import { DiagramView } from './DiagramView.tsx';
+import { alignComponents, mirrorComponents, moveComponents, rotateComponents, type Alignment } from '../model/arrange.ts';
+import {
+  EMPTY_SELECTION,
+  deleteSelected,
+  isEmpty,
+  prune,
+  selectAll,
+  selectComponent,
+  selectConnection,
+  type Selection,
+} from '../model/selection.ts';
 import { useHistory } from './useHistory.ts';
 
 const LINE_KIND_NAMES: Record<LineKind, string> = {
@@ -28,10 +37,35 @@ const LINE_KIND_NAMES: Record<LineKind, string> = {
 };
 import { DOMAIN_NAMES, NewDocumentDialog, SheetFields, type NewDocument } from './SheetSettings.tsx';
 
+const lineKindOptions = (Object.keys(LINE_KIND_NAMES) as LineKind[]).map((k) => (
+  <option key={k} value={k}>
+    {LINE_KIND_NAMES[k]}
+  </option>
+));
+
+const ALIGNMENTS: [Alignment, string, string][] = [
+  ['left', '⇤ Links', 'Linke Kanten bündig'],
+  ['center', '↔ Mitte', 'Waagerecht mittig (senkrechte Achse)'],
+  ['right', 'Rechts ⇥', 'Rechte Kanten bündig'],
+  ['top', '⤒ Oben', 'Obere Kanten bündig'],
+  ['middle', '↕ Mitte', 'Senkrecht mittig (waagerechte Achse)'],
+  ['bottom', '⤓ Unten', 'Untere Kanten bündig'],
+];
+
+/** z. B. „3 Bauteile, 1 Leitung“. */
+function describe(s: Selection): string {
+  const parts: string[] = [];
+  const n = (count: number, one: string, many: string) => count > 0 && parts.push(`${count} ${count === 1 ? one : many}`);
+  n(s.components.length, 'Bauteil', 'Bauteile');
+  n(s.connections.length, 'Leitung', 'Leitungen');
+  n(s.junctions.length, 'Abzweig', 'Abzweige');
+  return parts.join(', ');
+}
+
 export function App() {
   const history = useHistory<Diagram>(exampleHydraulicDiagram);
   const { present: diagram, edit } = history;
-  const [selection, setSelection] = useState<Selection>(null);
+  const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
   const [message, setMessage] = useState<string | null>(null);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -39,7 +73,7 @@ export function App() {
   const startNew = ({ domain, title, sheet }: NewDocument) => {
     setNewDialogOpen(false);
     history.reset(createDiagram(domain, title, new Date(), sheet));
-    setSelection(null);
+    setSelection(EMPTY_SELECTION);
     setMessage(null);
   };
 
@@ -47,7 +81,7 @@ export function App() {
     const result = await readDiagramFile(file);
     if (result.ok) {
       history.reset(result.diagram);
-      setSelection(null);
+      setSelection(EMPTY_SELECTION);
       setMessage(null);
     } else {
       setMessage(`„${file.name}“ konnte nicht geladen werden:\n` + result.errors.join('\n'));
@@ -70,23 +104,45 @@ export function App() {
       { config: entry.config },
     );
     edit(next);
-    setSelection({ kind: 'component', id: component.id });
+    setSelection(selectComponent(component.id));
   };
 
-  const selected = selection?.kind === 'component' ? diagram.components.find((c) => c.id === selection.id) : undefined;
-  const selectedLine =
-    selection?.kind === 'connection' ? diagram.connections.find((l) => l.id === selection.id) : undefined;
+  // Nach Rückgängig/Wiederholen kann Ausgewähltes verschwunden sein.
+  const current = prune(diagram, selection);
+  useEffect(() => {
+    if (current !== selection) setSelection(current);
+  }, [current, selection]);
+
+  const single = current.components.length + current.connections.length + current.junctions.length === 1;
+  const selected = single ? diagram.components.find((c) => c.id === current.components[0]) : undefined;
+  const selectedLine = single ? diagram.connections.find((l) => l.id === current.connections[0]) : undefined;
+  const selectedIds = current.components;
+  const selectedLines = diagram.connections.filter((l) => current.connections.includes(l.id));
 
   const deleteSelection = () => {
-    if (selection?.kind === 'component') edit((d) => removeComponent(d, selection.id));
-    if (selection?.kind === 'connection') edit((d) => removeConnection(d, selection.id));
-    setSelection(null);
+    edit((d) => deleteSelected(d, current));
+    setSelection(EMPTY_SELECTION);
   };
+  const rotate = () => edit((d) => rotateComponents(d, selectedIds));
+  const mirror = (axis: 'horizontal' | 'vertical') => edit((d) => mirrorComponents(d, selectedIds, axis));
+  const align = (alignment: Alignment) => edit((d) => alignComponents(d, selectedIds, alignment));
+  const setLineKind = (kind: LineKind) =>
+    edit((d) => selectedLines.reduce((acc, l) => updateConnection(acc, l.id, { kind }), d));
 
-  // Nach Rückgängig/Wiederholen kann das Ausgewählte verschwunden sein.
-  useEffect(() => {
-    if (selection && !selected && !selectedLine) setSelection(null);
-  }, [selection, selected, selectedLine]);
+  const arrangeButtons = (
+    <div className="row">
+      <button onClick={rotate} title="90° im Uhrzeigersinn drehen (R)">
+        Drehen
+      </button>
+      <button onClick={() => mirror('horizontal')} title="Links und rechts vertauschen">
+        Spiegeln ↔
+      </button>
+      <button onClick={() => mirror('vertical')} title="Oben und unten vertauschen">
+        Spiegeln ↕
+      </button>
+      <button onClick={deleteSelection}>Löschen</button>
+    </div>
+  );
 
   // Tastatur: Strg+Z / Strg+Y (bzw. Strg+Umschalt+Z) und Entf.
   // In Eingabefeldern bleiben die Tasten beim Feld (dort wirkt das Rückgängig des Browsers).
@@ -101,8 +157,16 @@ export function App() {
         else history.undo();
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && key === 'a') {
+        e.preventDefault();
+        setSelection(selectAll(diagram));
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'Escape') setSelection(EMPTY_SELECTION);
+      if (key === 'r' && selectedIds.length > 0) rotate();
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-      if (!selection) return;
+      if (isEmpty(current)) return;
       e.preventDefault();
       deleteSelection();
     };
@@ -175,14 +239,14 @@ export function App() {
       <main className="canvas">
         <DiagramView
           diagram={diagram}
-          selection={selection}
+          selection={current}
           onSelect={setSelection}
-          onMove={(id, position) => edit((d) => updateComponent(d, id, { position }), `move:${id}`)}
+          onMove={(ids, delta) => edit((d) => moveComponents(d, ids, delta), 'move')}
           onConnect={(from, to, waypoints) => {
             try {
               const r = connect(diagram, from, to, lineKindFor(diagram, from, to), waypoints);
               edit(r.diagram);
-              setSelection({ kind: 'connection', id: r.connection.id });
+              setSelection(selectConnection(r.connection.id));
               setMessage(null);
             } catch (err) {
               if (!(err instanceof DiagramError)) throw err;
@@ -205,23 +269,7 @@ export function App() {
                 onChange={(e) => edit(updateComponent(diagram, selected.id, { label: e.target.value }), `label:${selected.id}`)}
               />
             </label>
-            <div className="row">
-              <button
-                onClick={() =>
-                  edit(
-                    updateComponent(diagram, selected.id, {
-                      rotation: ((selected.rotation + 90) % 360) as 0 | 90 | 180 | 270,
-                    }),
-                  )
-                }
-              >
-                Drehen
-              </button>
-              <button onClick={() => edit(updateComponent(diagram, selected.id, { mirrored: !selected.mirrored }))}>
-                Spiegeln
-              </button>
-              <button onClick={deleteSelection}>Löschen</button>
-            </div>
+            {arrangeButtons}
             {selected.config && (
               <Configurator
                 config={selected.config}
@@ -235,15 +283,9 @@ export function App() {
               Linienart
               <select
                 value={selectedLine.kind}
-                onChange={(e) =>
-                  edit(updateConnection(diagram, selectedLine.id, { kind: e.target.value as LineKind }))
-                }
+                onChange={(e) => setLineKind(e.target.value as LineKind)}
               >
-                {(Object.keys(LINE_KIND_NAMES) as LineKind[]).map((k) => (
-                  <option key={k} value={k}>
-                    {LINE_KIND_NAMES[k]}
-                  </option>
-                ))}
+                {lineKindOptions}
               </select>
             </label>
             <div className="row">
@@ -260,10 +302,51 @@ export function App() {
               Ein Teilstück der Leitung ziehen, um es zu verschieben. Entf löscht die Leitung.
             </p>
           </>
+        ) : !isEmpty(current) ? (
+          <>
+            <p>{describe(current)} ausgewählt</p>
+            {selectedIds.length > 0 && arrangeButtons}
+            {selectedIds.length >= 2 && (
+              <>
+                <h2>Ausrichten</h2>
+                <div className="row align">
+                  {ALIGNMENTS.map(([alignment, label, title]) => (
+                    <button key={alignment} onClick={() => align(alignment)} title={title}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {selectedLines.length > 0 && (
+              <label>
+                Linienart
+                <select
+                  value={selectedLines.every((l) => l.kind === selectedLines[0]!.kind) ? selectedLines[0]!.kind : ''}
+                  onChange={(e) => setLineKind(e.target.value as LineKind)}
+                >
+                  <option value="" disabled>
+                    gemischt
+                  </option>
+                  {lineKindOptions}
+                </select>
+              </label>
+            )}
+            {selectedIds.length === 0 && (
+              <div className="row">
+                <button onClick={deleteSelection}>Löschen</button>
+              </div>
+            )}
+            <p className="hint">
+              Ziehen an einem ausgewählten Bauteil verschiebt die ganze Auswahl. Umschalt+Klick nimmt Teile hinzu oder
+              heraus.
+            </p>
+          </>
         ) : (
           <>
             <p className="hint">
-              Bauteil anklicken, um es zu bearbeiten. Ziehen verschiebt es. Mausrad zoomt, Ziehen auf freier Fläche
+              Bauteil anklicken, um es zu bearbeiten. Ziehen verschiebt es. Rahmen auf freier Fläche aufziehen oder
+              Umschalt+Klick wählt mehrere Teile, Strg+A alles. Mausrad zoomt; mittlere Maustaste oder Leertaste+Ziehen
               verschiebt die Ansicht.
             </p>
             <p className="hint">

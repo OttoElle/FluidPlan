@@ -184,3 +184,8 @@ select {
 .configurator legend { font-size: 12px; color: var(--muted); }
 .configurator .path { flex-wrap: nowrap; align-items: center; }
 .configurator .chip { justify-content: space-between; align-items: center; font-size: 13px; }
+
+/* Mehrfachauswahl */
+.band { fill: color-mix(in srgb, var(--accent) 10%, transparent); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.diagram.pan-ready { cursor: grab; }
+.row.align button { flex: 1 1 30%; padding: 4px 2px; white-space: nowrap; }

@@ -3,6 +3,7 @@ import { portPosition, transformLocalPoint } from '../model/diagram.ts';
 import { definitionOf } from '../model/library.ts';
 import { MM_PER_UNIT, drawingArea, sheetSize, titleBlock } from '../model/sheet.ts';
 import {
+  componentBox,
   junctions,
   moveSegment,
   obstaclesOf,
@@ -11,11 +12,11 @@ import {
   route,
   routeAll,
 } from '../model/routing.ts';
+import { EMPTY_SELECTION, toggle, union, type Selection } from '../model/selection.ts';
 import type { ComponentInstance, Diagram, LineKind, Point, PortRef } from '../model/types.ts';
 import { ComponentSymbol, hasSymbol } from './symbols.tsx';
 
-/** Was gerade ausgewählt ist: ein Bauteil oder eine Leitung. */
-export type Selection = { kind: 'component' | 'connection'; id: string } | null;
+export type { Selection };
 
 const GRID = 10;
 const DASH: Record<LineKind, string | undefined> = { working: undefined, pilot: '6 4', drain: '2 3' };
@@ -31,7 +32,8 @@ interface Props {
   diagram: Diagram;
   selection: Selection;
   onSelect: (selection: Selection) => void;
-  onMove: (id: string, position: Point) => void;
+  /** Verschiebt Bauteile um `delta` (seit dem letzten Aufruf, im Raster). */
+  onMove: (ids: string[], delta: Point) => void;
   /** Neue Leitung; `waypoints` leer = automatisch führen. */
   onConnect: (from: PortRef, to: PortRef, waypoints: Point[]) => void;
   onRouteChange: (id: string, waypoints: Point[]) => void;
@@ -55,7 +57,8 @@ interface View {
 }
 
 type Drag =
-  | { kind: 'move'; id: string; start: Point; origin: Point; last: Point }
+  | { kind: 'move'; ids: string[]; start: Point; moved: Point }
+  | { kind: 'band'; start: Point; end: Point; additive: boolean; moved: boolean }
   | { kind: 'pan'; startX: number; startY: number; origin: View; moved: boolean }
   | { kind: 'segment'; id: string; index: number; path: Point[]; start: Point; offset: number };
 
@@ -76,6 +79,26 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
   const [panning, setPanning] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [hoverPort, setHoverPort] = useState<PortRef | null>(null);
+  const [band, setBand] = useState<{ start: Point; end: Point } | null>(null);
+  const [spaceDown, setSpaceDown] = useState(false);
+
+  // Leertaste gedrückt halten: Ziehen mit der linken Maustaste verschiebt die Ansicht.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== ' ' || (e.target as HTMLElement).closest('input, textarea, select, button, [contenteditable]')) return;
+      e.preventDefault();
+      setSpaceDown(e.type === 'keydown');
+    };
+    const onBlur = () => setSpaceDown(false);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKey);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKey);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, []);
 
   // Esc bricht das Zeichnen einer Leitung ab.
   useEffect(() => {
@@ -159,13 +182,32 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
   const paths = routeAll(diagram);
   const dots = junctions(diagram.connections, paths);
 
+  /** Alles, was ganz im Rahmen zwischen a und b liegt. */
+  const inBand = (a: Point, b: Point): Selection => {
+    const minX = Math.min(a.x, b.x);
+    const maxX = Math.max(a.x, b.x);
+    const minY = Math.min(a.y, b.y);
+    const maxY = Math.max(a.y, b.y);
+    const inside = (p: Point) => p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY;
+    return {
+      ...EMPTY_SELECTION,
+      components: diagram.components
+        .filter((c) => {
+          const box = componentBox(c);
+          return box && inside({ x: box.minX, y: box.minY }) && inside({ x: box.maxX, y: box.maxY });
+        })
+        .map((c) => c.id),
+      connections: diagram.connections.filter((l) => paths.get(l.id)!.every(inside)).map((l) => l.id),
+    };
+  };
+
   const samePort = (a: PortRef, b: PortRef) => a.componentId === b.componentId && a.portId === b.portId;
 
   /** Klick bzw. Loslassen auf einem Anschluss: Leitung beginnen oder abschließen. */
   const portClicked = (ref: PortRef) => {
     if (!draft) {
       setDraft({ from: ref, waypoints: [], cursor: portPosition(diagram, ref) });
-      onSelect(null);
+      onSelect(EMPTY_SELECTION);
     } else if (!samePort(draft.from, ref)) {
       const start = portPosition(diagram, draft.from);
       const end = portPosition(diagram, ref);
@@ -198,7 +240,7 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
     <div className="diagram-wrap">
       <svg
         ref={svgRef}
-        className={panning ? 'diagram panning' : 'diagram'}
+        className={panning ? 'diagram panning' : spaceDown ? 'diagram pan-ready' : 'diagram'}
         viewBox={view && size ? `${view.x} ${view.y} ${size.width / view.scale} ${size.height / view.scale}` : undefined}
         onPointerDown={(e) => {
           if (draft && e.button === 0) {
@@ -214,6 +256,12 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
           if (!view || (e.button !== 0 && e.button !== 1)) return;
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
+          if (e.button === 0 && !spaceDown) {
+            // Linke Maustaste auf freier Fläche: Auswahlrahmen aufziehen.
+            const p = toDiagram(e);
+            drag.current = { kind: 'band', start: p, end: p, additive: e.shiftKey || e.ctrlKey || e.metaKey, moved: false };
+            return;
+          }
           drag.current = { kind: 'pan', startX: e.clientX, startY: e.clientY, origin: view, moved: false };
           setPanning(true);
         }}
@@ -233,11 +281,15 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
             }
           } else if (d.kind === 'move') {
             const p = toDiagram(e);
-            const to = { x: snap(d.origin.x + p.x - d.start.x), y: snap(d.origin.y + p.y - d.start.y) };
-            if (to.x !== d.last.x || to.y !== d.last.y) {
-              d.last = to;
-              onMove(d.id, to);
+            const total = { x: snap(p.x - d.start.x), y: snap(p.y - d.start.y) };
+            if (total.x !== d.moved.x || total.y !== d.moved.y) {
+              onMove(d.ids, { x: total.x - d.moved.x, y: total.y - d.moved.y });
+              d.moved = total;
             }
+          } else if (d.kind === 'band') {
+            d.end = toDiagram(e);
+            if (Math.abs(d.end.x - d.start.x) + Math.abs(d.end.y - d.start.y) > 2 / (view?.scale ?? 1)) d.moved = true;
+            if (d.moved) setBand({ start: d.start, end: d.end });
           } else {
             const dx = e.clientX - d.startX;
             const dy = e.clientY - d.startY;
@@ -250,8 +302,13 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
           drag.current = null;
           setPanning(false);
           if (d?.kind === 'move' || d?.kind === 'segment') onGestureEnd?.();
-          // Ein Klick ohne Verschieben auf freie Fläche hebt die Auswahl auf.
-          if (d?.kind === 'pan' && !d.moved) onSelect(null);
+          setBand(null);
+          if (d?.kind === 'band') {
+            const picked = d.moved ? inBand(d.start, d.end) : EMPTY_SELECTION;
+            // Ein Klick ohne Ziehen auf freie Fläche hebt die Auswahl auf (außer mit Umschalt).
+            if (d.additive) onSelect(union(selection, picked));
+            else onSelect(picked);
+          }
         }}
       >
         <defs>
@@ -275,7 +332,7 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
 
         {diagram.connections.map((l) => {
           const path = paths.get(l.id)!;
-          const selected = selection?.kind === 'connection' && selection.id === l.id;
+          const selected = selection.connections.includes(l.id);
           return (
             <g key={l.id} className={selected ? 'connection selected' : 'connection'}>
               <polyline className="line" points={toPoints(path)} strokeDasharray={DASH[l.kind]} />
@@ -293,8 +350,12 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
                       onPointerDown={(e) => {
                         if (e.button !== 0) return;
                         e.stopPropagation();
+                        if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                          onSelect(toggle(selection, { ...EMPTY_SELECTION, connections: [l.id] }));
+                          return;
+                        }
                         e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
-                        onSelect({ kind: 'connection', id: l.id });
+                        onSelect({ ...EMPTY_SELECTION, connections: [l.id] });
                         drag.current = { kind: 'segment', id: l.id, index: i, path, start: toDiagram(e), offset: 0 };
                       }}
                     />
@@ -311,14 +372,20 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
           <ComponentShape
             key={c.id}
             component={c}
-            selected={selection?.kind === 'component' && selection.id === c.id}
+            selected={selection.components.includes(c.id)}
             drawing={draft !== null}
             onPointerDown={(e) => {
               if (e.button !== 0 || draft) return; // mittlere Taste: Ansicht verschieben
               e.stopPropagation();
+              if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                onSelect(toggle(selection, { ...EMPTY_SELECTION, components: [c.id] }));
+                return;
+              }
               (e.currentTarget.ownerSVGElement ?? e.currentTarget).setPointerCapture?.(e.pointerId);
-              onSelect({ kind: 'component', id: c.id });
-              drag.current = { kind: 'move', id: c.id, start: toDiagram(e), origin: c.position, last: c.position };
+              // Ziehen an einem ausgewählten Bauteil verschiebt die ganze Auswahl.
+              const ids = selection.components.includes(c.id) ? selection.components : [c.id];
+              if (!selection.components.includes(c.id)) onSelect({ ...EMPTY_SELECTION, components: [c.id] });
+              drag.current = { kind: 'move', ids, start: toDiagram(e), moved: { x: 0, y: 0 } };
             }}
             onPortPointerDown={(portId, e) => {
               if (e.button !== 0) return;
@@ -336,6 +403,15 @@ export function DiagramView({ diagram, selection, onSelect, onMove, onConnect, o
         ))}
 
         {draft && <polyline className="line draft" points={toPoints(draftPath(draft))} />}
+        {band && (
+          <rect
+            className="band"
+            x={Math.min(band.start.x, band.end.x)}
+            y={Math.min(band.start.y, band.end.y)}
+            width={Math.abs(band.end.x - band.start.x)}
+            height={Math.abs(band.end.y - band.start.y)}
+          />
+        )}
       </svg>
 
       <div className="zoom-controls">
