@@ -63,7 +63,7 @@ npm run build      # Typprüfung und Produktions-Build nach dist/
 
 - TypeScript, React, SVG
 - Vite als Build-Werkzeug, Vitest für Tests
-- Keine weiteren Laufzeitabhängigkeiten. Desktop-Paketierung mit Tauri ist später möglich.
+- jsPDF und svg2pdf.js nur für den PDF-Export (werden erst beim Export geladen). Desktop-Paketierung mit Tauri ist später möglich.
 
 ## Aufbau
 
@@ -76,10 +76,13 @@ src/
     cylinder.ts      Konfigurierbarer Zylinder
     diagram.ts       Reine Funktionen zum Bearbeiten (hinzufügen, verbinden, löschen, Anschlussposition)
     routing.ts       Rechtwinklige Leitungsführung im Raster (A*-Suche, Teilstücke verschieben)
+    labels.ts        Automatische Kennzeichnung nach ISO 1219-2 (1A1, 1V1, 0P1, …)
+    check.ts         „Zeichnung prüfen“: doppelte Kennzeichen, offene Anschlüsse, Überlappungen
     example.ts       Beispielschaltplan
   io/
     json.ts          Dateiformat, Speichern (serialize) und Laden mit Prüfung (parse)
     browser.ts       Download und Datei-Öffnen im Browser
+    export.ts        Export als PDF, SVG und PNG in echter Papiergröße
   ui/
     App.tsx          Oberfläche: Werkzeugleiste, Bauteilliste, Eigenschaften
     DiagramView.tsx  SVG-Zeichenfläche
@@ -88,6 +91,8 @@ src/
     valveSymbol.tsx  Wegeventil aus seiner Konfiguration
     cylinderSymbol.tsx Zylinder aus seiner Konfiguration
     Configurator.tsx Konfigurator für Wegeventil und Zylinder
+    ExportDialog.tsx Dialog „Exportieren“
+    CheckPanel.tsx   Ergebnisliste von „Zeichnung prüfen“
 ```
 
 ## Datenmodell

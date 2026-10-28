@@ -1,0 +1,43 @@
+import type { Issue } from '../model/check.ts';
+
+/**
+ * Ergebnis von „Zeichnung prüfen“. Die Liste aktualisiert sich beim
+ * Bearbeiten; ein Klick auf eine Meldung wählt das betroffene Teil aus.
+ */
+export function CheckPanel({
+  issues,
+  onPick,
+  onClose,
+}: {
+  issues: Issue[];
+  onPick: (issue: Issue) => void;
+  onClose: () => void;
+}) {
+  const errors = issues.filter((i) => i.severity === 'error').length;
+  const warnings = issues.length - errors;
+  return (
+    <section className="check-panel" aria-label="Zeichnung prüfen">
+      <header>
+        <strong>Zeichnung prüfen</strong>
+        <span className="summary">
+          {issues.length === 0 ? 'Keine Auffälligkeiten' : `${errors} Fehler, ${warnings} ${warnings === 1 ? 'Hinweis' : 'Hinweise'}`}
+        </span>
+        <button onClick={onClose} title="Schließen">
+          ×
+        </button>
+      </header>
+      {issues.length > 0 && (
+        <ul>
+          {issues.map((issue, i) => (
+            <li key={i}>
+              <button className={issue.severity} onClick={() => onPick(issue)}>
+                <span className="badge">{issue.severity === 'error' ? 'Fehler' : 'Hinweis'}</span>
+                {issue.message}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}

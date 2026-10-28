@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DiagramError,
   addComponent,
@@ -12,11 +12,15 @@ import {
   updateComponent,
   updateConnection,
 } from '../model/diagram.ts';
+import { checkDiagram, type Issue } from '../model/check.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
+import { autoLabel } from '../model/labels.ts';
 import { PALETTE_GROUPS, paletteFor, type PaletteEntry } from '../model/library.ts';
 import { drawingArea } from '../model/sheet.ts';
 import type { Diagram, LineKind } from '../model/types.ts';
 import { downloadDiagram, readDiagramFile } from '../io/browser.ts';
+import { exportDiagram, type ExportFormat, type ExportOptions } from '../io/export.ts';
+import { CheckPanel } from './CheckPanel.tsx';
 import { Configurator } from './Configurator.tsx';
 import { DiagramView } from './DiagramView.tsx';
 import { alignComponents, mirrorComponents, moveComponents, rotateComponents, type Alignment } from '../model/arrange.ts';
@@ -30,6 +34,7 @@ import {
   selectConnection,
   type Selection,
 } from '../model/selection.ts';
+import { ExportDialog } from './ExportDialog.tsx';
 import { useHistory } from './useHistory.ts';
 
 const LINE_KIND_NAMES: Record<LineKind, string> = {
@@ -70,6 +75,9 @@ export function App() {
   const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
   const [message, setMessage] = useState<string | null>(null);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const issues = useMemo(() => (checking ? checkDiagram(diagram) : []), [checking, diagram]);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const startNew = ({ domain, title, sheet }: NewDocument) => {
@@ -94,6 +102,29 @@ export function App() {
     const saved = touch(diagram);
     history.replace(saved);
     downloadDiagram(saved);
+  };
+
+  const runExport = async (format: ExportFormat, options: ExportOptions) => {
+    setExportOpen(false);
+    const svg = document.querySelector<SVGSVGElement>('svg.diagram');
+    if (!svg) return;
+    try {
+      await exportDiagram(svg, diagram, format, options);
+    } catch (err) {
+      setMessage(`Export fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const label = () => {
+    const next = autoLabel(diagram);
+    const changed = next.components.filter((c, i) => c.label !== diagram.components[i]!.label).length;
+    if (changed) edit(next);
+    setMessage(changed ? null : 'Alle Kennzeichen sind schon aktuell.');
+  };
+
+  /** Klick auf eine Prüfmeldung: betroffenes Teil auswählen. */
+  const pickIssue = (issue: Issue) => {
+    setSelection({ ...EMPTY_SELECTION, components: issue.components, connections: issue.connections });
   };
 
   const add = (entry: PaletteEntry) => {
@@ -190,6 +221,13 @@ export function App() {
         <button onClick={history.redo} disabled={!history.canRedo} title="Wiederholen (Strg+Y)">
           ↷
         </button>
+        <button onClick={label} title="Alle Kennzeichen nach ISO 1219-2 neu vergeben (1A1, 1V1, 0P1, …)">
+          Kennzeichnen
+        </button>
+        <button onClick={() => setChecking(!checking)} aria-pressed={checking} title="Zeichnung auf Fehler prüfen">
+          Prüfen
+        </button>
+        <button onClick={() => setExportOpen(true)}>Exportieren…</button>
         <input
           ref={fileInput}
           type="file"
@@ -213,6 +251,12 @@ export function App() {
         <span className="domain">{DOMAIN_NAMES[diagram.domain]}</span>
       </header>
 
+      <ExportDialog
+        open={exportOpen}
+        diagram={diagram}
+        onExport={(format, options) => void runExport(format, options)}
+        onClose={() => setExportOpen(false)}
+      />
       <NewDocumentDialog open={newDialogOpen} onCreate={startNew} onClose={() => setNewDialogOpen(false)} />
 
       {message && (
@@ -273,6 +317,7 @@ export function App() {
           onMoveJunction={(id, position) => edit((d) => moveJunction(d, id, position), `junction:${id}`)}
           onGestureEnd={history.seal}
         />
+        {checking && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setChecking(false)} />}
       </main>
 
       <aside className="inspector">
