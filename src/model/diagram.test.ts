@@ -106,7 +106,7 @@ describe('Schaltplan bearbeiten', () => {
 });
 
 describe('Anschlussposition', () => {
-  // supply.tank: 40 x 20, Anschluss T bei (20, 0)
+  // supply.tank: 60 x 40, Anschluss T bei (20, 0)
   const at = (rotation: 0 | 90 | 180 | 270, mirrored = false) => {
     let d = addComponent(createDiagram('hydraulic'), 'supply.tank', { x: 100, y: 100 }).diagram;
     d = updateComponent(d, 'c1', { rotation, mirrored });
@@ -114,11 +114,11 @@ describe('Anschlussposition', () => {
   };
 
   it('berücksichtigt die Drehung um die Bauteilmitte', () => {
-    // Mitte liegt bei (120, 110)
+    // Mitte liegt bei (130, 120)
     expect(at(0)).toEqual({ x: 120, y: 100 });
-    expect(at(90)).toEqual({ x: 130, y: 110 });
-    expect(at(180)).toEqual({ x: 120, y: 120 });
-    expect(at(270)).toEqual({ x: 110, y: 110 });
+    expect(at(90)).toEqual({ x: 150, y: 110 });
+    expect(at(180)).toEqual({ x: 140, y: 140 });
+    expect(at(270)).toEqual({ x: 110, y: 130 });
   });
 
   it('berücksichtigt die Spiegelung', () => {

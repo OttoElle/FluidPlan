@@ -55,57 +55,61 @@ const HP: Domain[] = ['hydraulic', 'pneumatic'];
 /** Feste Bauteile; Maße und Anschlusslagen in M. */
 export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
   // --- Energieversorgung ---
-  fixed('supply.pump', 'Hydropumpe (konstant)', H, [9, 9], [['P', 'pressure', 6, 0], ['S', 'return', 6, 9]]),
-  fixed('supply.pump-variable', 'Hydropumpe (verstellbar)', H, [9, 9], [['P', 'pressure', 6, 0], ['S', 'return', 6, 9]]),
-  fixed('supply.compressor', 'Kompressor', P, [9, 7], [['1', 'pressure', 6, 0]]),
-  fixed('supply.electric-motor', 'Elektromotor', HP, [9, 7], []),
-  fixed('supply.tank', 'Tank', H, [4, 2], [['T', 'return', 2, 0]]),
-  fixed('supply.air-source', 'Druckluftquelle', P, [2, 4], [['1', 'pressure', 1, 0]]),
-  fixed('supply.exhaust', 'Entlüftung', P, [2, 2], [['3', 'return', 1, 0]]),
-  fixed('supply.accumulator', 'Hydrospeicher', H, [4, 6], [['P', 'work', 2, 6]]),
-  fixed('supply.filter', 'Filter', HP, [4, 4], [['1', 'work', 0, 2], ['2', 'work', 4, 2]]),
-  fixed('supply.service-unit', 'Wartungseinheit', P, [6, 4], [['1', 'pressure', 0, 2], ['2', 'work', 6, 2]]),
+  fixed('supply.pump', 'Hydropumpe (konstant)', H, [10, 10], [['P', 'pressure', 6, 0], ['S', 'return', 6, 10]]),
+  fixed('supply.pump-variable', 'Hydropumpe (verstellbar)', H, [10, 10], [['P', 'pressure', 6, 0], ['S', 'return', 6, 10]]),
+  fixed('supply.compressor', 'Kompressor', P, [10, 10], [['1', 'pressure', 6, 0]]),
+  fixed('supply.electric-motor', 'Elektromotor', HP, [10, 10], []),
+  fixed('supply.tank', 'Tank', H, [6, 4], [['T', 'return', 2, 0]]),
+  fixed('supply.air-source', 'Druckluftquelle', P, [6, 2], [['1', 'pressure', 6, 1]]),
+  fixed('supply.silencer', 'Schalldämpfer', P, [2, 6], [['3', 'return', 1, 0]]),
+  fixed('supply.accumulator', 'Hydrospeicher', H, [4, 10], [['P', 'work', 2, 10]]),
+  fixed('supply.filter', 'Filter', HP, [8, 10], [['1', 'work', 4, 0], ['2', 'work', 4, 10]]),
+  fixed('supply.service-unit', 'Wartungseinheit', P, [14, 6], [['1', 'pressure', 0, 3], ['2', 'work', 14, 3]]),
 
   // --- Antriebe ---
-  fixed('actuator.motor', 'Hydromotor (eine Drehrichtung)', H, [9, 9], [['A', 'work', 6, 0], ['B', 'work', 6, 9]]),
-  fixed('actuator.motor-reversible', 'Hydromotor (zwei Drehrichtungen)', H, [9, 9], [['A', 'work', 6, 0], ['B', 'work', 6, 9]]),
-  fixed('actuator.air-motor', 'Druckluftmotor', P, [9, 9], [['A', 'work', 6, 0], ['B', 'return', 6, 9]]),
+  fixed('actuator.motor', 'Hydromotor (eine Drehrichtung)', H, [10, 10], [['A', 'work', 6, 0], ['B', 'work', 6, 10]]),
+  fixed('actuator.motor-reversible', 'Hydromotor (zwei Drehrichtungen)', H, [10, 10], [['A', 'work', 6, 0], ['B', 'work', 6, 10]]),
+  fixed('actuator.air-motor', 'Druckluftmotor', P, [10, 10], [['A', 'work', 6, 0], ['B', 'return', 6, 10]]),
 
   // --- Sperrventile ---
-  fixed('valve.check', 'Rückschlagventil', HP, [2, 4], [['1', 'work', 1, 4], ['2', 'work', 1, 0]]),
-  fixed('valve.check-spring', 'Rückschlagventil mit Feder', HP, [2, 4], [['1', 'work', 1, 4], ['2', 'work', 1, 0]]),
-  fixed('valve.check-piloted', 'Rückschlagventil, entsperrbar', H, [4, 6], [
-    ['1', 'work', 1, 6],
-    ['2', 'work', 1, 0],
-    ['X', 'pilot', 4, 4],
+  fixed('valve.check', 'Rückschlagventil', HP, [2, 6], [['1', 'work', 1, 6], ['2', 'work', 1, 0]]),
+  fixed('valve.check-spring', 'Rückschlagventil mit Feder', HP, [2, 8], [['1', 'work', 1, 8], ['2', 'work', 1, 0]]),
+  fixed('valve.check-piloted', 'Rückschlagventil, entsperrbar', H, [6, 10], [
+    ['1', 'work', 2, 10],
+    ['2', 'work', 2, 0],
+    ['X', 'pilot', 4, 10],
   ]),
-  fixed('valve.shuttle', 'Wechselventil (ODER)', HP, [6, 4], [
-    ['X', 'work', 0, 3, '1'],
-    ['Y', 'work', 6, 3, '1'],
-    ['A', 'work', 3, 0, '2'],
+  fixed('valve.shuttle', 'Wechselventil (ODER)', HP, [12, 6], [
+    ['X', 'work', 0, 4, '1'],
+    ['Y', 'work', 12, 4, '1'],
+    ['A', 'work', 6, 0, '2'],
   ]),
-  fixed('valve.two-pressure', 'Zweidruckventil (UND)', P, [6, 4], [
-    ['X', 'work', 0, 3, '1'],
-    ['Y', 'work', 6, 3, '1'],
-    ['A', 'work', 3, 0, '2'],
+  fixed('valve.two-pressure', 'Zweidruckventil (UND)', P, [12, 6], [
+    ['X', 'work', 0, 4, '1'],
+    ['Y', 'work', 12, 4, '1'],
+    ['A', 'work', 6, 0, '2'],
   ]),
 
   // --- Druckventile ---
-  fixed('valve.pressure-relief', 'Druckbegrenzungsventil', HP, [8, 6], [['P', 'pressure', 3, 0], ['T', 'return', 3, 6]]),
-  fixed('valve.pressure-reducing', 'Druckminderventil', HP, [8, 6], [['P', 'pressure', 3, 6], ['A', 'work', 3, 0]]),
-  fixed('valve.sequence', 'Zuschaltventil', H, [8, 6], [
-    ['P', 'pressure', 3, 0],
-    ['A', 'work', 3, 6],
-    ['L', 'drain', 6, 6],
+  fixed('valve.pressure-relief', 'Druckbegrenzungsventil', HP, [10, 8], [['P', 'pressure', 4, 8], ['T', 'return', 4, 0]]),
+  fixed('valve.pressure-reducing', 'Druckminderventil', HP, [10, 8], [
+    ['P', 'pressure', 4, 8],
+    ['A', 'work', 4, 0],
+    ['L', 'drain', 8, 8],
+  ]),
+  fixed('valve.sequence', 'Zuschaltventil', H, [10, 8], [
+    ['P', 'pressure', 4, 8],
+    ['A', 'work', 4, 0],
+    ['L', 'drain', 8, 8],
   ]),
 
   // --- Stromventile ---
-  fixed('valve.throttle', 'Drosselventil (einstellbar)', HP, [2, 4], [['1', 'work', 1, 4], ['2', 'work', 1, 0]]),
-  fixed('valve.throttle-check', 'Drosselrückschlagventil', HP, [4, 6], [['1', 'work', 1, 6], ['2', 'work', 1, 0]]),
-  fixed('valve.flow-control', '2-Wege-Stromregelventil', H, [4, 6], [['1', 'work', 2, 6], ['2', 'work', 2, 0]]),
+  fixed('valve.throttle', 'Drosselventil (einstellbar)', HP, [4, 8], [['1', 'work', 2, 8], ['2', 'work', 2, 0]]),
+  fixed('valve.throttle-check', 'Drosselrückschlagventil', HP, [8, 12], [['1', 'work', 2, 12], ['2', 'work', 2, 0]]),
+  fixed('valve.flow-control', '2-Wege-Stromregelventil mit Umgehung', H, [10, 16], [['1', 'work', 3, 16], ['2', 'work', 3, 0]]),
 
   // --- Messgeräte ---
-  fixed('measure.gauge', 'Manometer', HP, [2, 2], [['1', 'work', 1, 2]]),
+  fixed('measure.gauge', 'Manometer', HP, [4, 6], [['1', 'work', 2, 6]]),
 ];
 
 // --- Konfigurierbare Bauteile ------------------------------------------------

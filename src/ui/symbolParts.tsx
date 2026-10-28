@@ -69,32 +69,33 @@ export function Spring({ from, to, amp = 1, peaks = 4 }: { from: P; to: P; amp?:
   return <polyline points={pts(...points)} />;
 }
 
-/** Kugel mit Ventilsitz; freier Durchfluss vom Sitz zur Kugel, also in Richtung `dir`. */
-export function CheckElement({ at, vertical = true }: { at: P; vertical?: boolean }) {
-  // `at` ist der Kugelmittelpunkt; der Sitz liegt in Gegenrichtung zum freien Durchfluss.
-  const [x, y] = at;
-  if (vertical) {
-    return (
-      <>
-        <circle cx={x} cy={y} r={0.5} />
-        <polyline points={pts([x - 0.7, y + 0.05], [x, y + 1], [x + 0.7, y + 0.05])} />
-      </>
-    );
-  }
+/**
+ * Rückschlagelement (8.4.2, 8.4.54): Kugel 1M Durchmesser im 90°-Sitz mit
+ * 1M langen Schenkeln. `seat` zeigt von der Kugel zur Spitze des Sitzes;
+ * frei durchströmt wird in Richtung vom Sitz zur Kugel.
+ */
+export function CheckElement({ ball: [x, y], seat: [dx, dy] }: { ball: P; seat: P }) {
+  const vx = x + dx * Math.SQRT1_2;
+  const vy = y + dy * Math.SQRT1_2;
+  // Schenkel unter 45° zurück Richtung Kugel
+  const arm = (sign: number): P => [vx - dx - sign * dy, vy - dy + sign * dx];
   return (
     <>
       <circle cx={x} cy={y} r={0.5} />
-      <polyline points={pts([x - 0.05, y - 0.7], [x - 1, y], [x - 0.05, y + 0.7])} />
+      <polyline points={pts(arm(1), [vx, vy], arm(-1))} />
     </>
   );
 }
 
-/** Drosselstelle in einer senkrechten Leitung bei x, um die Mitte cy. */
+/** Spitze des Ventilsitzes, zum Anschließen der Leitung. */
+export const seatTip = ([x, y]: P, [dx, dy]: P): P => [x + dx * Math.SQRT1_2, y + dy * Math.SQRT1_2];
+
+/** Drosselstelle in einer senkrechten Leitung bei x: zwei Bögen 3M hoch um cy (Beispiel 6.1.4.1). */
 export function Throttle({ x, cy }: { x: number; cy: number }) {
   return (
     <>
-      <path d={`M${x - 0.6} ${cy - 0.8} Q${x - 0.05} ${cy} ${x - 0.6} ${cy + 0.8}`} />
-      <path d={`M${x + 0.6} ${cy - 0.8} Q${x + 0.05} ${cy} ${x + 0.6} ${cy + 0.8}`} />
+      <path d={`M${x - 1.1} ${cy - 1.5} Q${x + 0.2} ${cy} ${x - 1.1} ${cy + 1.5}`} />
+      <path d={`M${x + 1.1} ${cy - 1.5} Q${x - 0.2} ${cy} ${x + 1.1} ${cy + 1.5}`} />
     </>
   );
 }
