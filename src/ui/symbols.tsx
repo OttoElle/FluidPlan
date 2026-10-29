@@ -126,7 +126,8 @@ function SpringCheckValve() {
   const ball: P = [1, 5.25];
   return (
     <>
-      <line x1={1} y1={0} x2={1} y2={2.25} />
+      {/* Leitung läuft durch die Feder bis zur Kugel (Beispiel 6.1.5.2) */}
+      <line x1={1} y1={0} x2={1} y2={4.75} />
       <Spring from={[1, 2.25]} to={[1, 4.75]} amp={0.9} peaks={6} />
       <CheckElement ball={ball} seat={DOWN} />
       <line x1={1} y1={seatTip(ball, DOWN)[1]} x2={1} y2={8} />
@@ -140,7 +141,7 @@ function PilotedCheckValve() {
   return (
     <>
       <rect x={0} y={2} width={5} height={6} />
-      <line x1={2} y1={0} x2={2} y2={3.25} />
+      <line x1={2} y1={0} x2={2} y2={5.75} />
       <Spring from={[2, 3.25]} to={[2, 5.75]} amp={0.9} peaks={6} />
       <CheckElement ball={ball} seat={DOWN} />
       <line x1={2} y1={seatTip(ball, DOWN)[1]} x2={2} y2={10} />

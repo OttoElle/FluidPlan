@@ -36,6 +36,7 @@ const PRINT_STYLE: [selector: string, attributes: Record<string, string>][] = [
   ['.component .box', { fill: '#ffffff', stroke: '#000000', 'stroke-width': '1' }],
   ['.component .name', { 'font-size': '7', 'text-anchor': 'middle', 'dominant-baseline': 'middle', fill: '#000000' }],
   ['.component .label', { 'font-size': '8', 'text-anchor': 'end', 'font-weight': 'bold', fill: '#000000' }],
+  ['.component .description', { 'font-size': '7', 'text-anchor': 'end', fill: '#000000' }],
   ['.port text', { 'font-size': '6', fill: '#000000' }],
   ['.sheet-frame .frame', { fill: 'none', stroke: '#000000', 'stroke-width': '2' }],
   ['.sheet-frame line', { stroke: '#000000', 'stroke-width': '1' }],

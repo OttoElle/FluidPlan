@@ -63,7 +63,8 @@ function accessoryVariants(): ComponentConfig[] {
   for (const type of Object.keys(ACCUMULATOR_NAMES) as AccumulatorType[]) out.push({ kind: 'accumulator', type } satisfies AccumulatorConfig);
   for (const closed of [false, true])
     for (const lines of TANK_LINES)
-      for (const lineEnd of ['below', 'above'] as const) out.push({ kind: 'tank', closed, lines, lineEnd } satisfies TankConfig);
+      for (const lineEnd of ['below', 'above'] as const)
+        for (const size of ['normal', 'small'] as const) out.push({ kind: 'tank', closed, lines, lineEnd, size } satisfies TankConfig);
   for (const checks of CHECK_COUNTS) for (const coupled of [false, true]) out.push({ kind: 'coupling', checks, coupled } satisfies CouplingConfig);
   for (const quantity of ['pressure', 'flow', 'temperature', 'position'] as const)
     for (const output of ['switching', 'analog', 'mechanical'] as const)

@@ -92,7 +92,13 @@ function ComponentProperties({ component, diagram, ...rest }: BodyProps & { comp
   const def = definitionOf(draft);
 
   const apply = () => {
-    let d = updateComponent(diagram, component.id, { label: draft.label });
+    let d = updateComponent(diagram, component.id, {
+      label: draft.label,
+      // Standardwerte nicht speichern, damit Dateien schlank bleiben.
+      description: draft.description || undefined,
+      showLabel: draft.showLabel === false ? false : undefined,
+      showDescription: draft.showDescription || undefined,
+    });
     // Lage über arrange.ts ändern: dreht um die Rastermitte und führt Leitungen nach.
     const id = [component.id];
     const now = () => d.components.find((c) => c.id === component.id)!;
@@ -111,15 +117,43 @@ function ComponentProperties({ component, diagram, ...rest }: BodyProps & { comp
         </div>
         <div className="props-ident">
           <h2>{def?.name ?? draft.type}</h2>
-          <label>
-            Kennzeichen
-            <input
-              autoFocus
-              value={draft.label}
-              placeholder="z. B. 1V1"
-              onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-            />
-          </label>
+          <div className="ident-row">
+            <label>
+              Kennzeichen
+              <input
+                autoFocus
+                value={draft.label}
+                placeholder="z. B. 1V1"
+                onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+              />
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={draft.showLabel !== false}
+                onChange={(e) => setDraft({ ...draft, showLabel: e.target.checked })}
+              />
+              Anzeigen
+            </label>
+          </div>
+          <div className="ident-row">
+            <label>
+              Bezeichnung
+              <input
+                value={draft.description ?? ''}
+                placeholder="z. B. Spannzylinder"
+                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+              />
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={draft.showDescription ?? false}
+                onChange={(e) => setDraft({ ...draft, showDescription: e.target.checked })}
+              />
+              Anzeigen
+            </label>
+          </div>
         </div>
       </div>
       {tab && (

@@ -310,7 +310,18 @@ function readComponent(v: unknown, path: string, errors: string[]): ComponentIns
   ) {
     return undefined;
   }
-  return { id, type, position, rotation, mirrored, label, properties, ...(config ? { config } : {}) };
+  // Optionale Angaben (Bezeichnung, Anzeige am Symbol); fehlen in älteren Dateien.
+  const extra: Partial<ComponentInstance> = {};
+  if (v.description !== undefined) {
+    if (typeof v.description === 'string') extra.description = v.description;
+    else errors.push(`${path}.description: Text erwartet`);
+  }
+  for (const key of ['showLabel', 'showDescription'] as const) {
+    if (v[key] === undefined) continue;
+    if (typeof v[key] === 'boolean') extra[key] = v[key];
+    else errors.push(`${path}.${key}: true oder false erwartet`);
+  }
+  return { id, type, position, rotation, mirrored, label, properties, ...extra, ...(config ? { config } : {}) };
 }
 
 function readConnection(v: unknown, path: string, errors: string[]): Connection | undefined {

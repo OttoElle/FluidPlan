@@ -97,6 +97,12 @@ export interface ComponentInstance {
   label: string;
   /** Freie Kennwerte, z. B. { "Druck": "160 bar" }. */
   properties: Record<string, string>;
+  /** Bezeichnung, z. B. "Hubzylinder Presse"; fehlt in älteren Dateien. */
+  description?: string;
+  /** Kennzeichen am Symbol anzeigen (Standard: ja). */
+  showLabel?: boolean;
+  /** Bezeichnung am Symbol anzeigen (Standard: nein). */
+  showDescription?: boolean;
   /** Nur bei konfigurierbaren Bauteiltypen. */
   config?: ComponentConfig;
 }

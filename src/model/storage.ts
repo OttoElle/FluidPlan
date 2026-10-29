@@ -11,8 +11,10 @@ import type { Domain, PortDefinition } from './types.ts';
  * liegt waagerecht mit Anschlüssen links und rechts.
  *
  * Behälter (8.7.32/33): offen 2M hoch, Rückführungen 2M voneinander und von
- * der Wand. Endet die Leitung unter dem Flüssigkeitsspiegel, reicht sie bis
- * 1M über den Boden, sonst endet sie am Behälterrand.
+ * der Wand, also immer mittig. Endet die Leitung unter dem Flüssigkeitsspiegel,
+ * reicht sie bis 1M über den Boden, sonst endet sie am Behälterrand. Die
+ * kleine Form (wie in Schaltplänen üblich, wenn mehrere Tanksymbole an
+ * verschiedenen Stellen stehen) ist 1M hoch mit Leitungen 1M von der Wand.
  */
 
 export type AccumulatorType = 'bladder' | 'diaphragm' | 'piston' | 'gas-bottle' | 'air-reservoir';
@@ -65,6 +67,7 @@ export function readAccumulatorConfig(v: unknown, path: string, errors: string[]
 
 export type LineEnd = 'below' | 'above';
 export type TankLines = 1 | 2 | 3;
+export type TankSize = 'normal' | 'small';
 
 export interface TankConfig {
   kind: 'tank';
@@ -74,7 +77,11 @@ export interface TankConfig {
   lines: TankLines;
   /** Leitung endet unter oder über dem Flüssigkeitsspiegel. */
   lineEnd: LineEnd;
+  /** Größe; fehlt in älteren Dateien (dann normal). */
+  size: TankSize;
 }
+
+export const TANK_SIZE_NAMES: Record<TankSize, string> = { normal: 'Normal', small: 'Klein' };
 
 export const LINE_END_NAMES: Record<LineEnd, string> = {
   below: 'Unter dem Flüssigkeitsspiegel',
@@ -83,22 +90,37 @@ export const LINE_END_NAMES: Record<LineEnd, string> = {
 export const TANK_LINES: readonly TankLines[] = [1, 2, 3];
 
 export function defaultTankConfig(): TankConfig {
-  return { kind: 'tank', closed: false, lines: 1, lineEnd: 'below' };
+  return { kind: 'tank', closed: false, lines: 1, lineEnd: 'below', size: 'normal' };
 }
 
 export function tankTitle(config: TankConfig): string {
   return config.closed ? 'Behälter, geschlossen' : 'Tank';
 }
 
-/** Breite des Behälters in M: mindestens 6M, sonst 2M je Rückführung plus Wandabstand. */
-export const tankWidth = (config: TankConfig) => Math.max(6, 2 * config.lines + 2);
+/** Maße in M: Wandabstand der ersten Leitung, Behälterhöhe, Leitungslänge über dem Behälter. */
+export function tankLayout(config: TankConfig) {
+  const small = config.size === 'small';
+  const margin = small ? 1 : 2;
+  const depth = small ? 1 : 2;
+  const line = small ? 1 : 2;
+  return {
+    margin,
+    depth,
+    line,
+    width: 2 * margin + 2 * (config.lines - 1),
+    height: depth + line,
+    /** Ende der Rückführung: unter dem Spiegel bis zur halben Tiefe, sonst am Rand. */
+    end: config.lineEnd === 'below' ? line + depth / 2 : line,
+  };
+}
 
 export function tankGeometry(config: TankConfig, unit: number) {
+  const l = tankLayout(config);
   const ports: PortDefinition[] = [];
   for (let i = 0; i < config.lines; i++) {
-    ports.push({ id: i === 0 ? 'T' : `T${i + 1}`, kind: 'return', offset: { x: (2 + 2 * i) * unit, y: 0 } });
+    ports.push({ id: i === 0 ? 'T' : `T${i + 1}`, kind: 'return', offset: { x: (l.margin + 2 * i) * unit, y: 0 } });
   }
-  return { size: { width: tankWidth(config) * unit, height: 4 * unit }, ports };
+  return { size: { width: l.width * unit, height: l.height * unit }, ports };
 }
 
 export function readTankConfig(v: unknown, path: string, errors: string[]): TankConfig | undefined {
@@ -109,6 +131,7 @@ export function readTankConfig(v: unknown, path: string, errors: string[]): Tank
     closed: r.bool('closed'),
     lines: r.count('lines', TANK_LINES),
     lineEnd: r.oneOf('lineEnd', LINE_END_NAMES),
+    size: r.oneOf('size', TANK_SIZE_NAMES, 'normal'),
   };
   return r.ok ? config : undefined;
 }

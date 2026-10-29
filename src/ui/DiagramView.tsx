@@ -1185,9 +1185,14 @@ function ComponentShape({
           </text>
         </>
       )}
-      {component.label && (
+      {component.label && component.showLabel !== false && (
         <text x={x - 4} y={y + 4} className="label">
           {component.label}
+        </text>
+      )}
+      {component.description && component.showDescription && (
+        <text x={x - 4} y={y + (component.label && component.showLabel !== false ? 13 : 4)} className="description">
+          {component.description}
         </text>
       )}
       {def.ports.map((port) => {

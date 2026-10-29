@@ -1,7 +1,9 @@
 import { Fragment } from 'react';
 import {
+  ACTUATOR_WIDTH,
   actuatorRowY,
   FIELD,
+  fieldWidth,
   FIELD_TOP,
   portInField,
   rolesOf,
@@ -219,4 +221,40 @@ function ActuatorElement({ kind, medium, reach }: { kind: Actuator; medium: Dire
         </>
       );
   }
+}
+
+// --- Symbole für den Konfigurator ---------------------------------------------
+
+/** Einzelne Betätigung als kleines Symbol, an einer Feldkante rechts angesetzt. */
+export function ActuatorIcon({ kind, medium, size = 34 }: { kind: Actuator; medium: DirectionalValveConfig['medium']; size?: number }) {
+  return (
+    <svg className="symbol-preview" width={size} height={size * 0.75} viewBox="-1.5 -3 8 6" aria-hidden>
+      <g className="symbol" strokeWidth={0.125}>
+        <polyline points={pts([-1.5, -2], [0, -2], [0, 2], [-1.5, 2])} />
+        <ActuatorElement kind={kind} medium={medium} reach={oddReach(kind)} />
+      </g>
+    </svg>
+  );
+}
+
+const oddReach = (kind: Actuator) => {
+  const n = Math.ceil(ACTUATOR_WIDTH[kind] - 1e-9);
+  return n % 2 === 1 ? n : n + 1;
+};
+
+/** Ein Schaltfeld mit seinen Wegen und Anschlussleitungen als kleines Symbol. */
+export function FieldIcon({ config, paths, size = 40 }: { config: DirectionalValveConfig; paths: ValvePath[]; size?: number }) {
+  const fw = fieldWidth(config.ports);
+  return (
+    <svg className="symbol-preview" width={(size * (fw + 1)) / 9} height={size} viewBox={`-0.5 -0.5 ${fw + 1} 9`} aria-hidden>
+      <g className="symbol" strokeWidth={0.125}>
+        <Field x0={0} width={fw} config={config} paths={paths} />
+        {rolesOf(config.ports).map((role) => {
+          const { x, top } = portInField(config.ports, role);
+          const [y1, y2] = top ? [0, FIELD_TOP] : [BOTTOM, 8];
+          return <line key={role} x1={x} y1={y1} x2={x} y2={y2} />;
+        })}
+      </g>
+    </svg>
+  );
 }

@@ -2,19 +2,14 @@ import type { ReactNode } from 'react';
 import { BORES, normalizeBallValve, WAYS, type BallValveConfig, type BallValveWays } from '../../model/ballValve.ts';
 import { CHECK_COUNTS, CHECK_NAMES, type CouplingConfig } from '../../model/coupling.ts';
 import {
-  ACTION_NAMES,
-  CUSHION_NAMES,
   DESIGN_NAMES,
   hasStroke,
   normalizeCylinder,
   ROD_NAMES,
-  SPRING_NAMES,
   type Cushion,
-  type CylinderAction,
   type CylinderConfig,
   type CylinderDesign,
   type CylinderRod,
-  type CylinderSpring,
 } from '../../model/cylinder.ts';
 import { typeOfConfig } from '../../model/library.ts';
 import { DIRECTION_COUNTS, DISPLACEMENT_NAMES, normalizeRotary, type RotaryConfig } from '../../model/rotary.ts';
@@ -24,6 +19,7 @@ import {
   ACCUMULATOR_TYPES,
   LINE_END_NAMES,
   TANK_LINES,
+  TANK_SIZE_NAMES,
   type AccumulatorConfig,
   type LineEnd,
   type TankConfig,
@@ -32,6 +28,7 @@ import type { ComponentConfig } from '../../model/types.ts';
 import { SymbolPreview } from '../SymbolPreview.tsx';
 import type { ConfigEditorProps } from './configEditors.tsx';
 import { Segmented, type SegmentOption } from './Segmented.tsx';
+import { SymbolPicker } from './SymbolPicker.tsx';
 
 /**
  * Konfiguratoren der Grundsymbole (Zylinder, Pumpe/Motor, Kugelhahn,
@@ -75,76 +72,129 @@ const keys = <T extends string>(r: Record<T, string>) => Object.keys(r) as T[];
 
 // --- Zylinder -------------------------------------------------------------------
 
+type Direction = 'push' | 'pull' | 'double';
+
+/** Wie in FluidDraw gegliedert: Zylinderart, Kolben, Kolbenstange, Kolbenstellung. */
 export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderConfig>) {
   const set = (c: Partial<CylinderConfig>) => onChange(normalizeCylinder({ ...config, ...c }));
   const variant = (c: Partial<CylinderConfig>) => normalizeCylinder({ ...config, stroke: 0, ...c });
   const piston = config.design === 'piston';
-  const cushion = (side: 'piston' | 'rod', title: string) => (
-    <Field title={title}>
-      <Segmented<Cushion>
-        label={title}
-        value={config.cushion[side]}
-        onChange={(v) => set({ cushion: { ...config.cushion, [side]: v } })}
-        options={keys(CUSHION_NAMES).map((value) => ({ value, label: CUSHION_NAMES[value] }))}
-      />
-    </Field>
-  );
+  const direction: Direction = config.action === 'double' ? 'double' : config.spring === 'piston' ? 'pull' : 'push';
+  const setDirection = (d: Direction) =>
+    set(
+      d === 'double'
+        ? { action: 'double' }
+        : { action: 'single', spring: d === 'pull' ? 'piston' : config.spring === 'none' ? 'none' : 'rod' },
+    );
+  const directions: { value: Direction; label: string }[] = piston
+    ? [
+        { value: 'push', label: 'Einfachwirkend, drückend →' },
+        { value: 'pull', label: 'Einfachwirkend, ziehend ←' },
+        { value: 'double', label: 'Doppeltwirkend ↔' },
+      ]
+    : config.design === 'telescopic'
+      ? [
+          { value: 'push', label: 'Einfachwirkend' },
+          { value: 'double', label: 'Doppeltwirkend' },
+        ]
+      : [];
+  const { piston: cp, rod: cr } = config.cushion;
+  const adjustable = cp === 'adjustable' || cr === 'adjustable';
+  const cushion = (pistonSide: boolean, rodSide: boolean, adj: boolean) => {
+    const kind: Cushion = adj ? 'adjustable' : 'fixed';
+    set({ cushion: { piston: pistonSide ? kind : 'none', rod: rodSide ? kind : 'none' } });
+  };
   return (
-    <div className="configurator config-grid">
-      <Field title="Bauart" wide>
-        <Segmented<CylinderDesign>
-          label="Bauart"
-          value={config.design}
-          onChange={(design) => set({ design, action: design === 'piston' ? config.action : 'single' })}
-          options={symbolOptions(keys(DESIGN_NAMES), (v) => DESIGN_NAMES[v], (design) => variant({ design, action: design === 'piston' ? config.action : 'single' }))}
-        />
-      </Field>
-      {config.design !== 'plunger' && (
-        <Field title="Wirkungsweise">
-          <Segmented<CylinderAction>
-            label="Wirkungsweise"
-            value={config.action}
-            onChange={(action) => set({ action, spring: action === 'single' && config.spring === 'none' ? 'rod' : config.spring })}
-            options={symbolOptions(keys(ACTION_NAMES), (v) => ACTION_NAMES[v], (action) =>
-              variant({ action, spring: action === 'single' && config.spring === 'none' ? 'rod' : config.spring }),
-            )}
+    <div className="configurator cylinder-editor">
+      <fieldset>
+        <legend>Zylinderart</legend>
+        <div className="group-row">
+          <SymbolPicker<CylinderDesign>
+            label="Bauart"
+            value={config.design}
+            empty={null}
+            onChange={(design) => design && set({ design, action: design === 'piston' ? config.action : 'single' })}
+            options={keys(DESIGN_NAMES).map((design) => ({
+              value: design,
+              label: DESIGN_NAMES[design],
+              icon: variantIcon(variant({ design, action: design === 'piston' ? config.action : 'single' })),
+            }))}
           />
-        </Field>
-      )}
+          <div className="radio-list" role="radiogroup" aria-label="Wirkungsweise">
+            {directions.map((d) => (
+              <label key={d.value} className="check">
+                <input type="radio" name="cyl-direction" checked={direction === d.value} onChange={() => setDirection(d.value)} />
+                {d.label}
+              </label>
+            ))}
+            {config.design === 'plunger' && <span className="hint">Plungerzylinder sind immer einfachwirkend.</span>}
+          </div>
+          {piston && direction === 'push' && (
+            <label className="check">
+              <input type="checkbox" checked={config.spring === 'rod'} onChange={(e) => set({ spring: e.target.checked ? 'rod' : 'none' })} />
+              Rückstellfeder
+            </label>
+          )}
+        </div>
+      </fieldset>
       {piston && (
-        <Field title="Kolbenstange">
-          <Segmented<CylinderRod>
-            label="Kolbenstange"
-            value={config.rod}
-            onChange={(rod) => set({ rod })}
-            options={symbolOptions(keys(ROD_NAMES), (v) => ROD_NAMES[v], (rod) => variant({ rod }))}
-          />
-        </Field>
+        <div className="group-columns">
+          <fieldset>
+            <legend>Kolben: Endlagendämpfung</legend>
+            <label className="check">
+              <input type="checkbox" checked={cp !== 'none'} onChange={(e) => cushion(e.target.checked, cr !== 'none', adjustable)} />
+              Kolbenseitig
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={cr !== 'none'} onChange={(e) => cushion(cp !== 'none', e.target.checked, adjustable)} />
+              Stangenseitig
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={adjustable}
+                disabled={cp === 'none' && cr === 'none'}
+                onChange={(e) => cushion(cp !== 'none', cr !== 'none', e.target.checked)}
+              />
+              Einstellbar
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>Kolbenstange</legend>
+            <SymbolPicker<CylinderRod>
+              label="Kolbenstange"
+              value={config.rod}
+              empty={null}
+              onChange={(rod) => rod && set({ rod })}
+              options={keys(ROD_NAMES).map((rod) => ({ value: rod, label: ROD_NAMES[rod], icon: variantIcon(variant({ rod })) }))}
+            />
+          </fieldset>
+        </div>
       )}
-      {piston && config.action === 'single' && (
-        <Field title="Rückstellung" wide>
-          <Segmented<CylinderSpring>
-            label="Rückstellung"
-            value={config.spring}
-            onChange={(spring) => set({ spring })}
-            options={symbolOptions(keys(SPRING_NAMES), (v) => SPRING_NAMES[v], (spring) => variant({ spring }))}
-          />
-        </Field>
-      )}
-      {piston && cushion('piston', 'Dämpfung kolbenseitig')}
-      {piston && cushion('rod', 'Dämpfung stangenseitig')}
       {hasStroke(config) && (
-        <Field title={`Kolbenstellung: ${config.stroke} %`} wide>
+        <fieldset>
+          <legend>Kolbenstellung</legend>
           <input
             type="range"
             min={0}
             max={100}
             step={5}
+            list="stroke-ticks"
             value={config.stroke}
             aria-label="Kolbenstellung in Prozent des Hubs"
             onChange={(e) => set({ stroke: Number(e.target.value) })}
           />
-        </Field>
+          <datalist id="stroke-ticks">
+            {[0, 25, 50, 75, 100].map((v) => (
+              <option key={v} value={v} />
+            ))}
+          </datalist>
+          <div className="ticks">
+            {[0, 25, 50, 75, 100].map((v) => (
+              <span key={v}>{v} %</span>
+            ))}
+          </div>
+        </fieldset>
       )}
     </div>
   );
@@ -249,7 +299,15 @@ export function TankEditor({ config, onChange }: ConfigEditorProps<TankConfig>) 
           options={symbolOptions(TANK_LINES, (n) => `${n} Leitung${n > 1 ? 'en' : ''}`, (lines) => ({ ...config, lines }))}
         />
       </Field>
-      <Field title="Leitung endet" wide>
+      <Field title="Größe">
+        <Segmented
+          label="Größe"
+          value={config.size}
+          onChange={(size) => set({ size })}
+          options={symbolOptions(keys(TANK_SIZE_NAMES), (v) => TANK_SIZE_NAMES[v], (size) => ({ ...config, size }))}
+        />
+      </Field>
+      <Field title="Leitung endet">
         <Segmented<LineEnd>
           label="Leitung endet"
           value={config.lineEnd}

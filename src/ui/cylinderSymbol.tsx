@@ -11,6 +11,9 @@ import {
 } from '../model/cylinder.ts';
 import { FlowArrow, pts } from './symbolParts.tsx';
 
+/** Oberkante der 1M dicken Kolbenstange. */
+const ROD_Y = 1.5;
+
 /**
  * Zylinder aus seiner Konfiguration (siehe model/cylinder.ts) nach
  * DIN ISO 1219-1: Rahmen 9M × 4M, Kolben 2M breit (nicht gefüllt),
@@ -58,10 +61,18 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
   };
   return (
     <>
-      <rect x={bx} y={0} width={BODY_WIDTH} height={BODY_HEIGHT} />
+      {/* Rahmen; die Wand ist dort offen, wo die Kolbenstange austritt (Beispiele 6.3.1/6.3.2) */}
+      {through ? (
+        <>
+          <polyline points={pts([bodyEnd, ROD_Y], [bodyEnd, 0], [bx, 0], [bx, ROD_Y])} />
+          <polyline points={pts([bx, ROD_Y + 1], [bx, BODY_HEIGHT], [bodyEnd, BODY_HEIGHT], [bodyEnd, ROD_Y + 1])} />
+        </>
+      ) : (
+        <polyline points={pts([bodyEnd, ROD_Y], [bodyEnd, 0], [bx, 0], [bx, BODY_HEIGHT], [bodyEnd, BODY_HEIGHT], [bodyEnd, ROD_Y + 1])} />
+      )}
       <rect x={px} y={0} width={PISTON} height={BODY_HEIGHT} />
-      <rect x={px + PISTON} y={1.5} width={rodEnd - px - PISTON} height={1} />
-      {through && <rect x={px - THROUGH_ROD} y={1.5} width={THROUGH_ROD} height={1} />}
+      <rect x={px + PISTON} y={ROD_Y} width={rodEnd - px - PISTON} height={1} />
+      {through && <rect x={px - THROUGH_ROD} y={ROD_Y} width={THROUGH_ROD} height={1} />}
 
       {config.spring === 'rod' && zigzag(px + PISTON, bodyEnd)}
       {config.spring === 'piston' && zigzag(bx, px)}
@@ -77,11 +88,7 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
 /** Rahmen 9M × 5M, rechts offen zwischen `gapTop` und `gapBottom` für die austretende Stufe. */
 function OpenFrame({ bx, gapTop = 1, gapBottom = 4 }: { bx: number; gapTop?: number; gapBottom?: number }) {
   const end = bx + BODY_WIDTH;
-  return (
-    <>
-      <polyline points={pts([end, gapTop], [end, 0], [bx, 0], [bx, 5], [end, 5], [end, gapBottom])} />
-    </>
-  );
+  return <polyline points={pts([end, gapTop], [end, 0], [bx, 0], [bx, 5], [end, 5], [end, gapBottom])} />;
 }
 
 /** Plungerzylinder (Beispiel 6.3.6): Plunger 9M × 3M, 1M Abstand zum Rahmen. */

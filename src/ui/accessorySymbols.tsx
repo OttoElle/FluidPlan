@@ -1,7 +1,7 @@
 import { ballValveLayout, BORES, PORT_DISTANCE, SIDE_DIR, SIDES, type BallValveConfig, type Side } from '../model/ballValve.ts';
 import type { CouplingConfig } from '../model/coupling.ts';
 import { QUANTITY_LETTER, sensorLayout, type SensorConfig } from '../model/sensor.ts';
-import { tankWidth, type AccumulatorConfig, type TankConfig } from '../model/storage.ts';
+import { tankLayout, type AccumulatorConfig, type TankConfig } from '../model/storage.ts';
 import { CheckElement, FlowArrow, pts, Spring, Triangle, type P } from './symbolParts.tsx';
 
 /**
@@ -94,13 +94,17 @@ export function AccumulatorSymbol({ config }: { config: AccumulatorConfig }) {
 }
 
 export function TankSymbol({ config }: { config: TankConfig }) {
-  const w = tankWidth(config);
-  const end = config.lineEnd === 'below' ? 3 : 2;
+  const { width: w, line, depth, margin, end } = tankLayout(config);
+  const bottom = line + depth;
   return (
     <>
-      {config.closed ? <rect x={0} y={2} width={w} height={2} /> : <polyline points={pts([0, 2], [0, 4], [w, 4], [w, 2])} />}
+      {config.closed ? (
+        <rect x={0} y={line} width={w} height={depth} />
+      ) : (
+        <polyline points={pts([0, line], [0, bottom], [w, bottom], [w, line])} />
+      )}
       {Array.from({ length: config.lines }, (_, i) => (
-        <line key={i} x1={2 + 2 * i} y1={0} x2={2 + 2 * i} y2={end} />
+        <line key={i} x1={margin + 2 * i} y1={0} x2={margin + 2 * i} y2={end} />
       ))}
     </>
   );

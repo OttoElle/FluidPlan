@@ -9,11 +9,13 @@ Schnelltrennkupplung, Schlauchleitung, Manometer und Sensoren.
 
 **Wegeventile und Zylinder sind konfigurierbar.** In der Bauteilliste stehen übliche
 Vorlagen (4/2, 4/3, 5/2, …); im Eigenschaften-Fenster (Doppelklick) legt man im Reiter „Konfigurator“ fest:
-Anzahl Anschlüsse und Schaltstellungen (X/Y), die Wege in jeder Stellung (aus Vorlagen
-wie „Umlauf“ oder „Schwimmstellung“ oder Weg für Weg), die Ruhestellung und die
-Betätigungen links und rechts (Magnet, Feder, Druck, Druckknopf, Hebel, Pedal, Rolle, …).
-Beim Zylinder: einfach-/doppeltwirkend, einseitige oder durchgehende Stange, Feder,
-Endlagendämpfung (fest/einstellbar) je Seite. Leitungen an Anschlüssen, die dabei
+Anzahl Anschlüsse und Schaltstellungen (X/Y), jede Schaltstellung per Symbolauswahl
+(z. B. „Umlauf“ oder „Schwimmstellung“, Weg für Weg unter „Wege einzeln bearbeiten“),
+die Ruhestellung per Optionsfeld und die Betätigungen links und rechts in drei
+Symbolauswahlen (Muskelkraft, mechanisch, elektrisch/Druck) plus „Federrückstellung“
+und „Vorgesteuert“. Beim Zylinder: Zylinderart als Symbol, einfachwirkend drückend/ziehend
+oder doppeltwirkend, Rückstellfeder, Endlagendämpfung (kolben-/stangenseitig, einstellbar),
+Kolbenstange einseitig/durchgehend und Kolbenstellung als Schieberegler. Leitungen an Anschlüssen, die dabei
 wegfallen, werden entfernt.
 
 **Weitere Grundsymbole mit Konfigurator** (je ein Eintrag in der Bauteilliste, Auswahl
@@ -24,7 +26,7 @@ im Konfigurator als Symbolvorschau):
   Leckanschluss, Motor-Pumpe-Einheit
 - Kugelhahn: 2, 3 oder 4 Wege mit Schaltstellung
 - Speicher: Blase, Membran, Kolben, Gasflasche, Luftbehälter
-- Tank: offen/geschlossen, 1–3 Rückführungen, Leitung unter/über dem Flüssigkeitsspiegel
+- Tank: offen/geschlossen, normal/klein, 1–3 Rückführungen, Leitung unter/über dem Flüssigkeitsspiegel
 - Schnelltrennkupplung: ohne/mit einem/zwei Rückschlagventilen, gekuppelt/entkuppelt
 - Sensor: Druck, Durchfluss, Temperatur, Näherung; schaltend, analog oder
   elektromechanisch (Druckschalter), Schaltpunkt einstellbar
@@ -63,7 +65,8 @@ verschiebt die Ansicht; 100 % entspricht der Papiergröße.
 Bedienung: Bauteile per Klick oder Ziehen aus der Bauteilliste aufs Blatt bringen; die Liste
 ist am rechten Rand in der Breite ziehbar. Was ausgewählt ist, bearbeitet eine kleine Leiste
 über dem Blatt (Drehen, Spiegeln, Ausrichten, Linienart, Löschen). Doppelklick oder Enter
-öffnet das Eigenschaften-Fenster: oben Vorschau und Kennzeichen, darunter Reiter wie
+öffnet das Eigenschaften-Fenster: oben Vorschau, Kennzeichen und Bezeichnung (je mit
+„Anzeigen“ für das Blatt), darunter Reiter wie
 „Konfigurator“ und „Lage“; „OK“ übernimmt alles als einen Rückgängig-Schritt. Hell/Dunkel
 und eine Übersicht der Bedienung stehen rechts in der Werkzeugleiste.
 
@@ -121,7 +124,8 @@ src/
     valveSymbol.tsx  Wegeventil aus seiner Konfiguration
     cylinderSymbol.tsx Zylinder aus seiner Konfiguration
     properties/      Eigenschaften-Fenster: PropertiesDialog, Reiter (tabs.tsx),
-                     Konfiguratoren je config.kind (configEditors.tsx), Segmented
+                     Konfiguratoren je config.kind (configEditors.tsx, valveEditor.tsx),
+                     Segmented, SymbolPicker (Auswahl mit Schaltzeichen)
     SheetDialog.tsx  Fenster „Blatt und Schriftfeld“
     layout.ts        Hell/Dunkel und Breite der Bauteilliste (gespeichert)
     ExportDialog.tsx Dialog „Exportieren“
