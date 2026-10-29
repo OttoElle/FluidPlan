@@ -57,6 +57,7 @@ import { CheckPanel } from './CheckPanel.tsx';
 import { Configurator } from './properties/configEditors.tsx';
 import { DiagramView, type AnnotationTool } from './DiagramView.tsx';
 import { alignComponents, mirrorComponents, moveComponents, rotateComponents, type Alignment } from '../model/arrange.ts';
+import { keepRoutes } from '../model/routing.ts';
 import {
   EMPTY_SELECTION,
   deleteSelected,
@@ -427,7 +428,7 @@ export function App() {
             }
           }}
           onRouteChange={(id, waypoints) => edit((d) => updateConnection(d, id, { waypoints }), `route:${id}`)}
-          onMoveJunction={(id, position) => edit((d) => moveJunction(d, id, position), `junction:${id}`)}
+          onMoveJunction={(id, position) => edit((d) => keepRoutes(d, moveJunction(d, id, position)), `junction:${id}`)}
           onGestureEnd={history.seal}
         />
         {checking && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setChecking(false)} />}

@@ -268,7 +268,12 @@ export function route({ start, startDir, end, endDir, obstacles, occupied }: Rou
     }
   }
 
-  if (found < 0) return fallbackRoute(start, startDir, end, endDir);
+  if (found < 0) {
+    // Kein Weg um die Bauteile herum (z. B. weil sie sich berühren): lieber
+    // quer durch als falsch herum an einen Anschluss.
+    if (obstacles.length) return route({ start, startDir, end, endDir, obstacles: [], occupied });
+    return fallbackRoute(start, startDir, end, endDir);
+  }
 
   const path: Point[] = [];
   for (let st = found; st >= 0; st = prev[st]!) {
@@ -470,4 +475,189 @@ export function linePathData(path: Point[], jumps: Point[] = []): string {
     d += ` L${b.x},${b.y}`;
   });
   return d;
+}
+
+// --- Leitungen beim Verschieben mitführen ------------------------------------
+
+/**
+ * Knickpunkte, die genau `path` beschreiben. Eine gerade Leitung bekommt
+ * einen Punkt in der Mitte, damit sie als selbst geführt gilt (leere Liste
+ * hieße „automatisch führen“).
+ */
+function waypointsFor(path: Point[]): Point[] {
+  const inner = path.slice(1, -1).map((p) => ({ ...p }));
+  if (inner.length || path.length < 2) return inner;
+  const a = path[0]!;
+  const b = path[path.length - 1]!;
+  if (samePoint(a, b)) return [];
+  const snap = (v: number) => Math.round(v / GRID) * GRID;
+  return [{ x: a.x === b.x ? a.x : snap((a.x + b.x) / 2), y: a.y === b.y ? a.y : snap((a.y + b.y) / 2) }];
+}
+
+/** Die Rasterschritte eines Verlaufs als Kanten, z. B. "10,20-20,20". */
+function unitEdges(path: Point[]): string[] {
+  const steps = gridSteps(path);
+  return steps.slice(1).map((b, i) => {
+    const a = steps[i]!;
+    const [p, q] = a.x < b.x || (a.x === b.x && a.y < b.y) ? [a, b] : [b, a];
+    return `${p.x},${p.y}-${q.x},${q.y}`;
+  });
+}
+
+/**
+ * Läuft der Verlauf durch ein Bauteil oder an dessen Rand entlang? Wie beim
+ * Routing zählen alle Rasterpunkte außer den beiden Enden.
+ */
+function hitsComponent(path: Point[], boxes: Box[]): boolean {
+  return gridSteps(path)
+    .slice(1, -1)
+    .some((p) => boxes.some((b) => p.x >= b.minX && p.x <= b.maxX && p.y >= b.minY && p.y <= b.maxY));
+}
+
+const isOrthogonal = (path: Point[]) => path.slice(1).every((b, i) => path[i]!.x === b.x || path[i]!.y === b.y);
+
+/** Verlässt die Leitung den Anschluss in seiner Richtung, mindestens einen Rasterschritt weit? */
+function leavesProperly(path: Point[], dir: Direction | undefined): boolean {
+  if (!dir || path.length < 2) return true;
+  const a = path[0]!;
+  const b = path[1]!;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return Math.sign(dx) === dir.x && Math.sign(dy) === dir.y && Math.abs(dx) + Math.abs(dy) >= GRID;
+}
+
+/**
+ * Führt den Anfang eines Verlaufs an die neue Anschlusslage `start` nach und
+ * lässt den Rest stehen: Das erste Teilstück wandert quer mit, das zweite
+ * wird dafür länger oder kürzer. Liefert undefined, wenn das nicht sauber geht.
+ */
+function followStart(
+  path: Point[],
+  start: Point,
+  dir: Direction | undefined,
+  endDir: Direction | undefined,
+  avoid: Box[],
+  taken: ReadonlySet<string>,
+): Point[] | undefined {
+  let p = path.map((q) => ({ ...q }));
+  const old = p[0]!;
+  if (p.length === 2 && !samePoint(old, start)) {
+    // Gerade Leitung: in der Mitte zwei Knicke einfügen, damit sie quer nachgeben kann.
+    const [a, b] = p as [Point, Point];
+    const snap = (v: number) => Math.round(v / GRID) * GRID;
+    p =
+      a.x === b.x
+        ? [a, { x: a.x, y: snap((a.y + b.y) / 2) }, { x: b.x, y: snap((a.y + b.y) / 2) }, b]
+        : [a, { x: snap((a.x + b.x) / 2), y: a.y }, { x: snap((a.x + b.x) / 2), y: b.y }, b];
+  }
+  const dx = start.x - old.x;
+  const dy = start.y - old.y;
+  const vertical = p[0]!.x === p[1]!.x;
+  p[0] = { ...start };
+  if (vertical) p[1]!.x += dx;
+  else p[1]!.y += dy;
+  const ok = (q: Point[]) =>
+    q.length >= 2 &&
+    isOrthogonal(q) &&
+    leavesProperly(q, dir) &&
+    leavesProperly([...q].reverse(), endDir) &&
+    !hitsComponent(q, avoid) &&
+    !unitEdges(q).some((e) => taken.has(e));
+  let result = simplify(p);
+  if (ok(result)) return result;
+  // Der Anschluss ist über den ersten Knick hinausgewandert: kurzer Stich aus
+  // dem Anschluss, dann auf kürzestem Weg zurück auf den alten Verlauf.
+  if (dir && p.length > 2) {
+    const stub = { x: start.x + dir.x * GRID, y: start.y + dir.y * GRID };
+    result = orthogonalize([start, stub, ...p.slice(2)], dir);
+    if (ok(result)) return result;
+  }
+  return undefined;
+}
+
+/**
+ * Hält die Leitungen ruhig, nachdem Bauteile oder Abzweige verschoben,
+ * gedreht oder gespiegelt wurden (`before` → `after`).
+ *
+ * - Leitungen in `internal` wandern als Ganzes mit (`map` auf jeden Punkt).
+ * - An Leitungen, deren Ende sich bewegt hat, werden nur die Teilstücke am
+ *   Ende nachgeführt; der übrige Verlauf samt Knickpunkten bleibt. Geht das
+ *   nicht sauber (Leitung liefe rückwärts oder durch das Bauteil), wird nur
+ *   diese Leitung neu geführt.
+ * - Alle übrigen automatisch geführten Leitungen behalten ihren bisherigen
+ *   Verlauf, statt wegen des verschobenen Bauteils auszuweichen.
+ */
+export function keepRoutes(
+  before: Diagram,
+  after: Diagram,
+  internal: ReadonlySet<string> = new Set(),
+  map: (p: Point) => Point = (p) => p,
+): Diagram {
+  const oldPaths = routeAll(before);
+  const obstacles = obstaclesOf(after);
+  const paths = new Map(oldPaths);
+  const waypoints = new Map<string, Point[]>();
+  const pending: Connection[] = [];
+  const sameDir = (a?: Direction, b?: Direction) => a?.x === b?.x && a?.y === b?.y;
+
+  for (const l of after.connections) {
+    const oldPath = oldPaths.get(l.id);
+    if (!oldPath) continue;
+    if (internal.has(l.id)) {
+      const mapped = oldPath.map(map);
+      paths.set(l.id, mapped);
+      waypoints.set(l.id, l.waypoints.length ? l.waypoints.map(map) : waypointsFor(mapped));
+      continue;
+    }
+    const endsMoved = ([l.from, l.to] as const).some(
+      (e, i) =>
+        !samePoint(endpointPosition(after, e), oldPath[i === 0 ? 0 : oldPath.length - 1]!) ||
+        !sameDir(endpointDirection(after, e), endpointDirection(before, e)),
+    );
+    if (endsMoved) pending.push(l);
+    else if (l.waypoints.length === 0) waypoints.set(l.id, waypointsFor(oldPath));
+  }
+
+  // Leitungen mit verschobenem Ende einzeln nachführen; keine darf dabei auf
+  // einer fremden Leitung zu liegen kommen (sähe verbunden aus).
+  const pendingIds = new Set(pending.map((l) => l.id));
+  const done = new Set<string>();
+  for (const l of pending) {
+    done.add(l.id);
+    const oldPath = oldPaths.get(l.id)!;
+    const start = endpointPosition(after, l.from);
+    const end = endpointPosition(after, l.to);
+    const startDir = endpointDirection(after, l.from);
+    const endDir = endpointDirection(after, l.to);
+    const mine = new Set([portKey(l.from), portKey(l.to)].filter((k) => k !== undefined));
+    const taken = new Set<string>();
+    const occupied = new Set<string>();
+    for (const other of after.connections) {
+      const path = paths.get(other.id);
+      const shares = [other.from, other.to].some((e) => {
+        const k = portKey(e);
+        return k !== undefined && mine.has(k);
+      });
+      // Noch nicht nachgeführte Leitungen liegen gleich woanders; sie zählen nicht.
+      if (other.id === l.id || !path || shares || (pendingIds.has(other.id) && !done.has(other.id))) continue;
+      for (const e of unitEdges(path)) taken.add(e);
+      for (const p of gridSteps(path)) occupied.add(`${p.x},${p.y}`);
+    }
+    const startMoved = !samePoint(start, oldPath[0]!) || !sameDir(startDir, endpointDirection(before, l.from));
+    let path: Point[] | undefined = oldPath;
+    // Beim ersten Ende darf das andere noch an der alten Stelle hängen; der zweite
+    // Schritt führt das andere Ende nach (falls nötig) und prüft den ganzen Verlauf.
+    if (startMoved) path = followStart(path, start, startDir, undefined, obstacles, new Set());
+    if (path) path = followStart([...path].reverse(), end, endDir, startDir, obstacles, taken)?.reverse();
+    // Nicht sauber nachführbar: nur diese Leitung neu führen.
+    path ??= route({ start, startDir, end, endDir, obstacles, occupied });
+    paths.set(l.id, path);
+    waypoints.set(l.id, waypointsFor(path));
+  }
+
+  if (waypoints.size === 0) return after;
+  return {
+    ...after,
+    connections: after.connections.map((l) => (waypoints.has(l.id) ? { ...l, waypoints: waypoints.get(l.id)! } : l)),
+  };
 }

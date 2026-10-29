@@ -1,5 +1,5 @@
 import { definitionOf } from './library.ts';
-import { GRID, componentBox, type Box } from './routing.ts';
+import { GRID, componentBox, keepRoutes, type Box } from './routing.ts';
 import type { ComponentInstance, Diagram, Point, PortRef, Rotation } from './types.ts';
 
 /**
@@ -85,7 +85,7 @@ function transformGroup(
   const set = new Set(ids);
   const junctions = internalJunctions(diagram, set);
   const internal = internalConnections(diagram, set, junctions);
-  return {
+  const after: Diagram = {
     ...diagram,
     components: diagram.components.map((c) => {
       const def = definitionOf(c);
@@ -95,11 +95,10 @@ function transformGroup(
       const center = map({ x: c.position.x + w, y: c.position.y + h });
       return { ...c, ...orient(c), position: { x: center.x - w, y: center.y - h } };
     }),
-    connections: diagram.connections.map((l) =>
-      internal.has(l.id) ? { ...l, waypoints: l.waypoints.map((p) => map(p)) } : l,
-    ),
     junctions: diagram.junctions.map((j) => (junctions.has(j.id) ? { ...j, position: map(j.position) } : j)),
   };
+  // Leitungen in der Gruppe wandern als Ganzes mit, an den übrigen nur die Enden.
+  return keepRoutes(diagram, after, internal, map);
 }
 
 /** Drehpunkt: Mitte eines einzelnen Bauteils, sonst Mitte des Umrisses im Raster. */

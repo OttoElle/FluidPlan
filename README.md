@@ -20,7 +20,10 @@ Leitungen verlaufen rechtwinklig im Raster. Gezeichnet wird von Anschluss zu Ans
 anklicken; Esc bricht ab). Ohne eigene Knickpunkte wird die Leitung automatisch geführt:
 senkrecht aus dem Anschluss heraus, um Bauteile herum, mit möglichst wenigen Knicken.
 Ein Teilstück lässt sich mit der Maus quer verschieben; danach bleibt der Verlauf so,
-bis man „Automatisch führen“ wählt. Wo sich Leitungen vom selben Anschluss trennen,
+bis man „Automatisch führen“ wählt. Verschiebt, dreht oder spiegelt man Bauteile, werden nur die
+Teilstücke an den bewegten Anschlüssen nachgeführt; der übrige Verlauf bleibt stehen, und
+unbeteiligte Leitungen ändern sich nicht. Neu geführt wird eine Leitung nur, wenn sie sonst
+rückwärts in einen Anschluss, durch ein Bauteil oder auf einer fremden Leitung liefe. Wo sich Leitungen vom selben Anschluss trennen,
 erscheint ein Verbindungspunkt. Entf löscht die ausgewählte Leitung bzw. das Bauteil.
 
 Endet eine neue Leitung auf einer bestehenden Leitung, entsteht dort ein Abzweig (T-Verteiler)
