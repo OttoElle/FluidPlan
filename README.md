@@ -4,7 +4,8 @@ Leichtgewichtiger Editor für einfache **Hydraulik- und Pneumatik-Schaltpläne**
 
 Stand: Projektgerüst mit Datenmodell, Bauteilbibliothek und Speichern/Laden als JSON.
 Schaltzeichen nach DIN ISO 1219-1 für die Grundbauteile: Pumpen, Kompressor, Motoren,
-Tank, Speicher, Filter, Wartungseinheit, Druck-, Strom- und Sperrventile, Manometer.
+Tank, Speicher, Filter, Wartungseinheit, Druck-, Strom- und Sperrventile, Kugelhahn,
+Schnelltrennkupplung, Schlauchleitung, Manometer und Sensoren.
 
 **Wegeventile und Zylinder sind konfigurierbar.** In der Bauteilliste stehen übliche
 Vorlagen (4/2, 4/3, 5/2, …); im Eigenschaften-Fenster (Doppelklick) legt man im Reiter „Konfigurator“ fest:
@@ -14,6 +15,19 @@ Betätigungen links und rechts (Magnet, Feder, Druck, Druckknopf, Hebel, Pedal, 
 Beim Zylinder: einfach-/doppeltwirkend, einseitige oder durchgehende Stange, Feder,
 Endlagendämpfung (fest/einstellbar) je Seite. Leitungen an Anschlüssen, die dabei
 wegfallen, werden entfernt.
+
+**Weitere Grundsymbole mit Konfigurator** (je ein Eintrag in der Bauteilliste, Auswahl
+im Konfigurator als Symbolvorschau):
+
+- Zylinder: Kolben-, Plunger- oder Teleskopzylinder, Kolbenstellung 0–100 %
+- Pumpe/Kompressor und Motor: konstant/verstellbar, eine oder zwei Richtungen,
+  Leckanschluss, Motor-Pumpe-Einheit
+- Kugelhahn: 2, 3 oder 4 Wege mit Schaltstellung
+- Speicher: Blase, Membran, Kolben, Gasflasche, Luftbehälter
+- Tank: offen/geschlossen, 1–3 Rückführungen, Leitung unter/über dem Flüssigkeitsspiegel
+- Schnelltrennkupplung: ohne/mit einem/zwei Rückschlagventilen, gekuppelt/entkuppelt
+- Sensor: Druck, Durchfluss, Temperatur, Näherung; schaltend, analog oder
+  elektromechanisch (Druckschalter), Schaltpunkt einstellbar
 
 Leitungen verlaufen rechtwinklig im Raster. Gezeichnet wird von Anschluss zu Anschluss
 (ziehen, oder Anschluss anklicken, optional Knickpunkte auf die Fläche klicken, Ziel
@@ -83,7 +97,13 @@ src/
     types.ts         Datenmodell: Diagram, ComponentInstance, Connection, Ports
     library.ts       Bauteilbibliothek (feste und konfigurierbare Bauteile, Bauteilliste)
     valve.ts         Konfigurierbares Wegeventil: Konfiguration, Geometrie, Vorlagen
-    cylinder.ts      Konfigurierbarer Zylinder
+    cylinder.ts      Konfigurierbarer Zylinder (Kolben, Plunger, Teleskop)
+    rotary.ts        Konfigurierbare Pumpe/Kompressor und Motor
+    ballValve.ts     Konfigurierbarer Kugelhahn
+    storage.ts       Konfigurierbare Speicher und Tanks
+    coupling.ts      Konfigurierbare Schnelltrennkupplung
+    sensor.ts        Konfigurierbarer Sensor/Schalter
+    configRead.ts    Hilfen zum Einlesen von Konfigurationen aus Dateien
     diagram.ts       Reine Funktionen zum Bearbeiten (hinzufügen, verbinden, löschen, Anschlussposition)
     routing.ts       Rechtwinklige Leitungsführung im Raster (A*-Suche, Teilstücke verschieben)
     labels.ts        Automatische Kennzeichnung nach ISO 1219-2 (1A1, 1V1, 0P1, …)
@@ -118,11 +138,13 @@ src/
   Hydraulik `P`, `T`, `A`, `B`; Pneumatik `1`, `2`, `3`, `4`, `5`, `12`, `14`.
 - **Bauteil** (im Schaltplan): ID, Typ-Verweis, Position, Drehung (0/90/180/270),
   Spiegelung, Betriebsmittelkennzeichen (z. B. `1V1`) und freie Kennwerte.
-  Konfigurierbare Bauteile (`valve.directional`, `actuator.cylinder`) tragen zusätzlich
+  Konfigurierbare Bauteile (`valve.directional`, `actuator.cylinder`, `supply.pump`,
+  `actuator.motor`, `supply.tank`, `supply.accumulator`, `valve.ball`, `line.coupling`,
+  `measure.sensor`) tragen zusätzlich
   `config`; Größe und Anschlüsse werden daraus berechnet (`definitionOf`). Ventilanschlüsse
   heißen intern immer `P`, `T`, `A`, `B`, `R`, `S`, `X`, `Y` und werden in der Pneumatik
   als `1`, `3`, `2`, `4`, `3`, `5`, `14`, `12` angezeigt. Ältere Dateien mit festen Typen
-  wie `valve.4-2` werden beim Laden umgestellt.
+  wie `valve.4-2` oder `supply.compressor` werden beim Laden umgestellt.
 - **Leitung**: verbindet zwei Anschlüsse (`{ componentId, portId }`), hat eine Linienart
   (`working` Arbeitsleitung, `pilot` Steuerleitung, `drain` Leckageleitung) und optionale Knickpunkte.
   Leere Knickpunktliste = automatisch geführt. Ein Leitungsende kann statt eines Anschlusses

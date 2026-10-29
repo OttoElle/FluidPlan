@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
-import type { ComponentInstance } from '../model/types.ts';
+import { defaultConfigFor, isConfigurable } from '../model/library.ts';
+import type { ComponentConfig, ComponentInstance } from '../model/types.ts';
+import { AccumulatorSymbol, BallValveSymbol, CouplingSymbol, HoseSymbol, SensorSymbol, TankSymbol } from './accessorySymbols.tsx';
 import { CylinderSymbol } from './cylinderSymbol.tsx';
+import { ElectricMotor, RotarySymbol } from './rotarySymbol.tsx';
 import { ArrowHead, CheckElement, DASH, FlowArrow, Junction, pts, seatTip, Spring, Throttle, Triangle, type P } from './symbolParts.tsx';
 import { ValveSymbol } from './valveSymbol.tsx';
 
@@ -19,90 +22,17 @@ import { ValveSymbol } from './valveSymbol.tsx';
  * den bemaßten Grundelementen (Abschnitt 8) und den Beispielen (Abschnitt 6
  * und 7) der DIN ISO 1219-1:2019; die Kommentare nennen die Abschnitte.
  *
- * Wegeventile und Zylinder sind konfigurierbar und werden aus ihrer
- * Konfiguration gezeichnet (valveSymbol.tsx, cylinderSymbol.tsx).
+ * Konfigurierbare Bauteile (Wegeventil, Zylinder, Pumpe, Kugelhahn, …) werden
+ * aus ihrer Konfiguration gezeichnet (valveSymbol.tsx, cylinderSymbol.tsx,
+ * rotarySymbol.tsx, accessorySymbols.tsx).
  */
 export const MODULE = 10;
 export const LINE_WIDTH = 0.125;
 
-// --- Energieversorgung und Antriebe -----------------------------------------
+// --- Energieversorgung ---------------------------------------------------------
 //
-// Pumpen, Motoren und Kompressor (10M × 10M): Kreis 6M (8.4.4) mit der Mitte
-// bei (6, 5), Antriebswelle als Rechteck 3M × 1M nach links, Anschluss-
-// leitungen 2M lang oben und unten (Beispiele 6.2), Dreieck 2M Seitenlänge.
-
-const CX = 6;
-const CY = 5;
-/** Sehne der Länge 2M im Kreis r = 3M liegt 2√2 M von der Mitte entfernt. */
-const CHORD = 2 * Math.SQRT2;
-const TRI_H = Math.sqrt(3);
-
-function EnergyConversionUnit({ top = true, bottom = true, children }: { top?: boolean; bottom?: boolean; children?: ReactNode }) {
-  return (
-    <>
-      <circle cx={CX} cy={CY} r={3} />
-      <rect x={0} y={CY - 0.5} width={3} height={1} />
-      {top && <line x1={CX} y1={0} x2={CX} y2={CY - 3} />}
-      {bottom && <line x1={CX} y1={CY + 3} x2={CX} y2={10} />}
-      {children}
-    </>
-  );
-}
-
-/** Verstellbarkeit von Pumpe/Motor (8.6.8): Pfeil unter 45° über ein 9M-Quadrat. */
-const Adjustable = () => <FlowArrow from={[CX - 4, CY + 4]} to={[CX + 4, CY - 4]} />;
-
-/** Hydropumpe, eine Förderrichtung: Dreieck mit der Spitze am Kreis, zeigt nach außen. */
-function Pump({ variable = false }: { variable?: boolean }) {
-  return (
-    <EnergyConversionUnit>
-      <Triangle tip={[CX, CY - 3]} dir={[0, -1]} filled />
-      {variable && <Adjustable />}
-    </EnergyConversionUnit>
-  );
-}
-
-/** Kompressor: wie die Pumpe, mit hohlem Dreieck, nur Druckanschluss. */
-function Compressor() {
-  return (
-    <EnergyConversionUnit bottom={false}>
-      <Triangle tip={[CX, CY - 3]} dir={[0, -1]} filled={false} />
-    </EnergyConversionUnit>
-  );
-}
-
-/** Motor: Dreieck mit der Grundseite am Kreis, Spitze zeigt nach innen. */
-function Motor({ reversible = false, filled = true }: { reversible?: boolean; filled?: boolean }) {
-  return (
-    <EnergyConversionUnit>
-      <Triangle tip={[CX, CY - CHORD + TRI_H]} dir={[0, 1]} filled={filled} />
-      {reversible && <Triangle tip={[CX, CY + CHORD - TRI_H]} dir={[0, -1]} filled={filled} />}
-    </EnergyConversionUnit>
-  );
-}
-
-/** Elektromotor (10M × 10M): Kreis 6M mit "M", Welle 3M × 1M nach rechts, auf Höhe der Pumpenwelle. */
-function ElectricMotor() {
-  return (
-    <>
-      <circle cx={3} cy={CY} r={3} />
-      <text x={3} y={CY} className="fill" stroke="none" fontSize={2.6} textAnchor="middle" dominantBaseline="central">
-        M
-      </text>
-      <rect x={6} y={CY - 0.5} width={3} height={1} />
-    </>
-  );
-}
-
-/** Behälter (8.7.32/33, 6M × 4M): offen, 2M hoch; Rücklauf 2M von der Wand, endet 1M über dem Boden. */
-function Tank() {
-  return (
-    <>
-      <polyline points={pts([0, 2], [0, 4], [6, 4], [6, 2])} />
-      <line x1={2} y1={0} x2={2} y2={3} />
-    </>
-  );
-}
+// Pumpen, Motoren, Behälter und Speicher sind konfigurierbar (rotarySymbol.tsx,
+// accessorySymbols.tsx).
 
 /** Pneumatische Energiequelle (8.7.35, 6M × 2M): hohles Dreieck 2M, Leitung 4M zum Anschluss. */
 function AirSource() {
@@ -123,18 +53,6 @@ function Silencer() {
       <line x1={0} y1={3} x2={1} y2={3} />
       <line x1={1} y1={4} x2={2} y2={4} />
       <line x1={0} y1={5} x2={1} y2={5} />
-    </>
-  );
-}
-
-/** Hydrospeicher, gasbelastet (8.7.34, 4M × 10M): Behälter 4M × 8M, Trennlinie, Gas-Dreieck. */
-function Accumulator() {
-  return (
-    <>
-      <rect x={0} y={0} width={4} height={8} rx={2} />
-      <line x1={0} y1={4} x2={4} y2={4} />
-      <Triangle tip={[2, 1]} dir={[0, -1]} filled={false} />
-      <line x1={2} y1={8} x2={2} y2={10} />
     </>
   );
 }
@@ -385,19 +303,11 @@ function FlowControlValve() {
 }
 
 const SYMBOLS: Record<string, () => ReactNode> = {
-  'supply.pump': () => <Pump />,
-  'supply.pump-variable': () => <Pump variable />,
-  'supply.compressor': Compressor,
   'supply.electric-motor': ElectricMotor,
-  'supply.tank': Tank,
   'supply.air-source': AirSource,
   'supply.silencer': Silencer,
-  'supply.accumulator': Accumulator,
   'supply.filter': Filter,
   'supply.service-unit': ServiceUnit,
-  'actuator.motor': () => <Motor />,
-  'actuator.motor-reversible': () => <Motor reversible />,
-  'actuator.air-motor': () => <Motor filled={false} />,
   'valve.check': CheckValve,
   'valve.check-spring': SpringCheckValve,
   'valve.check-piloted': PilotedCheckValve,
@@ -410,21 +320,37 @@ const SYMBOLS: Record<string, () => ReactNode> = {
   'valve.throttle-check': ThrottleCheckValve,
   'valve.flow-control': FlowControlValve,
   'measure.gauge': Gauge,
+  'line.hose': HoseSymbol,
 };
 
-const CONFIGURABLE_SYMBOLS = new Set(['valve.directional', 'actuator.cylinder']);
+type ConfigOf<K extends ComponentConfig['kind']> = Extract<ComponentConfig, { kind: K }>;
+
+/** Zeichnung je Konfigurationsart; TypeScript meldet fehlende Einträge. */
+const CONFIG_SYMBOLS: { [K in ComponentConfig['kind']]: (props: { config: ConfigOf<K> }) => ReactNode } = {
+  'directional-valve': ValveSymbol,
+  cylinder: CylinderSymbol,
+  pump: RotarySymbol,
+  motor: RotarySymbol,
+  tank: TankSymbol,
+  accumulator: AccumulatorSymbol,
+  'ball-valve': BallValveSymbol,
+  coupling: CouplingSymbol,
+  sensor: SensorSymbol,
+};
 
 export function hasSymbol(type: string): boolean {
-  return type in SYMBOLS || CONFIGURABLE_SYMBOLS.has(type);
+  return type in SYMBOLS || isConfigurable(type);
 }
 
 /** Zeichnet das Symbol in lokalen Bauteilkoordinaten (Einheiten, nicht M). */
 export function ComponentSymbol({ component }: { component: Pick<ComponentInstance, 'type' | 'config'> }) {
-  const { config } = component;
+  // Konfigurierbare Bauteile ohne Konfiguration (ältere Stände) in Startkonfiguration zeichnen.
+  const config = component.config ?? defaultConfigFor(component.type, 'hydraulic');
   let content: ReactNode = null;
-  if (config?.kind === 'directional-valve') content = <ValveSymbol config={config} />;
-  else if (config?.kind === 'cylinder') content = <CylinderSymbol config={config} />;
-  else {
+  if (config) {
+    const Draw = CONFIG_SYMBOLS[config.kind] as (props: { config: ComponentConfig }) => ReactNode;
+    content = <Draw config={config} />;
+  } else {
     const Draw = SYMBOLS[component.type];
     if (Draw) content = <Draw />;
   }

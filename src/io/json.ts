@@ -1,4 +1,4 @@
-import { definitionOf, getDefinition, isConfigurable, isKnownType, LEGACY_TYPES, readConfig } from '../model/library.ts';
+import { defaultConfigFor, definitionOf, getDefinition, isConfigurable, isKnownType, LEGACY_TYPES, readConfig } from '../model/library.ts';
 import type {
   Annotation,
   ComponentInstance,
@@ -82,12 +82,14 @@ export function parseDiagram(text: string): ParseResult {
 function upgradeLegacyTypes(diagram: Diagram): Diagram {
   const renamed = new Map<string, Record<string, string>>();
   const components = diagram.components.map((c) => {
+    // Früher feste, heute konfigurierbare Typen (z. B. Pumpe, Tank) bekommen ihre Startkonfiguration.
+    if (!c.config && isConfigurable(c.type)) return { ...c, config: defaultConfigFor(c.type, diagram.domain)! };
     const legacy = LEGACY_TYPES[c.type];
     if (!legacy) return c;
     renamed.set(c.id, legacy.ports);
     return { ...c, type: legacy.type, config: structuredClone(legacy.config) };
   });
-  if (renamed.size === 0) return diagram;
+  if (renamed.size === 0) return { ...diagram, components };
   const fix = (ref: Endpoint): Endpoint => {
     if ('junctionId' in ref) return ref;
     const map = renamed.get(ref.componentId);

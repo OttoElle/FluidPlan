@@ -2,14 +2,14 @@ import { Plus, X } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { IconButton } from '../IconButton.tsx';
 import {
-  ACTION_NAMES,
-  CUSHION_NAMES,
-  normalizeCylinder,
-  ROD_NAMES,
-  SPRING_NAMES,
-  type Cushion,
-  type CylinderConfig,
-} from '../../model/cylinder.ts';
+  AccumulatorEditor,
+  BallValveEditor,
+  CouplingEditor,
+  CylinderEditor,
+  RotaryEditor,
+  SensorEditor,
+  TankEditor,
+} from './symbolEditors.tsx';
 import type { ComponentConfig, Domain } from '../../model/types.ts';
 import {
   ACTUATOR_NAMES,
@@ -48,7 +48,14 @@ type ConfigOf<K extends ComponentConfig['kind']> = Extract<ComponentConfig, { ki
  */
 export const CONFIG_EDITORS: { [K in ComponentConfig['kind']]: ComponentType<ConfigEditorProps<ConfigOf<K>>> } = {
   'directional-valve': ValveConfigurator,
-  cylinder: CylinderConfigurator,
+  cylinder: CylinderEditor,
+  pump: RotaryEditor,
+  motor: RotaryEditor,
+  tank: TankEditor,
+  accumulator: AccumulatorEditor,
+  'ball-valve': BallValveEditor,
+  coupling: CouplingEditor,
+  sensor: SensorEditor,
 };
 
 /** Passenden Konfigurator für eine beliebige Konfiguration anzeigen. */
@@ -221,41 +228,5 @@ function ActuatorList({ title, list, onChange }: { title: string; list: Actuator
         </select>
       )}
     </fieldset>
-  );
-}
-
-function CylinderConfigurator({ config, onChange }: ConfigEditorProps<CylinderConfig>) {
-  const set = (c: CylinderConfig) => onChange(normalizeCylinder(c));
-  const choice = <K extends string>(
-    title: string,
-    value: K,
-    names: Record<K, string>,
-    apply: (v: K) => void,
-  ) => (
-    <label>
-      {title}
-      <select value={value} onChange={(e) => apply(e.target.value as K)}>
-        {(Object.keys(names) as K[]).map((k) => (
-          <option key={k} value={k}>
-            {names[k]}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-  return (
-    <div className="configurator">
-      {choice('Wirkungsweise', config.action, ACTION_NAMES, (action) =>
-        set({ ...config, action, spring: action === 'single' && config.spring === 'none' ? 'rod' : config.spring }),
-      )}
-      {choice('Kolbenstange', config.rod, ROD_NAMES, (rod) => set({ ...config, rod }))}
-      {config.action === 'single' && choice('Rückstellung', config.spring, SPRING_NAMES, (spring) => set({ ...config, spring }))}
-      {choice<Cushion>('Dämpfung kolbenseitig', config.cushion.piston, CUSHION_NAMES, (piston) =>
-        set({ ...config, cushion: { ...config.cushion, piston } }),
-      )}
-      {choice<Cushion>('Dämpfung stangenseitig', config.cushion.rod, CUSHION_NAMES, (rod) =>
-        set({ ...config, cushion: { ...config.cushion, rod } }),
-      )}
-    </div>
   );
 }

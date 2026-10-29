@@ -8,7 +8,17 @@ describe('Schaltzeichen', () => {
   });
 
   it('gibt es für die konfigurierbaren Bauteile', () => {
-    for (const type of ['valve.directional', 'actuator.cylinder']) {
+    for (const type of [
+      'valve.directional',
+      'actuator.cylinder',
+      'supply.pump',
+      'actuator.motor',
+      'supply.tank',
+      'supply.accumulator',
+      'valve.ball',
+      'line.coupling',
+      'measure.sensor',
+    ]) {
       expect(getDefinition(type), type).toBeDefined();
       expect(hasSymbol(type), type).toBe(true);
     }

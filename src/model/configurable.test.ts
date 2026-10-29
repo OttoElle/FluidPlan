@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { parseDiagram, serializeDiagram } from '../io/json.ts';
-import { defaultCylinderConfig, type CylinderConfig } from './cylinder.ts';
+import { BORES, WAYS, type BallValveConfig } from './ballValve.ts';
+import { CHECK_COUNTS, type CouplingConfig } from './coupling.ts';
+import { defaultCylinderConfig, normalizeCylinder, type CylinderConfig } from './cylinder.ts';
 import { addComponent, configureComponent, connect, createDiagram, transformLocalPoint } from './diagram.ts';
 import { exampleHydraulicDiagram } from './example.ts';
-import { definitionOf } from './library.ts';
+import { definitionOf, typeOfConfig } from './library.ts';
+import { defaultMotorConfig, defaultPumpConfig, normalizeRotary, type RotaryConfig } from './rotary.ts';
+import { defaultSensorConfig, normalizeSensor, type SensorConfig } from './sensor.ts';
+import { ACCUMULATOR_NAMES, TANK_LINES, type AccumulatorConfig, type AccumulatorType, type TankConfig } from './storage.ts';
 import type { ComponentConfig } from './types.ts';
 import {
   ACTUATORS,
@@ -31,18 +36,45 @@ function valveVariants(): DirectionalValveConfig[] {
 
 function cylinderVariants(): CylinderConfig[] {
   const out: CylinderConfig[] = [];
-  for (const action of ['double', 'single'] as const)
-    for (const rod of ['single', 'through'] as const)
-      for (const spring of ['none', 'rod', 'piston'] as const)
-        out.push({ ...defaultCylinderConfig(action), rod, spring: action === 'double' ? 'none' : spring });
+  for (const design of ['piston', 'plunger', 'telescopic'] as const)
+    for (const action of ['double', 'single'] as const)
+      for (const rod of ['single', 'through'] as const)
+        for (const spring of ['none', 'rod', 'piston'] as const)
+          for (const stroke of [0, 35, 50, 100])
+            out.push(normalizeCylinder({ ...defaultCylinderConfig(action, design), rod, spring, stroke }));
   return out;
 }
 
-const definition = (config: ComponentConfig) =>
-  definitionOf({ type: config.kind === 'cylinder' ? 'actuator.cylinder' : 'valve.directional', config })!;
+function rotaryVariants(): RotaryConfig[] {
+  const out: RotaryConfig[] = [];
+  for (const medium of ['hydraulic', 'pneumatic'] as const)
+    for (const base of [defaultPumpConfig(medium), defaultMotorConfig(medium)])
+      for (const displacement of ['fixed', 'variable'] as const)
+        for (const directions of [1, 2] as const)
+          for (const drain of [false, true])
+            for (const electricMotor of [false, true])
+              out.push(normalizeRotary({ ...base, displacement, directions, drain, electricMotor }));
+  return out;
+}
+
+function accessoryVariants(): ComponentConfig[] {
+  const out: ComponentConfig[] = [];
+  for (const ways of WAYS) for (const bore of Object.keys(BORES[ways])) out.push({ kind: 'ball-valve', ways, bore } satisfies BallValveConfig);
+  for (const type of Object.keys(ACCUMULATOR_NAMES) as AccumulatorType[]) out.push({ kind: 'accumulator', type } satisfies AccumulatorConfig);
+  for (const closed of [false, true])
+    for (const lines of TANK_LINES)
+      for (const lineEnd of ['below', 'above'] as const) out.push({ kind: 'tank', closed, lines, lineEnd } satisfies TankConfig);
+  for (const checks of CHECK_COUNTS) for (const coupled of [false, true]) out.push({ kind: 'coupling', checks, coupled } satisfies CouplingConfig);
+  for (const quantity of ['pressure', 'flow', 'temperature', 'position'] as const)
+    for (const output of ['switching', 'analog', 'mechanical'] as const)
+      for (const adjustable of [false, true]) out.push(normalizeSensor({ ...defaultSensorConfig(quantity, output), adjustable } satisfies SensorConfig));
+  return out;
+}
+
+const definition = (config: ComponentConfig) => definitionOf({ type: typeOfConfig(config), config })!;
 
 describe('Konfigurierbare Bauteile', () => {
-  const all: ComponentConfig[] = [...valveVariants(), ...cylinderVariants()];
+  const all: ComponentConfig[] = [...valveVariants(), ...cylinderVariants(), ...rotaryVariants(), ...accessoryVariants()];
 
   it('legen alle Anschlüsse auf den Rand und in jeder Lage aufs Raster', () => {
     for (const config of all) {
@@ -64,11 +96,36 @@ describe('Konfigurierbare Bauteile', () => {
   });
 
   it('legen die Anschlüsse von Wegeventil und Zylinder auf das 2M-Raster (ISO 1219-1, 9.2.12)', () => {
-    for (const config of all) {
+    for (const config of [...valveVariants(), ...cylinderVariants()]) {
       for (const p of definition(config).ports) {
         expect(p.offset.x % 20, `${definition(config).name} ${p.id}`).toBe(0);
       }
     }
+  });
+
+  it('halten Plunger- und Teleskopzylinder in sinnvollen Einstellungen', () => {
+    const plunger = normalizeCylinder({ ...defaultCylinderConfig('double', 'plunger'), rod: 'through', spring: 'rod' });
+    expect(plunger).toMatchObject({ action: 'single', rod: 'single', spring: 'none' });
+    expect(definition(plunger).ports.map((p) => p.id)).toEqual(['A']);
+    const telescopic = defaultCylinderConfig('double', 'telescopic');
+    expect(definition(telescopic).ports.map((p) => p.id)).toEqual(['A', 'B', 'C']);
+    expect(normalizeCylinder({ ...telescopic, stroke: 60 }).stroke).toBe(0);
+  });
+
+  it('fahren den Kolben mit der Kolbenstellung aus, ohne die Anschlüsse zu verschieben', () => {
+    const retracted = definition(defaultCylinderConfig('double'));
+    const extended = definition({ ...defaultCylinderConfig('double'), stroke: 100 });
+    expect(extended.size.width).toBeGreaterThan(retracted.size.width);
+    expect(extended.ports).toEqual(retracted.ports);
+  });
+
+  it('geben Pumpe und Motor Leckanschluss und Motor-Pumpe-Einheit', () => {
+    const pump = definition({ ...defaultPumpConfig('hydraulic'), drain: true, electricMotor: true });
+    expect(pump.ports.map((p) => p.id)).toEqual(['P', 'S', 'L']);
+    expect(pump.ports.find((p) => p.id === 'L')?.kind).toBe('drain');
+    expect(pump.size.width).toBe(160);
+    const compressor = definition(normalizeRotary({ ...defaultPumpConfig('pneumatic'), directions: 2, drain: true }));
+    expect(compressor.ports.map((p) => [p.id, p.label])).toEqual([['P', '1']]);
   });
 
   it('benennen Ventilanschlüsse in der Pneumatik nach ISO 5599', () => {
@@ -135,6 +192,41 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
     const r = parseDiagram(JSON.stringify(file));
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors[0]).toMatch(/config\.ports/);
+  });
+
+  it('speichern und laden alle neuen Grundsymbole', () => {
+    let d = createDiagram('hydraulic');
+    for (const config of [...rotaryVariants().slice(0, 4), ...accessoryVariants(), ...cylinderVariants().slice(-6)]) {
+      d = addComponent(d, typeOfConfig(config), { x: 0, y: 0 }, { config }).diagram;
+    }
+    expect(parseDiagram(serializeDiagram(d))).toEqual({ ok: true, diagram: d });
+  });
+
+  it('geben früher festen Pumpen, Motoren, Tanks und Speichern eine Konfiguration', () => {
+    const file = JSON.parse(serializeDiagram(createDiagram('pneumatic')));
+    const component = (id: string, type: string) => ({ id, type, position: { x: 0, y: 0 }, rotation: 0, mirrored: false, label: '', properties: {} });
+    file.diagram.components = [component('c1', 'supply.compressor'), component('c2', 'actuator.air-motor'), component('c3', 'supply.accumulator')];
+    file.diagram.connections = [{ id: 'l1', from: { componentId: 'c1', portId: '1' }, to: { componentId: 'c2', portId: 'A' }, kind: 'working', waypoints: [] }];
+    const r = parseDiagram(JSON.stringify(file));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.diagram.components.map((c) => [c.type, c.config?.kind])).toEqual([
+      ['supply.pump', 'pump'],
+      ['actuator.motor', 'motor'],
+      ['supply.accumulator', 'accumulator'],
+    ]);
+    expect(r.diagram.components[2]!.config).toEqual({ kind: 'accumulator', type: 'air-reservoir' });
+    expect(r.diagram.connections[0]!.from).toEqual({ componentId: 'c1', portId: 'P' });
+  });
+
+  it('lesen Zylinder aus älteren Dateien ohne Bauart und Kolbenstellung', () => {
+    const file = JSON.parse(serializeDiagram(exampleHydraulicDiagram()));
+    const cyl = file.diagram.components.find((c: { type: string }) => c.type === 'actuator.cylinder');
+    delete cyl.config.design;
+    delete cyl.config.stroke;
+    const r = parseDiagram(JSON.stringify(file));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.diagram.components.find((c) => c.type === 'actuator.cylinder')?.config).toMatchObject({ design: 'piston', stroke: 0 });
   });
 
   it('stellen alte feste Ventil- und Zylindertypen um', () => {

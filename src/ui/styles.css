@@ -453,3 +453,12 @@ dialog.help { width: min(560px, calc(100vw - 32px)); }
 .ruler line { stroke: var(--muted); stroke-width: 1; }
 .ruler text { font-size: 9px; fill: var(--muted); font-variant-numeric: tabular-nums; }
 .ruler.corner { width: 20px; height: 20px; z-index: 2; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+/* Konfiguratoren der Grundsymbole: zweispaltig, Auswahl als Symbolvorschau */
+.config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; align-items: start; }
+.config-grid .field.wide { grid-column: 1 / -1; }
+.config-grid .segmented { flex-wrap: wrap; }
+.config-grid .segment { height: 34px; padding: 0 3px; }
+.config-grid .segment .symbol-preview .symbol { stroke-width: 1px; }
+.config-grid input[type='range'] { width: 100%; }
+.config-grid .check { font-size: 13px; }

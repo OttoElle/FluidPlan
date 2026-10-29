@@ -1,4 +1,35 @@
+import {
+  ballValveGeometry,
+  ballValveTitle,
+  defaultBallValveConfig,
+  readBallValveConfig,
+  type BallValveConfig,
+} from './ballValve.ts';
+import { couplingGeometry, couplingTitle, defaultCouplingConfig, readCouplingConfig, type CouplingConfig } from './coupling.ts';
 import { cylinderGeometry, cylinderTitle, defaultCylinderConfig, readCylinderConfig, type CylinderConfig } from './cylinder.ts';
+import {
+  defaultMotorConfig,
+  defaultPumpConfig,
+  readMotorConfig,
+  readPumpConfig,
+  rotaryGeometry,
+  rotaryTitle,
+  type MotorConfig,
+  type PumpConfig,
+} from './rotary.ts';
+import { defaultSensorConfig, readSensorConfig, sensorGeometry, sensorTitle, type SensorConfig } from './sensor.ts';
+import {
+  accumulatorGeometry,
+  accumulatorTitle,
+  defaultAccumulatorConfig,
+  defaultTankConfig,
+  readAccumulatorConfig,
+  readTankConfig,
+  tankGeometry,
+  tankTitle,
+  type AccumulatorConfig,
+  type TankConfig,
+} from './storage.ts';
 import type { ComponentConfig, ComponentDefinition, ComponentInstance, Domain, PortDefinition, PortKind } from './types.ts';
 import {
   defaultValveConfig,
@@ -19,9 +50,11 @@ import {
  * dieselbe Parität, damit die Anschlüsse auch gedreht auf dem Raster bleiben.
  *
  * Es gibt zwei Arten von Bauteilen:
- *   - feste Bauteile mit genau einem Symbol (Pumpe, Rückschlagventil, …),
- *   - konfigurierbare Bauteile (Wegeventil, Zylinder), deren Symbol, Größe und
- *     Anschlüsse sich aus der Konfiguration der Instanz ergeben.
+ *   - feste Bauteile mit genau einem Symbol (Rückschlagventil, Filter, …),
+ *   - konfigurierbare Bauteile (Wegeventil, Zylinder, Pumpe, Kugelhahn, …),
+ *     deren Symbol, Größe und Anschlüsse sich aus der Konfiguration der
+ *     Instanz ergeben. In der Bauteilliste steht je Grundsymbol ein Eintrag,
+ *     die Einzelheiten stellt man im Konfigurator ein.
  */
 export const MODULE = 10;
 
@@ -55,21 +88,11 @@ const HP: Domain[] = ['hydraulic', 'pneumatic'];
 /** Feste Bauteile; Maße und Anschlusslagen in M. */
 export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
   // --- Energieversorgung ---
-  fixed('supply.pump', 'Hydropumpe (konstant)', H, [10, 10], [['P', 'pressure', 6, 0], ['S', 'return', 6, 10]]),
-  fixed('supply.pump-variable', 'Hydropumpe (verstellbar)', H, [10, 10], [['P', 'pressure', 6, 0], ['S', 'return', 6, 10]]),
-  fixed('supply.compressor', 'Kompressor', P, [10, 10], [['1', 'pressure', 6, 0]]),
   fixed('supply.electric-motor', 'Elektromotor', HP, [10, 10], []),
-  fixed('supply.tank', 'Tank', H, [6, 4], [['T', 'return', 2, 0]]),
   fixed('supply.air-source', 'Druckluftquelle', P, [6, 2], [['1', 'pressure', 6, 1]]),
   fixed('supply.silencer', 'Schalldämpfer', P, [2, 6], [['3', 'return', 1, 0]]),
-  fixed('supply.accumulator', 'Hydrospeicher', H, [4, 10], [['P', 'work', 2, 10]]),
   fixed('supply.filter', 'Filter', HP, [8, 10], [['1', 'work', 4, 0], ['2', 'work', 4, 10]]),
   fixed('supply.service-unit', 'Wartungseinheit', P, [14, 6], [['1', 'pressure', 0, 3], ['2', 'work', 14, 3]]),
-
-  // --- Antriebe ---
-  fixed('actuator.motor', 'Hydromotor (eine Drehrichtung)', H, [10, 10], [['A', 'work', 6, 0], ['B', 'work', 6, 10]]),
-  fixed('actuator.motor-reversible', 'Hydromotor (zwei Drehrichtungen)', H, [10, 10], [['A', 'work', 6, 0], ['B', 'work', 6, 10]]),
-  fixed('actuator.air-motor', 'Druckluftmotor', P, [10, 10], [['A', 'work', 6, 0], ['B', 'return', 6, 10]]),
 
   // --- Sperrventile ---
   fixed('valve.check', 'Rückschlagventil', HP, [2, 6], [['1', 'work', 1, 6], ['2', 'work', 1, 0]]),
@@ -110,6 +133,9 @@ export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
 
   // --- Messgeräte ---
   fixed('measure.gauge', 'Manometer', HP, [4, 6], [['1', 'work', 2, 6]]),
+
+  // --- Verbindungen ---
+  fixed('line.hose', 'Schlauchleitung', HP, [6, 2], [['1', 'work', 0, 1], ['2', 'work', 6, 1]]),
 ];
 
 // --- Konfigurierbare Bauteile ------------------------------------------------
@@ -144,7 +170,79 @@ const CYLINDER: ConfigurableType<CylinderConfig> = {
   read: readCylinderConfig,
 };
 
-const CONFIGURABLE = new Map<string, ConfigurableType<any>>([VALVE, CYLINDER].map((t) => [t.type, t]));
+const PUMP: ConfigurableType<PumpConfig> = {
+  type: 'supply.pump',
+  name: 'Pumpe / Kompressor',
+  domains: HP,
+  defaultConfig: defaultPumpConfig,
+  title: rotaryTitle,
+  geometry: rotaryGeometry,
+  read: readPumpConfig,
+};
+
+const MOTOR: ConfigurableType<MotorConfig> = {
+  type: 'actuator.motor',
+  name: 'Motor',
+  domains: HP,
+  defaultConfig: defaultMotorConfig,
+  title: rotaryTitle,
+  geometry: rotaryGeometry,
+  read: readMotorConfig,
+};
+
+const TANK: ConfigurableType<TankConfig> = {
+  type: 'supply.tank',
+  name: 'Tank',
+  domains: H,
+  defaultConfig: defaultTankConfig,
+  title: tankTitle,
+  geometry: tankGeometry,
+  read: readTankConfig,
+};
+
+const ACCUMULATOR: ConfigurableType<AccumulatorConfig> = {
+  type: 'supply.accumulator',
+  name: 'Speicher',
+  domains: HP,
+  defaultConfig: defaultAccumulatorConfig,
+  title: accumulatorTitle,
+  geometry: accumulatorGeometry,
+  read: readAccumulatorConfig,
+};
+
+const BALL_VALVE: ConfigurableType<BallValveConfig> = {
+  type: 'valve.ball',
+  name: 'Kugelhahn',
+  domains: HP,
+  defaultConfig: () => defaultBallValveConfig(2),
+  title: ballValveTitle,
+  geometry: ballValveGeometry,
+  read: readBallValveConfig,
+};
+
+const COUPLING: ConfigurableType<CouplingConfig> = {
+  type: 'line.coupling',
+  name: 'Schnelltrennkupplung',
+  domains: HP,
+  defaultConfig: defaultCouplingConfig,
+  title: couplingTitle,
+  geometry: couplingGeometry,
+  read: readCouplingConfig,
+};
+
+const SENSOR: ConfigurableType<SensorConfig> = {
+  type: 'measure.sensor',
+  name: 'Sensor',
+  domains: HP,
+  defaultConfig: () => defaultSensorConfig(),
+  title: sensorTitle,
+  geometry: sensorGeometry,
+  read: readSensorConfig,
+};
+
+const CONFIGURABLE = new Map<string, ConfigurableType<any>>(
+  [VALVE, CYLINDER, PUMP, MOTOR, TANK, ACCUMULATOR, BALL_VALVE, COUPLING, SENSOR].map((t) => [t.type, t]),
+);
 
 const BY_TYPE = new Map(COMPONENT_LIBRARY.map((d) => [d.type, d]));
 
@@ -159,6 +257,12 @@ export function isKnownType(type: string): boolean {
 /** Startkonfiguration für einen konfigurierbaren Typ, sonst undefined. */
 export function defaultConfigFor(type: string, domain: Domain): ComponentConfig | undefined {
   return CONFIGURABLE.get(type)?.defaultConfig(domain);
+}
+
+/** Bauteiltyp, zu dem eine Konfiguration gehört (z. B. für Vorschauen im Konfigurator). */
+export function typeOfConfig(config: ComponentConfig): string {
+  for (const t of CONFIGURABLE.values()) if (t.defaultConfig('hydraulic').kind === config.kind) return t.type;
+  throw new Error(`Keine Bauteilart für Konfiguration "${config.kind}"`);
 }
 
 /** Prüft die Konfiguration eines konfigurierbaren Typs aus einer Datei. */
@@ -210,22 +314,32 @@ export const PALETTE_GROUPS = [
   'Sperrventile',
   'Druckventile',
   'Stromventile',
+  'Speicher und Behälter',
+  'Verbindungen',
+  'Messen und Sensoren',
   'Zubehör',
 ] as const;
 
-const GROUP_OF: Record<string, (typeof PALETTE_GROUPS)[number]> = {
-  supply: 'Energieversorgung',
-  actuator: 'Antriebe',
-  measure: 'Zubehör',
-};
+type PaletteGroup = (typeof PALETTE_GROUPS)[number];
 
-function groupOfFixed(type: string): (typeof PALETTE_GROUPS)[number] {
+function groupOfFixed(type: string): PaletteGroup {
   if (type.startsWith('valve.check') || type === 'valve.shuttle' || type === 'valve.two-pressure') return 'Sperrventile';
   if (type.startsWith('valve.pressure') || type === 'valve.sequence') return 'Druckventile';
   if (type.startsWith('valve.throttle') || type === 'valve.flow-control') return 'Stromventile';
-  if (type === 'supply.filter' || type === 'supply.accumulator') return 'Zubehör';
-  return GROUP_OF[type.split('.')[0]!] ?? 'Zubehör';
+  if (type.startsWith('measure.')) return 'Messen und Sensoren';
+  if (type.startsWith('line.')) return 'Verbindungen';
+  if (type === 'supply.filter' || type === 'supply.silencer' || type === 'supply.service-unit') return 'Zubehör';
+  if (type.startsWith('supply.')) return 'Energieversorgung';
+  return 'Zubehör';
 }
+
+const entry = (key: string, name: string, group: PaletteGroup, type: ConfigurableType<any>, config: ComponentConfig): PaletteEntry => ({
+  key,
+  name,
+  group,
+  type: type.type,
+  config,
+});
 
 function valvePreset(
   domain: Domain,
@@ -262,14 +376,31 @@ export function paletteFor(domain: Domain): PaletteEntry[] {
           valvePreset(domain, 5, 2, ['pilot'], ['pilot'], 'Impuls'),
           valvePreset(domain, 5, 3),
         ];
-  const cylinders: PaletteEntry[] = [
-    { key: 'cyl-double', name: 'Zylinder, doppeltwirkend', group: 'Antriebe', type: CYLINDER.type, config: defaultCylinderConfig('double') },
-    { key: 'cyl-single', name: 'Zylinder, einfachwirkend', group: 'Antriebe', type: CYLINDER.type, config: defaultCylinderConfig('single') },
+  const hydraulic = domain === 'hydraulic';
+  const configurable: PaletteEntry[] = [
+    entry('pump', hydraulic ? 'Hydropumpe' : 'Kompressor', 'Energieversorgung', PUMP, defaultPumpConfig(domain)),
+    entry('cyl-double', 'Zylinder, doppeltwirkend', 'Antriebe', CYLINDER, defaultCylinderConfig('double')),
+    entry('cyl-single', 'Zylinder, einfachwirkend', 'Antriebe', CYLINDER, defaultCylinderConfig('single')),
+    ...(hydraulic
+      ? [
+          entry('cyl-plunger', 'Plungerzylinder', 'Antriebe', CYLINDER, defaultCylinderConfig('single', 'plunger')),
+          entry('cyl-telescopic', 'Teleskopzylinder', 'Antriebe', CYLINDER, defaultCylinderConfig('single', 'telescopic')),
+        ]
+      : []),
+    entry('motor', hydraulic ? 'Hydromotor' : 'Druckluftmotor', 'Antriebe', MOTOR, defaultMotorConfig(domain)),
+    entry('ball-valve', 'Kugelhahn', 'Sperrventile', BALL_VALVE, defaultBallValveConfig(2)),
+    ...(hydraulic ? [entry('tank', 'Tank', 'Speicher und Behälter', TANK, defaultTankConfig())] : []),
+    entry('accumulator', hydraulic ? 'Hydrospeicher' : 'Luftbehälter', 'Speicher und Behälter', ACCUMULATOR, defaultAccumulatorConfig(domain)),
+    entry('coupling', 'Schnelltrennkupplung', 'Verbindungen', COUPLING, defaultCouplingConfig()),
+    entry('pressure-switch', 'Druckschalter', 'Messen und Sensoren', SENSOR, defaultSensorConfig('pressure', 'switching')),
+    entry('flow-sensor', 'Durchflusssensor', 'Messen und Sensoren', SENSOR, defaultSensorConfig('flow', 'analog')),
+    entry('temperature-sensor', 'Temperatursensor', 'Messen und Sensoren', SENSOR, defaultSensorConfig('temperature', 'analog')),
+    entry('proximity-switch', 'Näherungsschalter', 'Messen und Sensoren', SENSOR, defaultSensorConfig('position', 'switching')),
   ];
   const fixedEntries = definitionsFor(domain).map(
     (d): PaletteEntry => ({ key: d.type, name: d.name, group: groupOfFixed(d.type), type: d.type }),
   );
-  return [...cylinders, ...presets, ...fixedEntries];
+  return [...configurable, ...presets, ...fixedEntries];
 }
 
 // --- Ältere Bauteiltypen ----------------------------------------------------
@@ -303,6 +434,26 @@ export const LEGACY_TYPES: Record<string, { type: string; config: ComponentConfi
   'actuator.cylinder-double': {
     type: CYLINDER.type,
     config: defaultCylinderConfig('double'),
+    ports: { A: 'A', B: 'B' },
+  },
+  'supply.pump-variable': {
+    type: PUMP.type,
+    config: { ...defaultPumpConfig('hydraulic'), displacement: 'variable' },
+    ports: { P: 'P', S: 'S' },
+  },
+  'supply.compressor': {
+    type: PUMP.type,
+    config: defaultPumpConfig('pneumatic'),
+    ports: { '1': 'P' },
+  },
+  'actuator.motor-reversible': {
+    type: MOTOR.type,
+    config: { ...defaultMotorConfig('hydraulic'), directions: 2 },
+    ports: { A: 'A', B: 'B' },
+  },
+  'actuator.air-motor': {
+    type: MOTOR.type,
+    config: defaultMotorConfig('pneumatic'),
     ports: { A: 'A', B: 'B' },
   },
   'actuator.cylinder-single': {

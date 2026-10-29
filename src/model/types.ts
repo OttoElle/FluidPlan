@@ -9,8 +9,13 @@
  * Konfigurierbare Bauteile tragen zusätzlich ihre Einstellungen (`config`).
  */
 
-import type { DirectionalValveConfig } from './valve.ts';
+import type { BallValveConfig } from './ballValve.ts';
+import type { CouplingConfig } from './coupling.ts';
 import type { CylinderConfig } from './cylinder.ts';
+import type { MotorConfig, PumpConfig } from './rotary.ts';
+import type { SensorConfig } from './sensor.ts';
+import type { AccumulatorConfig, TankConfig } from './storage.ts';
+import type { DirectionalValveConfig } from './valve.ts';
 
 /** Medium eines Bauteils bzw. Schaltplans. */
 export type Domain = 'hydraulic' | 'pneumatic';
@@ -63,10 +68,19 @@ export interface ComponentDefinition {
 }
 
 /**
- * Einstellungen eines konfigurierbaren Bauteils (Wegeventil, Zylinder).
+ * Einstellungen eines konfigurierbaren Bauteils (Wegeventil, Zylinder, Pumpe, …).
  * Aus ihnen ergeben sich Symbol, Größe und Anschlüsse; siehe library.ts.
  */
-export type ComponentConfig = DirectionalValveConfig | CylinderConfig;
+export type ComponentConfig =
+  | DirectionalValveConfig
+  | CylinderConfig
+  | PumpConfig
+  | MotorConfig
+  | TankConfig
+  | AccumulatorConfig
+  | BallValveConfig
+  | CouplingConfig
+  | SensorConfig;
 
 /** Ein im Schaltplan platziertes Bauteil. */
 export interface ComponentInstance {

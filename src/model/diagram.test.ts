@@ -51,8 +51,8 @@ describe('Bauteilbibliothek', () => {
   });
 
   it('filtert nach Medium', () => {
-    expect(definitionsFor('pneumatic').some((d) => d.type === 'supply.pump')).toBe(false);
-    expect(definitionsFor('hydraulic').some((d) => d.type === 'supply.pump')).toBe(true);
+    expect(definitionsFor('pneumatic').some((d) => d.type === 'valve.flow-control')).toBe(false);
+    expect(definitionsFor('hydraulic').some((d) => d.type === 'valve.flow-control')).toBe(true);
   });
 });
 
@@ -64,7 +64,7 @@ describe('Schaltplan bearbeiten', () => {
 
   it('fügt Bauteile hinzu, ohne das Original zu verändern', () => {
     const empty = createDiagram('pneumatic');
-    const { diagram, component } = addComponent(empty, 'supply.compressor', { x: 10, y: 20 }, { label: '1V1' });
+    const { diagram, component } = addComponent(empty, 'supply.pump', { x: 10, y: 20 }, { label: '1V1' });
     expect(empty.components).toHaveLength(0);
     expect(diagram.components).toEqual([component]);
     expect(component).toMatchObject({ id: 'c1', rotation: 0, mirrored: false, label: '1V1' });

@@ -10,7 +10,7 @@ const labelsOf = (d: Diagram) => Object.fromEntries(d.components.map((c) => [c.i
 describe('autoLabel', () => {
   it('ordnet Kennbuchstaben nach ISO 1219-2 zu', () => {
     expect(componentCode('supply.pump')).toBe('P');
-    expect(componentCode('supply.compressor')).toBe('P');
+    expect(componentCode('measure.sensor')).toBe('S');
     expect(componentCode('supply.electric-motor')).toBe('M');
     expect(componentCode('actuator.cylinder')).toBe('A');
     expect(componentCode('valve.directional')).toBe('V');

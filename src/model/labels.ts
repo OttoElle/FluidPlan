@@ -10,8 +10,8 @@ import type { ComponentInstance, Diagram, Endpoint, PortKind } from './types.ts'
  * laufender Nummer, z. B. "1V2" = zweites Ventil im Schaltkreis 1.
  *
  * Kennbuchstaben: P = Pumpe, Kompressor; M = Antriebsmotor; A = Antrieb
- * (Zylinder, Motor); V = Ventil; Z = alles übrige (Tank, Filter, Speicher,
- * Wartungseinheit, Manometer, …).
+ * (Zylinder, Motor); V = Ventil; S = Signalaufnehmer (Sensor, Druckschalter);
+ * Z = alles übrige (Tank, Filter, Speicher, Wartungseinheit, Manometer, …).
  *
  * Schaltkreise: Die Energieversorgung ist Kreis 0. Jeder Antrieb eröffnet
  * einen eigenen Kreis, von links nach rechts nummeriert. Alle übrigen Bauteile
@@ -24,20 +24,21 @@ import type { ComponentInstance, Diagram, Endpoint, PortKind } from './types.ts'
  * gleicher Höhe von links nach rechts gezählt.
  */
 
-export type ComponentCode = 'P' | 'M' | 'A' | 'V' | 'Z';
+export type ComponentCode = 'P' | 'M' | 'A' | 'V' | 'S' | 'Z';
 
-/** Bauteile, die kein eigenes Kennzeichen bekommen (reine Anschlusssymbole). */
-const UNLABELED = new Set(['supply.silencer']);
+/** Bauteile, die kein eigenes Kennzeichen bekommen (reine Anschluss- und Leitungssymbole). */
+const UNLABELED = new Set(['supply.silencer', 'line.hose']);
 
 export function needsLabel(component: Pick<ComponentInstance, 'type'>): boolean {
   return !UNLABELED.has(component.type);
 }
 
 export function componentCode(type: string): ComponentCode {
-  if (type === 'supply.pump' || type === 'supply.pump-variable' || type === 'supply.compressor') return 'P';
+  if (type === 'supply.pump') return 'P';
   if (type === 'supply.electric-motor') return 'M';
   if (type.startsWith('actuator.')) return 'A';
   if (type.startsWith('valve.')) return 'V';
+  if (type === 'measure.sensor') return 'S';
   return 'Z';
 }
 
