@@ -1,5 +1,6 @@
 import { Plus, X } from 'lucide-react';
-import { IconButton } from './IconButton.tsx';
+import type { ComponentType } from 'react';
+import { IconButton } from '../IconButton.tsx';
 import {
   ACTION_NAMES,
   CUSHION_NAMES,
@@ -8,8 +9,8 @@ import {
   SPRING_NAMES,
   type Cushion,
   type CylinderConfig,
-} from '../model/cylinder.ts';
-import type { ComponentConfig } from '../model/types.ts';
+} from '../../model/cylinder.ts';
+import type { ComponentConfig, Domain } from '../../model/types.ts';
 import {
   ACTUATOR_NAMES,
   ACTUATORS,
@@ -27,26 +28,38 @@ import {
   type PathKind,
   type ValvePath,
   type ValveRole,
-} from '../model/valve.ts';
+} from '../../model/valve.ts';
 
-/** Konfigurator für Wegeventile und Zylinder im Eigenschaftenbereich. */
-export function Configurator({ config, onChange }: { config: ComponentConfig; onChange: (c: ComponentConfig) => void }) {
-  return config.kind === 'directional-valve' ? (
-    <ValveConfigurator config={config} onChange={onChange} />
-  ) : (
-    <CylinderConfigurator config={config} onChange={onChange} />
-  );
+/** Was ein Konfigurator bekommt: die aktuelle Konfiguration und wohin Änderungen gehen. */
+export interface ConfigEditorProps<C extends ComponentConfig = ComponentConfig> {
+  config: C;
+  /** Medium des Schaltplans, z. B. für Anschlussbezeichnungen. */
+  domain: Domain;
+  onChange: (config: C) => void;
+}
+
+type ConfigOf<K extends ComponentConfig['kind']> = Extract<ComponentConfig, { kind: K }>;
+
+/**
+ * Konfigurator je Konfigurationsart (`config.kind`). Erweiterungspunkt für neue
+ * konfigurierbare Bauteile: Art in ComponentConfig (types.ts) aufnehmen und hier
+ * einen Eintrag ergänzen; TypeScript meldet fehlende Einträge. Der Eintrag
+ * erscheint im Eigenschaften-Fenster als Reiter „Konfigurator“.
+ */
+export const CONFIG_EDITORS: { [K in ComponentConfig['kind']]: ComponentType<ConfigEditorProps<ConfigOf<K>>> } = {
+  'directional-valve': ValveConfigurator,
+  cylinder: CylinderConfigurator,
+};
+
+/** Passenden Konfigurator für eine beliebige Konfiguration anzeigen. */
+export function Configurator({ config, domain, onChange }: ConfigEditorProps) {
+  const Editor = CONFIG_EDITORS[config.kind] as ComponentType<ConfigEditorProps>;
+  return <Editor config={config} domain={domain} onChange={onChange} />;
 }
 
 const PATH_KIND_SYMBOL: Record<PathKind, string> = { flow: '→', both: '↔', open: '—' };
 
-function ValveConfigurator({
-  config,
-  onChange,
-}: {
-  config: DirectionalValveConfig;
-  onChange: (c: DirectionalValveConfig) => void;
-}) {
+function ValveConfigurator({ config, onChange }: ConfigEditorProps<DirectionalValveConfig>) {
   const set = (c: DirectionalValveConfig) => onChange(normalizeValve(c));
   const roles = rolesOf(config.ports);
   const names = positionNames(config.positions.length);
@@ -58,7 +71,6 @@ function ValveConfigurator({
 
   return (
     <div className="configurator">
-      <h2>Wegeventil</h2>
       <div className="row">
         <label>
           Anschlüsse
@@ -212,7 +224,7 @@ function ActuatorList({ title, list, onChange }: { title: string; list: Actuator
   );
 }
 
-function CylinderConfigurator({ config, onChange }: { config: CylinderConfig; onChange: (c: CylinderConfig) => void }) {
+function CylinderConfigurator({ config, onChange }: ConfigEditorProps<CylinderConfig>) {
   const set = (c: CylinderConfig) => onChange(normalizeCylinder(c));
   const choice = <K extends string>(
     title: string,
@@ -233,7 +245,6 @@ function CylinderConfigurator({ config, onChange }: { config: CylinderConfig; on
   );
   return (
     <div className="configurator">
-      <h2>Zylinder</h2>
       {choice('Wirkungsweise', config.action, ACTION_NAMES, (action) =>
         set({ ...config, action, spring: action === 'single' && config.spring === 'none' ? 'rod' : config.spring }),
       )}

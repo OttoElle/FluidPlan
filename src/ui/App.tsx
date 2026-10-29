@@ -54,7 +54,7 @@ import type { Diagram, DiagramMeta, LineKind, StrokeStyle } from '../model/types
 import { downloadDiagram, readDiagramFile } from '../io/browser.ts';
 import { exportDiagram, type ExportFormat, type ExportOptions } from '../io/export.ts';
 import { CheckPanel } from './CheckPanel.tsx';
-import { Configurator } from './Configurator.tsx';
+import { Configurator } from './properties/configEditors.tsx';
 import { DiagramView, type AnnotationTool } from './DiagramView.tsx';
 import { alignComponents, mirrorComponents, moveComponents, rotateComponents, type Alignment } from '../model/arrange.ts';
 import {
@@ -448,6 +448,7 @@ export function App() {
             {selected.config && (
               <Configurator
                 config={selected.config}
+                domain={diagram.domain}
                 onChange={(config) => edit((d) => configureComponent(d, selected.id, config))}
               />
             )}
