@@ -1,0 +1,90 @@
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import type { TitleField } from '../model/sheet.ts';
+import type { Diagram, DiagramMeta, Sheet } from '../model/types.ts';
+import { SheetFields } from './SheetSettings.tsx';
+
+/** Bearbeitbare Felder des Schriftfelds; Datum und Format füllt das Programm. */
+const TITLE_FIELDS: [Exclude<TitleField, 'date' | 'format'>, string][] = [
+  ['title', 'Titel'],
+  ['drawingNumber', 'Zeichnungsnummer'],
+  ['organization', 'Firma / Abteilung'],
+  ['author', 'Erstellt von'],
+  ['checkedBy', 'Geprüft von'],
+  ['revision', 'Änderungsstand'],
+];
+
+/**
+ * Fenster „Blatt und Schriftfeld“. `focus` springt zu einem Feld, z. B. nach
+ * einem Klick ins Schriftfeld.
+ */
+export function SheetDialog({
+  open,
+  diagram,
+  focus,
+  onApply,
+  onClose,
+}: {
+  open: boolean;
+  diagram: Diagram;
+  focus?: TitleField;
+  onApply: (sheet: Sheet, meta: DiagramMeta) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const [sheet, setSheet] = useState(diagram.sheet);
+  const [meta, setMeta] = useState(diagram.meta);
+
+  useEffect(() => {
+    const dialog = ref.current!;
+    if (open && !dialog.open) {
+      setSheet(diagram.sheet);
+      setMeta(diagram.meta);
+      dialog.showModal();
+      requestAnimationFrame(() => {
+        const el = dialog.querySelector<HTMLInputElement>(`#sheet-${focus ?? 'title'}`);
+        el?.focus();
+        el?.select();
+      });
+    }
+    if (!open && dialog.open) dialog.close();
+    // Nur beim Öffnen übernehmen, damit Eingaben nicht überschrieben werden.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    onApply(sheet, meta);
+    onClose();
+  };
+
+  return (
+    <dialog ref={ref} className="sheet-dialog" onClose={onClose}>
+      <form method="dialog" onSubmit={submit}>
+        <h2>Blatt und Schriftfeld</h2>
+        <div className="columns">
+          <fieldset className="column">
+            <legend>Blatt</legend>
+            <SheetFields sheet={sheet} onChange={setSheet} />
+          </fieldset>
+          <fieldset className="column">
+            <legend>Schriftfeld</legend>
+            {TITLE_FIELDS.map(([field, caption]) => (
+              <label key={field}>
+                {caption}
+                <input id={`sheet-${field}`} value={meta[field]} onChange={(e) => setMeta({ ...meta, [field]: e.target.value })} />
+              </label>
+            ))}
+          </fieldset>
+        </div>
+        <div className="dialog-buttons">
+          <button type="button" onClick={onClose}>
+            Abbrechen
+          </button>
+          <button type="submit" className="primary">
+            OK
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
+}

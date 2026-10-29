@@ -16,23 +16,32 @@ export function SymbolPreview({
   height = 44,
   unitsPerPixel = 1.4,
 }: {
-  component: Pick<ComponentInstance, 'type' | 'config'>;
+  /** Mit `rotation`/`mirrored` wird das Symbol so gezeigt, wie es auf dem Blatt liegt. */
+  component: Pick<ComponentInstance, 'type' | 'config'> & Partial<Pick<ComponentInstance, 'rotation' | 'mirrored'>>;
   width?: number;
   height?: number;
   unitsPerPixel?: number;
 }) {
   const def = definitionOf(component);
   if (!def || !hasSymbol(def.type)) return <svg className="symbol-preview" width={width} height={height} aria-hidden />;
-  const w = def.size.width + 2 * PAD;
-  const h = def.size.height + 2 * PAD;
+  const rotation = component.rotation ?? 0;
+  const turned = rotation % 180 !== 0;
+  const w = (turned ? def.size.height : def.size.width) + 2 * PAD;
+  const h = (turned ? def.size.width : def.size.height) + 2 * PAD;
   // Gleicher Maßstab für alle, außer das Symbol ist zu groß.
   const vw = Math.max(w, width * unitsPerPixel, (h * width) / height);
   const vh = (vw * height) / width;
-  const vx = def.size.width / 2 - vw / 2;
-  const vy = def.size.height / 2 - vh / 2;
+  const cx = def.size.width / 2;
+  const cy = def.size.height / 2;
+  const vx = cx - vw / 2;
+  const vy = cy - vh / 2;
+  // Wie auf dem Blatt: erst spiegeln, dann um die Mitte drehen.
+  const transform = `rotate(${rotation} ${cx} ${cy}) translate(${cx} 0) scale(${component.mirrored ? -1 : 1} 1) translate(${-cx} 0)`;
   return (
     <svg className="symbol-preview" width={width} height={height} viewBox={`${vx} ${vy} ${vw} ${vh}`} aria-hidden>
-      <ComponentSymbol component={component} />
+      <g transform={transform}>
+        <ComponentSymbol component={component} />
+      </g>
     </svg>
   );
 }

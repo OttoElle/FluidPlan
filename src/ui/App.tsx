@@ -5,6 +5,8 @@ import {
   AlignEndVertical,
   AlignStartHorizontal,
   AlignStartVertical,
+  CircleQuestionMark,
+  FileCog,
   FilePlus2,
   FileDown,
   TrianglesCenterlineDashedHorizontal,
@@ -16,30 +18,29 @@ import {
   Route,
   Save,
   Slash,
+  SlidersHorizontal,
   Square,
+  Sun,
+  Moon,
   Tag,
   Trash2,
   Type,
   Undo2,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   DiagramError,
   addComponent,
-  configureComponent,
   connect,
   createDiagram,
   lineKindFor,
   moveJunction,
   splitConnection,
   touch,
-  updateComponent,
   updateConnection,
 } from '../model/diagram.ts';
 import {
-  DEFAULT_TEXT_SIZE,
-  TEXT_SIZES,
   addAnnotation,
   moveAnnotations,
   updateAnnotation,
@@ -48,14 +49,19 @@ import {
 import { checkDiagram, type Issue } from '../model/check.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
 import { autoLabel } from '../model/labels.ts';
-import { PALETTE_GROUPS, paletteFor, type PaletteEntry } from '../model/library.ts';
+import { MODULE, PALETTE_GROUPS, definitionOf, paletteFor, type PaletteEntry } from '../model/library.ts';
 import { drawingArea, type TitleField } from '../model/sheet.ts';
-import type { Diagram, DiagramMeta, LineKind, StrokeStyle } from '../model/types.ts';
+import type { Annotation, Diagram, DiagramMeta, LineKind, Point, StrokeStyle } from '../model/types.ts';
 import { downloadDiagram, readDiagramFile } from '../io/browser.ts';
 import { exportDiagram, type ExportFormat, type ExportOptions } from '../io/export.ts';
 import { CheckPanel } from './CheckPanel.tsx';
-import { Configurator } from './properties/configEditors.tsx';
-import { DiagramView, type AnnotationTool } from './DiagramView.tsx';
+import { DiagramView, SYMBOL_DRAG_TYPE, type AnnotationTool } from './DiagramView.tsx';
+import { HelpDialog } from './HelpDialog.tsx';
+import { usePaletteWidth, useTheme } from './layout.ts';
+import { LINE_KIND_OPTIONS, STROKE_STYLE_OPTIONS } from './properties/options.tsx';
+import { PropertiesDialog, type PropertiesTarget } from './properties/PropertiesDialog.tsx';
+import { Segmented } from './properties/Segmented.tsx';
+import { SheetDialog } from './SheetDialog.tsx';
 import { alignComponents, mirrorComponents, moveComponents, rotateComponents, type Alignment } from '../model/arrange.ts';
 import { keepRoutes } from '../model/routing.ts';
 import {
@@ -76,48 +82,13 @@ import { SymbolPreview } from './SymbolPreview.tsx';
 import { Tooltip } from './Tooltip.tsx';
 import { useHistory } from './useHistory.ts';
 
-const LINE_KIND_NAMES: Record<LineKind, string> = {
-  working: 'Arbeitsleitung',
-  pilot: 'Steuerleitung',
-  drain: 'Leckageleitung',
-};
-import { DOMAIN_NAMES, NewDocumentDialog, SheetFields, type NewDocument } from './SheetSettings.tsx';
-
-const lineKindOptions = (Object.keys(LINE_KIND_NAMES) as LineKind[]).map((k) => (
-  <option key={k} value={k}>
-    {LINE_KIND_NAMES[k]}
-  </option>
-));
-
-const STROKE_STYLE_NAMES: Record<StrokeStyle, string> = {
-  solid: 'Volllinie',
-  dashed: 'Strichlinie',
-  dashdot: 'Strich-Punkt (Baugruppe)',
-};
+import { DOMAIN_NAMES, NewDocumentDialog, type NewDocument } from './SheetSettings.tsx';
 
 const TOOLS: [AnnotationTool, LucideIcon, string][] = [
   ['text', Type, 'Text: Klick auf das Blatt setzt einen Text'],
   ['line', Slash, 'Linie auf dem Blatt aufziehen'],
   ['rect', Square, 'Rechteck aufziehen, z. B. als Baugruppen-Umrandung'],
 ];
-
-/** Bearbeitbare Felder des Schriftfelds; Datum und Format füllt das Programm. */
-const TITLE_FIELDS: [Exclude<TitleField, 'date' | 'format'>, string][] = [
-  ['title', 'Titel'],
-  ['drawingNumber', 'Zeichnungsnummer'],
-  ['organization', 'Firma / Abteilung'],
-  ['author', 'Erstellt von'],
-  ['checkedBy', 'Geprüft von'],
-  ['revision', 'Änderungsstand'],
-];
-
-/** Fokussiert ein Eingabefeld der Seitenleiste, sobald es gerendert ist. */
-const focusField = (id: string) =>
-  requestAnimationFrame(() => {
-    const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
-    el?.focus();
-    el?.select();
-  });
 
 const ALIGNMENTS: [Alignment, LucideIcon, string][] = [
   ['left', AlignStartVertical, 'Linke Kanten bündig'],
@@ -148,8 +119,14 @@ export function App() {
   const [exportOpen, setExportOpen] = useState(false);
   const [checking, setChecking] = useState(false);
   const [tool, setTool] = useState<AnnotationTool | null>(null);
+  const [properties, setProperties] = useState<PropertiesTarget | null>(null);
+  const [sheetDialog, setSheetDialog] = useState<{ focus?: TitleField } | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [theme, toggleTheme] = useTheme();
+  const [paletteWidth, startPaletteResize, resetPaletteWidth] = usePaletteWidth();
   const issues = useMemo(() => (checking ? checkDiagram(diagram) : []), [checking, diagram]);
   const fileInput = useRef<HTMLInputElement>(null);
+  const palette = paletteFor(diagram.domain);
 
   const startNew = ({ domain, title, sheet }: NewDocument) => {
     setNewDialogOpen(false);
@@ -198,16 +175,20 @@ export function App() {
     setSelection({ ...EMPTY_SELECTION, components: issue.components, connections: issue.connections });
   };
 
-  const add = (entry: PaletteEntry) => {
-    const offset = (diagram.components.length % 10) * 10;
-    const area = drawingArea(diagram.sheet);
-    const { diagram: next, component } = addComponent(
-      diagram,
-      entry.type,
-      { x: area.x + 40 + offset, y: area.y + 40 + offset },
-      { config: entry.config },
-    );
-    edit(next);
+  /** Bauteil einfügen: per Klick versetzt oben links, per Ziehen mittig unter der Maus. */
+  const add = (entry: PaletteEntry, at?: Point) => {
+    let position: Point;
+    if (at) {
+      const size = definitionOf(entry)?.size ?? { width: 0, height: 0 };
+      const snap = (v: number) => Math.round(v / MODULE) * MODULE;
+      position = { x: snap(at.x - size.width / 2), y: snap(at.y - size.height / 2) };
+    } else {
+      const offset = (diagram.components.length % 10) * 10;
+      const area = drawingArea(diagram.sheet);
+      position = { x: area.x + 40 + offset, y: area.y + 40 + offset };
+    }
+    const { diagram: next, component } = addComponent(diagram, entry.type, position, { config: entry.config });
+    edit(keepRoutes(diagram, next));
     setSelection(selectComponent(component.id));
   };
 
@@ -218,28 +199,34 @@ export function App() {
   }, [current, selection]);
 
   const single = selectionCount(current) === 1;
-  const selected = single ? diagram.components.find((c) => c.id === current.components[0]) : undefined;
   const selectedLine = single ? diagram.connections.find((l) => l.id === current.connections[0]) : undefined;
-  const selectedJunction = single ? diagram.junctions.find((j) => j.id === current.junctions[0]) : undefined;
-  const selectedAnnotation = single ? diagram.annotations.find((a) => a.id === current.annotations[0]) : undefined;
   const selectedIds = current.components;
   const selectedLines = diagram.connections.filter((l) => current.connections.includes(l.id));
+  const styledAnnotations = diagram.annotations.filter(
+    (a): a is Extract<Annotation, { style: StrokeStyle }> => 'style' in a && current.annotations.includes(a.id),
+  );
+  /** Was ein Doppelklick bzw. Enter bei der jetzigen Auswahl öffnen würde. */
+  const propertiesTarget: PropertiesTarget | null = !single
+    ? null
+    : current.components[0]
+      ? { kind: 'component', id: current.components[0] }
+      : current.connections[0]
+        ? { kind: 'connection', id: current.connections[0] }
+        : current.annotations[0]
+          ? { kind: 'annotation', id: current.annotations[0] }
+          : null;
 
   const createAnnotation = (a: NewAnnotation) => {
     const r = addAnnotation(diagram, a);
     edit(r.diagram);
     setSelection(selectAnnotation(r.annotation.id));
     setTool(null);
-    if (a.kind === 'text') focusField('annotation-text');
+    // Neuen Text gleich im Eigenschaften-Fenster eintippen.
+    if (a.kind === 'text') setProperties({ kind: 'annotation', id: r.annotation.id });
   };
 
   const setMeta = (field: keyof DiagramMeta, value: string) =>
     edit((d) => ({ ...d, meta: { ...d.meta, [field]: value } }), `meta:${field}`);
-
-  const editTitleField = (field: TitleField) => {
-    setSelection(EMPTY_SELECTION);
-    focusField(`title-${field}`);
-  };
 
   const deleteSelection = () => {
     edit((d) => deleteSelected(d, current));
@@ -250,16 +237,9 @@ export function App() {
   const align = (alignment: Alignment) => edit((d) => alignComponents(d, selectedIds, alignment));
   const setLineKind = (kind: LineKind) =>
     edit((d) => selectedLines.reduce((acc, l) => updateConnection(acc, l.id, { kind }), d));
-
-  const deleteButton = <IconButton icon={Trash2} label="Löschen" shortcut="Entf" onClick={deleteSelection} />;
-  const arrangeButtons = (
-    <div className="row">
-      <IconButton icon={RotateCw} label="90° im Uhrzeigersinn drehen" shortcut="R" onClick={rotate} />
-      <IconButton icon={TrianglesCenterlineDashedVertical} label="Spiegeln: links und rechts vertauschen" onClick={() => mirror('horizontal')} />
-      <IconButton icon={TrianglesCenterlineDashedHorizontal} label="Spiegeln: oben und unten vertauschen" onClick={() => mirror('vertical')} />
-      {deleteButton}
-    </div>
-  );
+  const setStrokeStyle = (style: StrokeStyle) =>
+    edit((d) => styledAnnotations.reduce((acc, a) => updateAnnotation(acc, a.id, { style }), d));
+  const common = <T,>(values: T[]) => (values.length > 0 && values.every((v) => v === values[0]) ? values[0] : undefined);
 
   // Tastatur: Strg+Z / Strg+Y (bzw. Strg+Umschalt+Z) und Entf.
   // In Eingabefeldern bleiben die Tasten beim Feld (dort wirkt das Rückgängig des Browsers).
@@ -275,7 +255,7 @@ export function App() {
         return;
       }
       const t = e.target as HTMLElement;
-      if (t.closest('input, textarea, select, [contenteditable]')) return;
+      if (t.closest('input, textarea, select, [contenteditable], dialog')) return;
       if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === 'z' || key === 'y')) {
         e.preventDefault();
         if (key === 'y' || e.shiftKey) history.redo();
@@ -293,6 +273,11 @@ export function App() {
         else setSelection(EMPTY_SELECTION);
       }
       if (key === 'r' && selectedIds.length > 0) rotate();
+      if (e.key === 'Enter' && propertiesTarget) {
+        e.preventDefault();
+        setProperties(propertiesTarget);
+        return;
+      }
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       if (isEmpty(current)) return;
       e.preventDefault();
@@ -302,14 +287,74 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  const contextBar = !isEmpty(current) && (
+    <div className="context-bar" role="toolbar" aria-label="Auswahl bearbeiten">
+      <span className="count">{describe(current)}</span>
+      {selectedIds.length > 0 && (
+        <div className="tool-group">
+          <IconButton icon={RotateCw} label="90° im Uhrzeigersinn drehen" shortcut="R" onClick={rotate} />
+          <IconButton icon={TrianglesCenterlineDashedVertical} label="Spiegeln: links und rechts vertauschen" onClick={() => mirror('horizontal')} />
+          <IconButton icon={TrianglesCenterlineDashedHorizontal} label="Spiegeln: oben und unten vertauschen" onClick={() => mirror('vertical')} />
+        </div>
+      )}
+      {selectedIds.length >= 2 && (
+        <div className="tool-group">
+          {ALIGNMENTS.map(([alignment, icon, title]) => (
+            <IconButton key={alignment} icon={icon} label={title} onClick={() => align(alignment)} />
+          ))}
+        </div>
+      )}
+      {selectedLines.length > 0 && (
+        <div className="tool-group">
+          <Segmented
+            label="Linienart"
+            options={LINE_KIND_OPTIONS}
+            value={common(selectedLines.map((l) => l.kind))}
+            onChange={setLineKind}
+          />
+          {selectedLine && (
+            <IconButton
+              icon={Route}
+              label="Automatisch führen (eigene Knicke verwerfen)"
+              disabled={selectedLine.waypoints.length === 0}
+              onClick={() => edit(updateConnection(diagram, selectedLine.id, { waypoints: [] }))}
+            />
+          )}
+        </div>
+      )}
+      {styledAnnotations.length > 0 && (
+        <div className="tool-group">
+          <Segmented
+            label="Linienart"
+            options={STROKE_STYLE_OPTIONS}
+            value={common(styledAnnotations.map((a) => a.style))}
+            onChange={setStrokeStyle}
+          />
+        </div>
+      )}
+      <div className="tool-group">
+        {propertiesTarget && (
+          <IconButton
+            icon={SlidersHorizontal}
+            label="Eigenschaften (Doppelklick)"
+            shortcut="Enter"
+            onClick={() => setProperties(propertiesTarget)}
+          />
+        )}
+        <IconButton icon={Trash2} label="Löschen" shortcut="Entf" onClick={deleteSelection} />
+      </div>
+    </div>
+  );
+
   return (
-    <div className="app">
+    <div className="app" style={{ '--palette-width': `${paletteWidth}px` } as CSSProperties}>
       <header className="toolbar">
         <strong className="brand">FluidPlan</strong>
         <div className="tool-group">
           <IconButton icon={FilePlus2} label="Neuer Schaltplan" onClick={() => setNewDialogOpen(true)} />
           <IconButton icon={FolderOpen} label="Öffnen" shortcut="Strg+O" onClick={() => fileInput.current?.click()} />
           <IconButton icon={Save} label="Speichern" shortcut="Strg+S" onClick={save} />
+          <IconButton icon={FileCog} label="Blatt und Schriftfeld" onClick={() => setSheetDialog({})} />
         </div>
         <div className="tool-group">
           <IconButton icon={Undo2} label="Rückgängig" shortcut="Strg+Z" onClick={history.undo} disabled={!history.canUndo} />
@@ -346,6 +391,15 @@ export function App() {
           }}
         />
         <span className="domain">{DOMAIN_NAMES[diagram.domain]}</span>
+        <div className="tool-group end">
+          <IconButton
+            icon={theme === 'dark' ? Sun : Moon}
+            label={theme === 'dark' ? 'Helle Darstellung' : 'Dunkle Darstellung'}
+            tooltip="left"
+            onClick={toggleTheme}
+          />
+          <IconButton icon={CircleQuestionMark} label="Bedienung" tooltip="left" onClick={() => setHelpOpen(true)} />
+        </div>
       </header>
 
       <ExportDialog
@@ -355,6 +409,15 @@ export function App() {
         onClose={() => setExportOpen(false)}
       />
       <NewDocumentDialog open={newDialogOpen} onCreate={startNew} onClose={() => setNewDialogOpen(false)} />
+      <PropertiesDialog diagram={diagram} target={properties} onApply={(next) => edit(next)} onClose={() => setProperties(null)} />
+      <SheetDialog
+        open={sheetDialog !== null}
+        diagram={diagram}
+        focus={sheetDialog?.focus}
+        onApply={(sheet, meta) => edit((d) => ({ ...d, sheet, meta }))}
+        onClose={() => setSheetDialog(null)}
+      />
+      <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <Tooltip />
       {message && (
@@ -372,14 +435,26 @@ export function App() {
         </div>
         <h2>Bauteile</h2>
         {PALETTE_GROUPS.map((group) => {
-          const entries = paletteFor(diagram.domain).filter((e) => e.group === group);
+          const entries = palette.filter((e) => e.group === group);
           if (entries.length === 0) return null;
           return (
             <details key={group} open className="palette-group">
               <summary>{group}</summary>
               <div className="palette-grid">
                 {entries.map((entry) => (
-                  <button key={entry.key} className="palette-item" title={entry.name} onClick={() => add(entry)}>
+                  <button
+                    key={entry.key}
+                    className="palette-item"
+                    title={`${entry.name}: klicken oder aufs Blatt ziehen`}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(SYMBOL_DRAG_TYPE, entry.key);
+                      e.dataTransfer.effectAllowed = 'copy';
+                      const preview = e.currentTarget.querySelector('svg');
+                      if (preview) e.dataTransfer.setDragImage(preview, preview.clientWidth / 2, preview.clientHeight / 2);
+                    }}
+                    onClick={() => add(entry)}
+                  >
                     <SymbolPreview component={entry} />
                     <span>{entry.name}</span>
                   </button>
@@ -391,6 +466,16 @@ export function App() {
       </aside>
 
       <main className="canvas">
+        <div
+          className="palette-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Breite der Bauteilliste"
+          data-tooltip="Ziehen ändert die Breite, Doppelklick setzt sie zurück"
+          data-tooltip-pos="below"
+          onPointerDown={startPaletteResize}
+          onDoubleClick={resetPaletteWidth}
+        />
         <DiagramView
           diagram={diagram}
           selection={current}
@@ -401,8 +486,12 @@ export function App() {
           tool={tool}
           onCreateAnnotation={createAnnotation}
           onReshapeAnnotation={(id, changes) => edit((d) => updateAnnotation(d, id, changes), `shape:${id}`)}
-          onEditText={() => focusField('annotation-text')}
-          onEditTitleField={editTitleField}
+          onOpenProperties={setProperties}
+          onDropSymbol={(key, point) => {
+            const entry = palette.find((e) => e.key === key);
+            if (entry) add(entry, point);
+          }}
+          onEditTitleField={(field) => setSheetDialog({ focus: field })}
           onConnect={(from, to, waypoints) => {
             try {
               const r = connect(diagram, from, to, lineKindFor(diagram, from, to), waypoints);
@@ -431,185 +520,9 @@ export function App() {
           onMoveJunction={(id, position) => edit((d) => keepRoutes(d, moveJunction(d, id, position)), `junction:${id}`)}
           onGestureEnd={history.seal}
         />
+        {contextBar}
         {checking && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setChecking(false)} />}
       </main>
-
-      <aside className="inspector">
-        <h2>Eigenschaften</h2>
-        {selected ? (
-          <>
-            <label>
-              Kennzeichen
-              <input
-                value={selected.label}
-                onChange={(e) => edit(updateComponent(diagram, selected.id, { label: e.target.value }), `label:${selected.id}`)}
-              />
-            </label>
-            {arrangeButtons}
-            {selected.config && (
-              <Configurator
-                config={selected.config}
-                domain={diagram.domain}
-                onChange={(config) => edit((d) => configureComponent(d, selected.id, config))}
-              />
-            )}
-          </>
-        ) : selectedLine ? (
-          <>
-            <label>
-              Linienart
-              <select
-                value={selectedLine.kind}
-                onChange={(e) => setLineKind(e.target.value as LineKind)}
-              >
-                {lineKindOptions}
-              </select>
-            </label>
-            <div className="row">
-              <IconButton
-                icon={Route}
-                label="Automatisch führen (eigene Knicke verwerfen)"
-                disabled={selectedLine.waypoints.length === 0}
-                onClick={() => edit(updateConnection(diagram, selectedLine.id, { waypoints: [] }))}
-              />
-              {deleteButton}
-            </div>
-            <p className="hint">
-              Ein Teilstück der Leitung ziehen, um es zu verschieben. Entf löscht die Leitung.
-            </p>
-          </>
-        ) : selectedAnnotation ? (
-          <>
-            {selectedAnnotation.kind === 'text' ? (
-              <>
-                <label>
-                  Text
-                  <textarea
-                    id="annotation-text"
-                    rows={3}
-                    value={selectedAnnotation.text}
-                    onChange={(e) =>
-                      edit(updateAnnotation(diagram, selectedAnnotation.id, { text: e.target.value }), `text:${selectedAnnotation.id}`)
-                    }
-                  />
-                </label>
-                <label>
-                  Schrifthöhe
-                  <select
-                    value={selectedAnnotation.size}
-                    onChange={(e) => edit(updateAnnotation(diagram, selectedAnnotation.id, { size: Number(e.target.value) }))}
-                  >
-                    {TEXT_SIZES.some((t) => t.size === selectedAnnotation.size) ? null : (
-                      <option value={selectedAnnotation.size}>{selectedAnnotation.size / 4} mm</option>
-                    )}
-                    {TEXT_SIZES.map((t) => (
-                      <option key={t.size} value={t.size}>
-                        {t.name}
-                        {t.size === DEFAULT_TEXT_SIZE ? ' (Standard)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </>
-            ) : (
-              <label>
-                Linienart
-                <select
-                  value={selectedAnnotation.style}
-                  onChange={(e) =>
-                    edit(updateAnnotation(diagram, selectedAnnotation.id, { style: e.target.value as StrokeStyle }))
-                  }
-                >
-                  {(Object.keys(STROKE_STYLE_NAMES) as StrokeStyle[]).map((k) => (
-                    <option key={k} value={k}>
-                      {STROKE_STYLE_NAMES[k]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <div className="row">
-              {deleteButton}
-            </div>
-            <p className="hint">
-              {selectedAnnotation.kind === 'text'
-                ? 'Ziehen verschiebt den Text, Doppelklick springt zum Textfeld. Zeilenumbruch mit Enter.'
-                : 'Ziehen verschiebt das Objekt, die Anfasser ändern Lage und Größe.'}
-            </p>
-          </>
-        ) : selectedJunction ? (
-          <>
-            <p className="hint">
-              Abzweigpunkt. Ziehen verschiebt ihn. Löschen entfernt ihn mit allen daran hängenden Leitungen; bleiben an
-              einem Abzweig nur zwei Leitungen übrig, werden sie wieder zu einer.
-            </p>
-            <div className="row">
-              {deleteButton}
-            </div>
-          </>
-        ) : !isEmpty(current) ? (
-          <>
-            <p>{describe(current)} ausgewählt</p>
-            {selectedIds.length > 0 && arrangeButtons}
-            {selectedIds.length >= 2 && (
-              <>
-                <h2>Ausrichten</h2>
-                <div className="row align">
-                  {ALIGNMENTS.map(([alignment, icon, title]) => (
-                    <IconButton key={alignment} icon={icon} label={title} onClick={() => align(alignment)} />
-                  ))}
-                </div>
-              </>
-            )}
-            {selectedLines.length > 0 && (
-              <label>
-                Linienart
-                <select
-                  value={selectedLines.every((l) => l.kind === selectedLines[0]!.kind) ? selectedLines[0]!.kind : ''}
-                  onChange={(e) => setLineKind(e.target.value as LineKind)}
-                >
-                  <option value="" disabled>
-                    gemischt
-                  </option>
-                  {lineKindOptions}
-                </select>
-              </label>
-            )}
-            {selectedIds.length === 0 && (
-              <div className="row">
-                {deleteButton}
-              </div>
-            )}
-            <p className="hint">
-              Ziehen an einem ausgewählten Bauteil verschiebt die ganze Auswahl. Umschalt+Klick nimmt Teile hinzu oder
-              heraus.
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="hint">
-              Bauteil anklicken, um es zu bearbeiten. Ziehen verschiebt es. Rahmen auf freier Fläche aufziehen oder
-              Umschalt+Klick wählt mehrere Teile, Strg+A alles. Mausrad zoomt; mittlere Maustaste oder Leertaste+Ziehen
-              verschiebt die Ansicht.
-            </p>
-            <p className="hint">
-              Leitung zeichnen: von einem Anschluss zum anderen ziehen, oder Anschluss anklicken, bei Bedarf Knickpunkte
-              auf die Fläche klicken und den Zielanschluss anklicken. Endet die Leitung auf einer anderen Leitung, entsteht
-              dort ein Abzweig. Esc bricht ab.
-            </p>
-            <h2>Blatt</h2>
-            <SheetFields sheet={diagram.sheet} onChange={(sheet) => edit((d) => ({ ...d, sheet }))} />
-            <h2>Schriftfeld</h2>
-            {TITLE_FIELDS.map(([field, caption]) => (
-              <label key={field}>
-                {caption}
-                <input id={`title-${field}`} value={diagram.meta[field]} onChange={(e) => setMeta(field, e.target.value)} />
-              </label>
-            ))}
-            <p className="hint">Datum und Format füllt das Programm. Ein Klick ins Schriftfeld springt zum passenden Feld.</p>
-          </>
-        )}
-      </aside>
     </div>
   );
 }

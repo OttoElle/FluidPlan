@@ -1,0 +1,223 @@
+import { Route } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { DEFAULT_TEXT_SIZE } from '../../model/annotations.ts';
+import { updateAnnotation } from '../../model/annotations.ts';
+import { configureComponent, updateComponent, updateConnection } from '../../model/diagram.ts';
+import { definitionOf } from '../../model/library.ts';
+import { mirrorComponents, rotateComponents } from '../../model/arrange.ts';
+import { keepRoutes } from '../../model/routing.ts';
+import type { Annotation, ComponentInstance, Connection, Diagram } from '../../model/types.ts';
+import { SymbolPreview } from '../SymbolPreview.tsx';
+import { LINE_KIND_OPTIONS, STROKE_STYLE_OPTIONS, TEXT_SIZE_OPTIONS } from './options.tsx';
+import { Segmented } from './Segmented.tsx';
+import { COMPONENT_TABS } from './tabs.tsx';
+
+/** Was im Eigenschaften-Fenster bearbeitet wird. */
+export type PropertiesTarget = { kind: 'component' | 'connection' | 'annotation'; id: string };
+
+/**
+ * Eigenschaften-Fenster (Doppelklick auf ein Teil). Änderungen bleiben ein
+ * Entwurf, bis „OK“ sie als ein Rückgängig-Schritt übernimmt.
+ */
+export function PropertiesDialog({
+  diagram,
+  target,
+  onApply,
+  onClose,
+}: {
+  diagram: Diagram;
+  target: PropertiesTarget | null;
+  onApply: (next: Diagram) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const open = target !== null;
+  useEffect(() => {
+    const dialog = ref.current!;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+
+  const component = target?.kind === 'component' ? diagram.components.find((c) => c.id === target.id) : undefined;
+  const connection = target?.kind === 'connection' ? diagram.connections.find((l) => l.id === target.id) : undefined;
+  const annotation = target?.kind === 'annotation' ? diagram.annotations.find((a) => a.id === target.id) : undefined;
+  const body = { diagram, onApply, onClose };
+
+  return (
+    <dialog ref={ref} className="properties" onClose={onClose}>
+      {component ? (
+        <ComponentProperties key={component.id} component={component} {...body} />
+      ) : connection ? (
+        <ConnectionProperties key={connection.id} connection={connection} {...body} />
+      ) : annotation ? (
+        <AnnotationProperties key={annotation.id} annotation={annotation} {...body} />
+      ) : null}
+    </dialog>
+  );
+}
+
+interface BodyProps {
+  diagram: Diagram;
+  onApply: (next: Diagram) => void;
+  onClose: () => void;
+}
+
+/** Formular mit OK/Abbrechen; `apply` liefert den geänderten Schaltplan. */
+function Frame({ apply, onApply, onClose, children }: { apply: () => Diagram } & Omit<BodyProps, 'diagram'> & { children: ReactNode }) {
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    onApply(apply());
+    onClose();
+  };
+  return (
+    <form method="dialog" onSubmit={submit}>
+      {children}
+      <div className="dialog-buttons">
+        <button type="button" onClick={onClose}>
+          Abbrechen
+        </button>
+        <button type="submit" className="primary">
+          OK
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ComponentProperties({ component, diagram, ...rest }: BodyProps & { component: ComponentInstance }) {
+  const [draft, setDraft] = useState(component);
+  const tabs = COMPONENT_TABS.filter((t) => t.applies(draft));
+  const [tabId, setTabId] = useState(tabs[0]?.id);
+  const tab = tabs.find((t) => t.id === tabId) ?? tabs[0];
+  const def = definitionOf(draft);
+
+  const apply = () => {
+    let d = updateComponent(diagram, component.id, { label: draft.label });
+    // Lage über arrange.ts ändern: dreht um die Rastermitte und führt Leitungen nach.
+    const id = [component.id];
+    const now = () => d.components.find((c) => c.id === component.id)!;
+    if (Boolean(draft.mirrored) !== Boolean(component.mirrored)) d = mirrorComponents(d, id, 'horizontal');
+    for (let i = 0; i < 3 && now().rotation !== draft.rotation; i++) d = rotateComponents(d, id);
+    if (draft.config && draft.config !== component.config) d = configureComponent(d, component.id, draft.config);
+    // Übrige Leitungen behalten ihren Verlauf, nur die angeschlossenen werden nachgeführt.
+    return keepRoutes(diagram, d);
+  };
+
+  return (
+    <Frame apply={apply} {...rest}>
+      <div className="props-head">
+        <div className="props-preview">
+          <SymbolPreview component={draft} width={220} height={140} unitsPerPixel={0.55} />
+        </div>
+        <div className="props-ident">
+          <h2>{def?.name ?? draft.type}</h2>
+          <label>
+            Kennzeichen
+            <input
+              autoFocus
+              value={draft.label}
+              placeholder="z. B. 1V1"
+              onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+            />
+          </label>
+        </div>
+      </div>
+      {tab && (
+        <>
+          <div className="tabs" role="tablist">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={t.id === tab.id}
+                onClick={() => setTabId(t.id)}
+              >
+                {t.title}
+              </button>
+            ))}
+          </div>
+          <div className="tab-panel" role="tabpanel">
+            <tab.Panel component={draft} domain={diagram.domain} onChange={setDraft} />
+          </div>
+        </>
+      )}
+    </Frame>
+  );
+}
+
+function ConnectionProperties({ connection, diagram, ...rest }: BodyProps & { connection: Connection }) {
+  const [draft, setDraft] = useState(connection);
+  const apply = () => updateConnection(diagram, connection.id, { kind: draft.kind, waypoints: draft.waypoints });
+  return (
+    <Frame apply={apply} {...rest}>
+      <h2>Leitung</h2>
+      <div className="tab-form">
+        <div className="field">
+          <span>Linienart</span>
+          <Segmented label="Linienart" options={LINE_KIND_OPTIONS} value={draft.kind} onChange={(kind) => setDraft({ ...draft, kind })} />
+        </div>
+        <button
+          type="button"
+          className="with-icon"
+          disabled={draft.waypoints.length === 0}
+          onClick={() => setDraft({ ...draft, waypoints: [] })}
+        >
+          <Route size={14} aria-hidden /> Automatisch führen
+        </button>
+      </div>
+    </Frame>
+  );
+}
+
+const ANNOTATION_NAMES: Record<string, string> = { text: 'Text', line: 'Linie', rect: 'Rechteck' };
+
+function AnnotationProperties({ annotation, diagram, ...rest }: BodyProps & { annotation: Annotation }) {
+  const [draft, setDraft] = useState<Annotation>(annotation);
+  const apply = () => updateAnnotation(diagram, annotation.id, draft);
+  return (
+    <Frame apply={apply} {...rest}>
+      <h2>{ANNOTATION_NAMES[annotation.kind] ?? 'Grafik'}</h2>
+      <div className="tab-form">
+        {draft.kind === 'text' && (
+          <>
+            <label>
+              Text
+              <textarea
+                autoFocus
+                rows={4}
+                value={draft.text}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+                onKeyDown={(e) => {
+                  // Strg+Enter übernimmt, Enter allein macht eine neue Zeile.
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) e.currentTarget.form?.requestSubmit();
+                }}
+              />
+            </label>
+            <div className="field">
+              <span>Schrifthöhe</span>
+              <Segmented
+                label="Schrifthöhe"
+                options={TEXT_SIZE_OPTIONS}
+                value={draft.size ?? DEFAULT_TEXT_SIZE}
+                onChange={(size) => setDraft({ ...draft, size })}
+              />
+            </div>
+          </>
+        )}
+        {'style' in draft && (
+          <div className="field">
+            <span>Linienart</span>
+            <Segmented
+              label="Linienart"
+              options={STROKE_STYLE_OPTIONS}
+              value={draft.style}
+              onChange={(style) => setDraft({ ...draft, style })}
+            />
+          </div>
+        )}
+      </div>
+    </Frame>
+  );
+}

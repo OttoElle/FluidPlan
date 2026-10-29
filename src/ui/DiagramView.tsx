@@ -26,6 +26,7 @@ import { EMPTY_SELECTION, toggle, union, type Selection } from '../model/selecti
 import type { Annotation, ComponentInstance, Diagram, Endpoint, LineKind, Point } from '../model/types.ts';
 import { ComponentSymbol, hasSymbol } from './symbols.tsx';
 import { IconButton } from './IconButton.tsx';
+import type { PropertiesTarget } from './properties/PropertiesDialog.tsx';
 import { Maximize, ZoomIn, ZoomOut } from 'lucide-react';
 
 export type { Selection };
@@ -44,7 +45,11 @@ const DEFAULT_LINE = 100;
 const DEFAULT_RECT = { width: 200, height: 120 };
 
 const GRID = 10;
-const DASH: Record<LineKind, string | undefined> = { working: undefined, pilot: '6 4', drain: '2 3' };
+/** Datentyp beim Ziehen eines Symbols aus der Bauteilliste; Inhalt ist der Schlüssel des Eintrags. */
+export const SYMBOL_DRAG_TYPE = 'application/x-fluidplan-symbol';
+
+/** Strichmuster der Leitungsarten nach ISO 1219-1. */
+export const LINE_DASH: Record<LineKind, string | undefined> = { working: undefined, pilot: '6 4', drain: '2 3' };
 
 /** Bildschirmpixel pro Millimeter bei 100 % (CSS: 96 dpi). */
 const PX_PER_MM = 96 / 25.4;
@@ -64,8 +69,10 @@ interface Props {
   onCreateAnnotation?: (annotation: NewAnnotation) => void;
   /** Linie bzw. Rechteck über einen Anfasser verändert. */
   onReshapeAnnotation?: (id: string, changes: Partial<Annotation>) => void;
-  /** Doppelklick auf einen Text: Text bearbeiten. */
-  onEditText?: (id: string) => void;
+  /** Doppelklick auf Bauteil, Leitung oder Grafik: Eigenschaften-Fenster öffnen. */
+  onOpenProperties?: (target: PropertiesTarget) => void;
+  /** Symbol aus der Bauteilliste auf das Blatt gezogen; `point` ist die Stelle unter der Maus. */
+  onDropSymbol?: (key: string, point: Point) => void;
   /** Klick auf ein Feld im Schriftfeld. */
   onEditTitleField?: (field: TitleField) => void;
   /** Neue Leitung; `waypoints` leer = automatisch führen. */
@@ -102,6 +109,8 @@ type Drag =
   | { kind: 'segment'; id: string; index: number; path: Point[]; start: Point; offset: number }
   | { kind: 'junction'; id: string; start: Point; origin: Point; last: Point };
 
+const DOUBLE_CLICK_MS = 400;
+
 const clampScale = (s: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
 
 /**
@@ -124,7 +133,8 @@ export function DiagramView({
   tool = null,
   onCreateAnnotation,
   onReshapeAnnotation,
-  onEditText,
+  onOpenProperties,
+  onDropSymbol,
   onEditTitleField,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -225,7 +235,17 @@ export function DiagramView({
     return () => svg.removeEventListener('wheel', onWheel);
   }, [zoomAt]);
 
-  const toDiagram = (e: React.PointerEvent): Point => {
+  // Doppelklick selbst erkennen: das Ziehen fängt den Zeiger am SVG, dadurch
+  // käme das dblclick-Ereignis nicht beim Bauteil an.
+  const lastDown = useRef<{ key: string; time: number } | null>(null);
+  const isDoubleClick = (key: string, e: React.PointerEvent) => {
+    const last = lastDown.current;
+    const double = last !== null && last.key === key && e.timeStamp - last.time < DOUBLE_CLICK_MS;
+    lastDown.current = double ? null : { key, time: e.timeStamp };
+    return double;
+  };
+
+  const toDiagram = (e: { clientX: number; clientY: number }): Point => {
     const ctm = svgRef.current!.getScreenCTM()!.inverse();
     const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm);
     return { x: p.x, y: p.y };
@@ -402,6 +422,18 @@ export function DiagramView({
             setView({ ...d.origin, x: d.origin.x - dx / d.origin.scale, y: d.origin.y - dy / d.origin.scale });
           }
         }}
+        onDragOver={(e) => {
+          if (onDropSymbol && e.dataTransfer.types.includes(SYMBOL_DRAG_TYPE)) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+          }
+        }}
+        onDrop={(e) => {
+          const key = e.dataTransfer.getData(SYMBOL_DRAG_TYPE);
+          if (!key || !onDropSymbol) return;
+          e.preventDefault();
+          onDropSymbol(key, toDiagram(e));
+        }}
         onPointerUp={() => {
           const d = drag.current;
           drag.current = null;
@@ -454,6 +486,11 @@ export function DiagramView({
                   onSelect(toggle(selection, { ...EMPTY_SELECTION, annotations: [a.id] }));
                   return;
                 }
+                if (isDoubleClick(`a:${a.id}`, e)) {
+                  onSelect({ ...EMPTY_SELECTION, annotations: [a.id] });
+                  onOpenProperties?.({ kind: 'annotation', id: a.id });
+                  return;
+                }
                 e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
                 const target = selected
                   ? { components: selection.components, annotations: selection.annotations }
@@ -467,7 +504,6 @@ export function DiagramView({
                 (e.currentTarget as SVGElement).ownerSVGElement?.setPointerCapture(e.pointerId);
                 drag.current = { kind: 'handle', annotation: a, handle, start: toDiagram(e), last: { x: 0, y: 0 } };
               }}
-              onDoubleClick={() => a.kind === 'text' && onEditText?.(a.id)}
             />
           );
         })}
@@ -477,7 +513,7 @@ export function DiagramView({
           const selected = selection.connections.includes(l.id);
           return (
             <g key={l.id} className={selected ? 'connection selected' : 'connection'}>
-              <path className="line" d={linePathData(path, jumps.get(l.id))} strokeDasharray={DASH[l.kind]} />
+              <path className="line" d={linePathData(path, jumps.get(l.id))} strokeDasharray={LINE_DASH[l.kind]} />
               {path.slice(1).map((b, i) => {
                   const a = path[i]!;
                   return (
@@ -503,6 +539,11 @@ export function DiagramView({
                         }
                         if (e.shiftKey || e.ctrlKey || e.metaKey) {
                           onSelect(toggle(selection, { ...EMPTY_SELECTION, connections: [l.id] }));
+                          return;
+                        }
+                        if (isDoubleClick(`l:${l.id}`, e)) {
+                          onSelect({ ...EMPTY_SELECTION, connections: [l.id] });
+                          onOpenProperties?.({ kind: 'connection', id: l.id });
                           return;
                         }
                         e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
@@ -562,6 +603,11 @@ export function DiagramView({
               e.stopPropagation();
               if (e.shiftKey || e.ctrlKey || e.metaKey) {
                 onSelect(toggle(selection, { ...EMPTY_SELECTION, components: [c.id] }));
+                return;
+              }
+              if (isDoubleClick(`c:${c.id}`, e)) {
+                onSelect({ ...EMPTY_SELECTION, components: [c.id] });
+                onOpenProperties?.({ kind: 'component', id: c.id });
                 return;
               }
               (e.currentTarget.ownerSVGElement ?? e.currentTarget).setPointerCapture?.(e.pointerId);
@@ -719,14 +765,12 @@ function AnnotationShape({
   handles,
   onPointerDown,
   onHandlePointerDown,
-  onDoubleClick,
 }: {
   annotation: Annotation;
   selected: boolean;
   handles: boolean;
   onPointerDown: (e: React.PointerEvent<SVGGElement>) => void;
   onHandlePointerDown: (handle: Handle, e: React.PointerEvent) => void;
-  onDoubleClick: () => void;
 }) {
   const handle = (h: Handle, p: Point) => (
     <rect
@@ -787,7 +831,6 @@ function AnnotationShape({
     <g
       className={`annotation ${a.kind}${selected ? ' selected' : ''}`}
       onPointerDown={onPointerDown}
-      onDoubleClick={onDoubleClick}
     >
       {shape}
       {grips}

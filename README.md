@@ -7,7 +7,7 @@ Schaltzeichen nach DIN ISO 1219-1 für die Grundbauteile: Pumpen, Kompressor, Mo
 Tank, Speicher, Filter, Wartungseinheit, Druck-, Strom- und Sperrventile, Manometer.
 
 **Wegeventile und Zylinder sind konfigurierbar.** In der Bauteilliste stehen übliche
-Vorlagen (4/2, 4/3, 5/2, …); nach dem Auswählen legt man im Eigenschaftenbereich fest:
+Vorlagen (4/2, 4/3, 5/2, …); im Eigenschaften-Fenster (Doppelklick) legt man im Reiter „Konfigurator“ fest:
 Anzahl Anschlüsse und Schaltstellungen (X/Y), die Wege in jeder Stellung (aus Vorlagen
 wie „Umlauf“ oder „Schwimmstellung“ oder Weg für Weg), die Ruhestellung und die
 Betätigungen links und rechts (Magnet, Feder, Druck, Druckknopf, Hebel, Pedal, Rolle, …).
@@ -41,10 +41,17 @@ Abstand 2M darüber (Reihenfolge Druck, Magnet, Feder, Hand), Magnet 3M × 2M, F
 Zylinderrahmen 9M × 4M mit 2M breitem Kolben; ihre Anschlüsse liegen auf dem 2M-Raster.
 
 Gezeichnet wird auf einem Blatt (A4 bis A1, hoch oder quer, wahlweise mit Rahmen und
-Schriftfeld nach DIN EN ISO 5457), festgelegt beim Anlegen über „Neuer Schaltplan“ (Symbol ganz links in der Werkzeugleiste) und später in der
-Seitenleiste änderbar. Maßstab: 1 Einheit = 0,25 mm, also 1M = 2,5 mm auf dem Papier.
+Schriftfeld nach DIN EN ISO 5457), festgelegt beim Anlegen über „Neuer Schaltplan“ (Symbol ganz links in der Werkzeugleiste) und später im
+Fenster „Blatt und Schriftfeld“ änderbar (Werkzeugleiste oder Klick ins Schriftfeld). Maßstab: 1 Einheit = 0,25 mm, also 1M = 2,5 mm auf dem Papier.
 Mausrad zoomt um den Mauszeiger, Ziehen auf freier Fläche oder mit der mittleren Maustaste
 verschiebt die Ansicht; 100 % entspricht der Papiergröße.
+
+Bedienung: Bauteile per Klick oder Ziehen aus der Bauteilliste aufs Blatt bringen; die Liste
+ist am rechten Rand in der Breite ziehbar. Was ausgewählt ist, bearbeitet eine kleine Leiste
+über dem Blatt (Drehen, Spiegeln, Ausrichten, Linienart, Löschen). Doppelklick oder Enter
+öffnet das Eigenschaften-Fenster: oben Vorschau und Kennzeichen, darunter Reiter wie
+„Konfigurator“ und „Lage“; „OK“ übernimmt alles als einen Rückgängig-Schritt. Hell/Dunkel
+und eine Übersicht der Bedienung stehen rechts in der Werkzeugleiste.
 
 ## Schnellstart
 
@@ -87,13 +94,16 @@ src/
     browser.ts       Download und Datei-Öffnen im Browser
     export.ts        Export als PDF, SVG und PNG in echter Papiergröße
   ui/
-    App.tsx          Oberfläche: Werkzeugleiste, Bauteilliste, Eigenschaften
+    App.tsx          Oberfläche: Werkzeugleiste, Bauteilliste, Kontextleiste
     DiagramView.tsx  SVG-Zeichenfläche
     symbols.tsx      Schaltzeichen nach ISO 1219 (im Modul M gezeichnet)
     symbolParts.tsx  Grundelemente (Pfeil, Dreieck, Feder, Drossel, Rückschlagelement)
     valveSymbol.tsx  Wegeventil aus seiner Konfiguration
     cylinderSymbol.tsx Zylinder aus seiner Konfiguration
-    Configurator.tsx Konfigurator für Wegeventil und Zylinder
+    properties/      Eigenschaften-Fenster: PropertiesDialog, Reiter (tabs.tsx),
+                     Konfiguratoren je config.kind (configEditors.tsx), Segmented
+    SheetDialog.tsx  Fenster „Blatt und Schriftfeld“
+    layout.ts        Hell/Dunkel und Breite der Bauteilliste (gespeichert)
     ExportDialog.tsx Dialog „Exportieren“
     CheckPanel.tsx   Ergebnisliste von „Zeichnung prüfen“
     IconButton.tsx   Schaltfläche mit Symbol (lucide-react), Beschriftung als Tooltip
