@@ -10,6 +10,8 @@ const MOUSE: [string, string][] = [
   ['Symbol aus der Liste ziehen', 'Bauteil an dieser Stelle einfügen'],
   ['Mausrad', 'Zoomen'],
   ['Mittlere Taste / Leertaste+Ziehen', 'Ansicht verschieben'],
+  ['Linienzug-Werkzeug', 'Punkte anklicken; Doppelklick oder Rechtsklick beendet, Klick auf den ersten Punkt schließt'],
+  ['Leiste unten links', 'Raster und Lineale ein/aus; Fangen an Raster, Anschluss und Endpunkt'],
 ];
 
 const KEYS: [string, string][] = [
@@ -19,6 +21,9 @@ const KEYS: [string, string][] = [
   ['Esc', 'Abbrechen / Auswahl aufheben'],
   ['Strg+Z / Strg+Y', 'Rückgängig / Wiederholen'],
   ['Strg+A', 'Alles auswählen'],
+  ['Strg+C / Strg+X / Strg+V', 'Kopieren / Ausschneiden / Einfügen (Leitungen zwischen kopierten Bauteilen kommen mit)'],
+  ['Strg+G / Strg+Umschalt+G', 'Gruppieren / Gruppierung aufheben'],
+  ['Enter / Rücktaste', 'Linienzug beenden / letzten Punkt zurücknehmen'],
   ['Strg+S / Strg+O / Strg+E', 'Speichern / Öffnen / Exportieren'],
 ];
 

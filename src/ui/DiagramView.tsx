@@ -342,7 +342,10 @@ export function DiagramView({
     if (!poly) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
-      if (e.key === 'Enter') finishPoly(poly.points, false);
+      if (e.key === 'Enter') {
+        e.stopImmediatePropagation();
+        finishPoly(poly.points, false);
+      }
       else if (e.key === 'Escape') {
         e.stopImmediatePropagation();
         setPoly(null);
