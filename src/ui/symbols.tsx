@@ -198,6 +198,47 @@ function TwoPressureValve() {
   );
 }
 
+/**
+ * Handpumpe: Pumpe mit begrenztem Schwenkwinkel, Hebelbetätigung
+ * (Beispiel 6.2.5, 11M × 9M). Halbkreis r = 3M (8.4.5) mit der geraden
+ * Seite bei x = 9, Anschlüsse 1,5M über und unter der Mitte mit 2M langen
+ * Leitungen, Dreieck am Druckanschluss nach außen, Welle 1M breit nach links
+ * bis zum Hebel mit Knauf.
+ */
+function HandPump() {
+  const xf = 9;
+  const cy = 4.5;
+  // Hebel schräg von unten rechts nach oben links, Knauf 1M am oberen Ende
+  const a: P = [xf - 5.75, cy + 1];
+  const b: P = [xf - 6.5, cy - 2];
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const knob: P = [b[0] + ((b[0] - a[0]) / len) * 0.5, b[1] + ((b[1] - a[1]) / len) * 0.5];
+  const leverX = (y: number) => a[0] + ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]);
+  const arcX = xf - Math.sqrt(9 - 0.25);
+  return (
+    <>
+      <path d={`M${xf} ${cy - 3} A3 3 0 0 0 ${xf} ${cy + 3} Z`} />
+      <line x1={xf} y1={cy - 1.5} x2={11} y2={cy - 1.5} />
+      <line x1={xf} y1={cy + 1.5} x2={11} y2={cy + 1.5} />
+      <Triangle tip={[xf, cy - 1.5]} dir={[1, 0]} side={1.15} filled />
+      <line x1={leverX(cy - 0.5)} y1={cy - 0.5} x2={arcX} y2={cy - 0.5} />
+      <line x1={leverX(cy + 0.5)} y1={cy + 0.5} x2={arcX} y2={cy + 0.5} />
+      <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} />
+      <circle cx={knob[0]} cy={knob[1]} r={0.5} />
+    </>
+  );
+}
+
+/** Verschlossener Anschluss, Stopfen (8.2.9, 2M × 2M): Leitung 1M, Querstrich 2M. */
+function Plug() {
+  return (
+    <>
+      <line x1={1} y1={0} x2={1} y2={1} />
+      <line x1={0} y1={1} x2={2} y2={1} />
+    </>
+  );
+}
+
 // --- Druckventile -------------------------------------------------------------
 
 /**
@@ -322,6 +363,8 @@ const SYMBOLS: Record<string, () => ReactNode> = {
   'valve.flow-control': FlowControlValve,
   'measure.gauge': Gauge,
   'line.hose': HoseSymbol,
+  'line.plug': Plug,
+  'supply.hand-pump': HandPump,
 };
 
 type ConfigOf<K extends ComponentConfig['kind']> = Extract<ComponentConfig, { kind: K }>;

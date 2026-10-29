@@ -3,9 +3,9 @@
 Leichtgewichtiger Editor für einfache **Hydraulik- und Pneumatik-Schaltpläne** im Browser.
 
 Stand: Projektgerüst mit Datenmodell, Bauteilbibliothek und Speichern/Laden als JSON.
-Schaltzeichen nach DIN ISO 1219-1 für die Grundbauteile: Pumpen, Kompressor, Motoren,
+Schaltzeichen nach DIN ISO 1219-1 für die Grundbauteile: Pumpen, Handpumpe, Kompressor, Motoren,
 Tank, Speicher, Filter, Wartungseinheit, Druck-, Strom- und Sperrventile, Kugelhahn,
-Schnelltrennkupplung, Schlauchleitung, Manometer und Sensoren.
+Zweidruckventil, Schnelltrennkupplung, Schlauchleitung, verschlossener Anschluss (Stopfen), Manometer und Sensoren.
 
 **Wegeventile und Zylinder sind konfigurierbar.** In der Bauteilliste stehen übliche
 Vorlagen (4/2, 4/3, 5/2, …); im Eigenschaften-Fenster (Doppelklick) legt man im Reiter „Konfigurator“ fest:
@@ -23,10 +23,10 @@ im Konfigurator als Symbolvorschau):
 
 - Zylinder: Kolben-, Plunger- oder Teleskopzylinder, Kolbenstellung 0–100 %
 - Pumpe/Kompressor und Motor: konstant/verstellbar, eine oder zwei Richtungen,
-  Leckanschluss, Motor-Pumpe-Einheit
+  Leckanschluss, Drehrichtungspfeil, Motor-Pumpe-Einheit mit Wellenkupplung
 - Kugelhahn: 2, 3 oder 4 Wege mit Schaltstellung
 - Speicher: Blase, Membran, Kolben, Gasflasche, Luftbehälter
-- Tank: offen/geschlossen, normal/klein, 1–3 Rückführungen, Leitung unter/über dem Flüssigkeitsspiegel
+- Tank und Behälterrückführung: offen/geschlossen, normal/klein, 1–3 Rückführungen, Leitung unter/über dem Flüssigkeitsspiegel
 - Schnelltrennkupplung: ohne/mit einem/zwei Rückschlagventilen, gekuppelt/entkuppelt
 - Sensor: Druck, Durchfluss, Temperatur, Näherung; schaltend, analog oder
   elektromechanisch (Druckschalter), Schaltpunkt einstellbar

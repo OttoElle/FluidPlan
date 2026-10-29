@@ -89,6 +89,7 @@ const HP: Domain[] = ['hydraulic', 'pneumatic'];
 export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
   // --- Energieversorgung ---
   fixed('supply.electric-motor', 'Elektromotor', HP, [10, 10], []),
+  fixed('supply.hand-pump', 'Handpumpe', H, [11, 9], [['P', 'pressure', 11, 3], ['S', 'return', 11, 6]]),
   fixed('supply.air-source', 'Druckluftquelle', P, [6, 2], [['1', 'pressure', 6, 1]]),
   fixed('supply.silencer', 'Schalldämpfer', P, [2, 6], [['3', 'return', 1, 0]]),
   fixed('supply.filter', 'Filter', HP, [8, 10], [['1', 'work', 4, 0], ['2', 'work', 4, 10]]),
@@ -107,7 +108,7 @@ export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
     ['Y', 'work', 12, 4, '1'],
     ['A', 'work', 6, 0, '2'],
   ]),
-  fixed('valve.two-pressure', 'Zweidruckventil (UND)', P, [12, 6], [
+  fixed('valve.two-pressure', 'Zweidruckventil (UND)', HP, [12, 6], [
     ['X', 'work', 0, 4, '1'],
     ['Y', 'work', 12, 4, '1'],
     ['A', 'work', 6, 0, '2'],
@@ -135,6 +136,7 @@ export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
   fixed('measure.gauge', 'Manometer', HP, [4, 6], [['1', 'work', 2, 6]]),
 
   // --- Verbindungen ---
+  fixed('line.plug', 'Verschlossener Anschluss (Stopfen)', HP, [2, 2], [['1', 'work', 1, 0]]),
   fixed('line.hose', 'Schlauchleitung', HP, [6, 2], [['1', 'work', 0, 1], ['2', 'work', 6, 1]]),
 ];
 
@@ -389,7 +391,12 @@ export function paletteFor(domain: Domain): PaletteEntry[] {
       : []),
     entry('motor', hydraulic ? 'Hydromotor' : 'Druckluftmotor', 'Antriebe', MOTOR, defaultMotorConfig(domain)),
     entry('ball-valve', 'Kugelhahn', 'Sperrventile', BALL_VALVE, defaultBallValveConfig(2)),
-    ...(hydraulic ? [entry('tank', 'Tank', 'Speicher und Behälter', TANK, defaultTankConfig())] : []),
+    ...(hydraulic
+      ? [
+          entry('tank', 'Tank', 'Speicher und Behälter', TANK, defaultTankConfig()),
+          entry('tank-return', 'Behälterrückführung', 'Speicher und Behälter', TANK, { ...defaultTankConfig(), size: 'small' }),
+        ]
+      : []),
     entry('accumulator', hydraulic ? 'Hydrospeicher' : 'Luftbehälter', 'Speicher und Behälter', ACCUMULATOR, defaultAccumulatorConfig(domain)),
     entry('coupling', 'Schnelltrennkupplung', 'Verbindungen', COUPLING, defaultCouplingConfig()),
     entry('pressure-switch', 'Druckschalter', 'Messen und Sensoren', SENSOR, defaultSensorConfig('pressure', 'switching')),

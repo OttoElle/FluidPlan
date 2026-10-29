@@ -12,7 +12,7 @@ import {
   type CylinderRod,
 } from '../../model/cylinder.ts';
 import { typeOfConfig } from '../../model/library.ts';
-import { DIRECTION_COUNTS, DISPLACEMENT_NAMES, normalizeRotary, type RotaryConfig } from '../../model/rotary.ts';
+import { DIRECTION_COUNTS, DISPLACEMENT_NAMES, normalizeRotary, ROTATION_NAMES, type RotaryConfig, type Rotation } from '../../model/rotary.ts';
 import { normalizeSensor, OUTPUT_NAMES, QUANTITY_NAMES, type Quantity, type SensorConfig, type SensorOutput } from '../../model/sensor.ts';
 import {
   ACCUMULATOR_NAMES,
@@ -202,6 +202,12 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
 
 // --- Pumpe und Motor -------------------------------------------------------------
 
+/** Motoren mit zwei Drehrichtungen zeigen immer beide Pfeilspitzen, mit einer nie. */
+function rotationChoices(config: RotaryConfig): Rotation[] {
+  if (config.kind === 'motor') return config.directions === 2 ? ['none', 'both'] : ['none', 'cw', 'ccw'];
+  return ['none', 'cw', 'ccw', 'both'];
+}
+
 export function RotaryEditor<C extends RotaryConfig>({ config, onChange }: ConfigEditorProps<C>) {
   const set = (c: Partial<RotaryConfig>) => onChange(normalizeRotary({ ...config, ...c }) as C);
   const variant = (c: Partial<RotaryConfig>) => normalizeRotary({ ...config, ...c }) as ComponentConfig;
@@ -227,6 +233,14 @@ export function RotaryEditor<C extends RotaryConfig>({ config, onChange }: Confi
           />
         </Field>
       )}
+      <Field title="Drehrichtung">
+        <Segmented
+          label="Drehrichtung"
+          value={config.rotation}
+          onChange={(rotation) => set({ rotation })}
+          options={symbolOptions(rotationChoices(config), (v) => ROTATION_NAMES[v], (rotation) => variant({ rotation }))}
+        />
+      </Field>
       {hydraulic && <Check title="Leckanschluss" checked={config.drain} onChange={(drain) => set({ drain })} />}
       {pump && (
         <Check title="Mit Elektromotor (Motor-Pumpe-Einheit)" checked={config.electricMotor} onChange={(electricMotor) => set({ electricMotor })} />

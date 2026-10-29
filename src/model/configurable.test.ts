@@ -124,9 +124,17 @@ describe('Konfigurierbare Bauteile', () => {
     const pump = definition({ ...defaultPumpConfig('hydraulic'), drain: true, electricMotor: true });
     expect(pump.ports.map((p) => p.id)).toEqual(['P', 'S', 'L']);
     expect(pump.ports.find((p) => p.id === 'L')?.kind).toBe('drain');
-    expect(pump.size.width).toBe(160);
+    expect(pump.size.width).toBe(200);
     const compressor = definition(normalizeRotary({ ...defaultPumpConfig('pneumatic'), directions: 2, drain: true }));
     expect(compressor.ports.map((p) => [p.id, p.label])).toEqual([['P', '1']]);
+  });
+
+  it('führen die Drehrichtung beim Motor mit den Drehrichtungen', () => {
+    const motor = defaultMotorConfig('hydraulic');
+    expect(normalizeRotary({ ...motor, directions: 2, rotation: 'cw' }).rotation).toBe('both');
+    expect(normalizeRotary({ ...motor, rotation: 'both' }).rotation).toBe('cw');
+    expect(normalizeRotary({ ...motor, rotation: 'none', directions: 2 }).rotation).toBe('none');
+    expect(normalizeRotary({ ...defaultPumpConfig('hydraulic'), rotation: 'ccw' }).rotation).toBe('ccw');
   });
 
   it('benennen Ventilanschlüsse in der Pneumatik nach ISO 5599', () => {

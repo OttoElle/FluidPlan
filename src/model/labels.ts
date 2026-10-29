@@ -27,14 +27,14 @@ import type { ComponentInstance, Diagram, Endpoint, PortKind } from './types.ts'
 export type ComponentCode = 'P' | 'M' | 'A' | 'V' | 'S' | 'Z';
 
 /** Bauteile, die kein eigenes Kennzeichen bekommen (reine Anschluss- und Leitungssymbole). */
-const UNLABELED = new Set(['supply.silencer', 'line.hose']);
+const UNLABELED = new Set(['supply.silencer', 'line.hose', 'line.plug']);
 
 export function needsLabel(component: Pick<ComponentInstance, 'type'>): boolean {
   return !UNLABELED.has(component.type);
 }
 
 export function componentCode(type: string): ComponentCode {
-  if (type === 'supply.pump') return 'P';
+  if (type === 'supply.pump' || type === 'supply.hand-pump') return 'P';
   if (type === 'supply.electric-motor') return 'M';
   if (type.startsWith('actuator.')) return 'A';
   if (type.startsWith('valve.')) return 'V';
