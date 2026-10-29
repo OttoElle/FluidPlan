@@ -188,8 +188,8 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
 
   it('melden ungültige Konfigurationen', () => {
     const file = JSON.parse(serializeDiagram(exampleHydraulicDiagram()));
-    const i = file.diagram.components.findIndex((c: { type: string }) => c.type === 'valve.directional');
-    file.diagram.components[i].config.ports = 7;
+    const i = file.drawing.sheets[0].components.findIndex((c: { type: string }) => c.type === 'valve.directional');
+    file.drawing.sheets[0].components[i].config.ports = 7;
     const r = parseDiagram(JSON.stringify(file));
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors[0]).toMatch(/config\.ports/);
@@ -206,8 +206,8 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
   it('geben früher festen Pumpen, Motoren, Tanks und Speichern eine Konfiguration', () => {
     const file = JSON.parse(serializeDiagram(createDiagram('pneumatic')));
     const component = (id: string, type: string) => ({ id, type, position: { x: 0, y: 0 }, rotation: 0, mirrored: false, label: '', properties: {} });
-    file.diagram.components = [component('c1', 'supply.compressor'), component('c2', 'actuator.air-motor'), component('c3', 'supply.accumulator')];
-    file.diagram.connections = [{ id: 'l1', from: { componentId: 'c1', portId: '1' }, to: { componentId: 'c2', portId: 'A' }, kind: 'working', waypoints: [] }];
+    file.drawing.sheets[0].components = [component('c1', 'supply.compressor'), component('c2', 'actuator.air-motor'), component('c3', 'supply.accumulator')];
+    file.drawing.sheets[0].connections = [{ id: 'l1', from: { componentId: 'c1', portId: '1' }, to: { componentId: 'c2', portId: 'A' }, kind: 'working', waypoints: [] }];
     const r = parseDiagram(JSON.stringify(file));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -222,7 +222,7 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
 
   it('lesen Zylinder aus älteren Dateien ohne Bauart und Kolbenstellung', () => {
     const file = JSON.parse(serializeDiagram(exampleHydraulicDiagram()));
-    const cyl = file.diagram.components.find((c: { type: string }) => c.type === 'actuator.cylinder');
+    const cyl = file.drawing.sheets[0].components.find((c: { type: string }) => c.type === 'actuator.cylinder');
     delete cyl.config.design;
     delete cyl.config.stroke;
     const r = parseDiagram(JSON.stringify(file));
@@ -232,7 +232,7 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
 
   it('stellen alte feste Ventil- und Zylindertypen um', () => {
     const file = JSON.parse(serializeDiagram(exampleHydraulicDiagram()));
-    for (const c of file.diagram.components) {
+    for (const c of file.drawing.sheets[0].components) {
       if (c.type === 'valve.directional') c.type = 'valve.4-2';
       if (c.type === 'actuator.cylinder') c.type = 'actuator.cylinder-double';
       delete c.config;

@@ -12,6 +12,7 @@ const MOUSE: [string, string][] = [
   ['Mittlere Taste / Leertaste+Ziehen', 'Ansicht verschieben'],
   ['Linienzug-Werkzeug', 'Punkte anklicken; Doppelklick oder Rechtsklick beendet, Klick auf den ersten Punkt schließt'],
   ['Leiste unten links', 'Raster und Lineale ein/aus; Fangen an Raster, Anschluss und Endpunkt'],
+  ['Blattreiter unten', 'Blatt wechseln; Doppelklick benennt um, Ziehen verschiebt, Rechtsklick oder ⋮ für Duplizieren und Löschen'],
 ];
 
 const KEYS: [string, string][] = [
@@ -25,6 +26,7 @@ const KEYS: [string, string][] = [
   ['Strg+G / Strg+Umschalt+G', 'Gruppieren / Gruppierung aufheben'],
   ['Enter / Rücktaste', 'Linienzug beenden / letzten Punkt zurücknehmen'],
   ['Strg+S / Strg+O / Strg+E', 'Speichern / Öffnen / Exportieren'],
+  ['Strg+Bild auf / Strg+Bild ab', 'Voriges / nächstes Blatt'],
 ];
 
 /** Übersicht der Maus- und Tastenbedienung. */

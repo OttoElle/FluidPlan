@@ -6,6 +6,8 @@ import type {
   Diagram,
   DiagramMeta,
   Domain,
+  Drawing,
+  DrawingSheet,
   Endpoint,
   Group,
   Junction,
@@ -19,34 +21,51 @@ import type {
 } from '../model/types.ts';
 import { SHEET_FORMATS, smallestSheetFor } from '../model/sheet.ts';
 import { pruneGroups } from '../model/groups.ts';
+import { contentOf, drawingOf, sheetView } from '../model/drawing.ts';
 
 /**
  * Dateiformat (.fluidplan.json):
  *
- *   { "format": "fluidplan", "version": 5, "diagram": { ... } }
+ *   { "format": "fluidplan", "version": 6, "drawing": { "domain", "meta", "sheets": [ ... ] } }
+ *
+ * Bis Version 5 stand dort ein einzelner Schaltplan unter "diagram".
  *
  * `version` wird erhöht, sobald sich das Format inkompatibel ändert.
  * Ältere Versionen werden dann beim Laden in `migrate` hochgezogen.
  */
 export const FILE_FORMAT = 'fluidplan';
-export const FILE_VERSION = 5;
+export const FILE_VERSION = 6;
 export const FILE_EXTENSION = '.fluidplan.json';
 
 interface FileEnvelope {
   format: typeof FILE_FORMAT;
   version: number;
-  diagram: Diagram;
+  drawing: Drawing;
 }
 
-export function serializeDiagram(diagram: Diagram): string {
+export function serializeDrawing(drawing: Drawing): string {
   // Gruppen können noch auf Gelöschtes verweisen; das soll nicht in die Datei.
-  const envelope: FileEnvelope = { format: FILE_FORMAT, version: FILE_VERSION, diagram: pruneGroups(diagram) };
+  const sheets = drawing.sheets.map((s) => ({ id: s.id, name: s.name, ...contentOf(pruneGroups(s as unknown as Diagram)) }));
+  const envelope: FileEnvelope = { format: FILE_FORMAT, version: FILE_VERSION, drawing: { ...drawing, sheets } };
   return JSON.stringify(envelope, null, 2) + '\n';
 }
 
-export type ParseResult = { ok: true; diagram: Diagram } | { ok: false; errors: string[] };
+/** Ein einzelnes Blatt als Datei, z. B. ein kopierter Ausschnitt in der Zwischenablage. */
+export function serializeDiagram(diagram: Diagram): string {
+  return serializeDrawing(drawingOf(diagram));
+}
 
-export function parseDiagram(text: string): ParseResult {
+export type ParseResult = { ok: true; drawing: Drawing } | { ok: false; errors: string[] };
+
+/** Liest eine Datei mit nur einem Blatt bzw. davon das erste Blatt (Zwischenablage). */
+export function parseDiagram(text: string): { ok: true; diagram: Diagram } | { ok: false; errors: string[] } {
+  const r = parseDrawing(text);
+  if (!r.ok) return r;
+  const { page: _page, ...diagram } = sheetView(r.drawing, 0);
+  return { ok: true, diagram };
+}
+
+export function parseDrawing(text: string): ParseResult {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -68,11 +87,21 @@ export function parseDiagram(text: string): ParseResult {
     };
   }
 
-  const diagram = readDiagram(migrate(raw.version, raw.diagram), errors);
-  if (errors.length > 0 || !diagram) return { ok: false, errors };
-  const upgraded = upgradeLegacyTypes(diagram);
-  checkReferences(upgraded, errors);
-  return errors.length > 0 ? { ok: false, errors } : { ok: true, diagram: upgraded };
+  const body = raw.version < 6 ? migrateToSheets(migrate(raw.version, raw.diagram)) : raw.drawing;
+  const drawing = readDrawing(body, errors);
+  if (errors.length > 0 || !drawing) return { ok: false, errors };
+  const sheetIds = new Set<string>();
+  const sheets = drawing.sheets.map((s, i) => {
+    if (sheetIds.has(s.id)) errors.push(`Blatt-ID "${s.id}" ist doppelt vergeben`);
+    sheetIds.add(s.id);
+    const upgraded = upgradeLegacyTypes(sheetView(drawing, i));
+    const sheetErrors: string[] = [];
+    checkReferences(upgraded, sheetErrors);
+    const prefix = drawing.sheets.length > 1 ? `Blatt ${i + 1} („${s.name}“): ` : '';
+    errors.push(...sheetErrors.map((e) => prefix + e));
+    return { ...s, ...contentOf(upgraded) };
+  });
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, drawing: { ...drawing, sheets } };
 }
 
 /**
@@ -110,6 +139,7 @@ function upgradeLegacyTypes(diagram: Diagram): Diagram {
  * 3 → 4: Freier Text und Grafik (`annotations`) sowie weitere Schriftfeld-Angaben
  *        in `meta` (Zeichnungsnummer, Firma, Geprüft von, Änderungsstand).
  * 4 → 5: Gruppen (`groups`); neue Grafikarten Kreis, Ellipse und Linienzug.
+ * 5 → 6: mehrere Blätter (siehe migrateToSheets).
  */
 function migrate(version: number, diagram: unknown): unknown {
   let d = diagram;
@@ -121,6 +151,13 @@ function migrate(version: number, diagram: unknown): unknown {
   }
   if (version < 5 && isObject(d)) d = { ...d, groups: [] };
   return d;
+}
+
+/** 5 → 6: Der bisherige Schaltplan wird zum ersten und einzigen Blatt der Zeichnung. */
+function migrateToSheets(diagram: unknown): unknown {
+  if (!isObject(diagram)) return diagram;
+  const { domain, meta, ...content } = diagram;
+  return { domain, meta, sheets: [{ id: 's1', name: 'Blatt 1', ...content }] };
 }
 
 const META_DEFAULTS = { drawingNumber: '', organization: '', checkedBy: '', revision: '' };
@@ -154,23 +191,39 @@ const ORIENTATIONS: readonly Orientation[] = ['portrait', 'landscape'];
 const STROKE_STYLES: readonly StrokeStyle[] = ['solid', 'dashed', 'dashdot'];
 const ANNOTATION_KINDS: readonly Annotation['kind'][] = ['text', 'line', 'rect', 'circle', 'ellipse', 'polyline'];
 
-function readDiagram(v: unknown, errors: string[]): Diagram | undefined {
+function readDrawing(v: unknown, errors: string[]): Drawing | undefined {
   if (!isObject(v)) {
-    errors.push('diagram: Objekt erwartet');
+    errors.push('drawing: Objekt erwartet');
     return undefined;
   }
-  const domain = oneOf(v.domain, DOMAINS, 'diagram.domain', errors);
+  const domain = oneOf(v.domain, DOMAINS, 'drawing.domain', errors);
   const meta = readMeta(v.meta, errors);
-  const sheet = readSheet(v.sheet, errors);
-  const components = readArray(v.components, 'diagram.components', errors, readComponent);
-  const connections = readArray(v.connections, 'diagram.connections', errors, readConnection);
-  const junctions = readArray(v.junctions, 'diagram.junctions', errors, readJunction);
-  const annotations = readArray(v.annotations, 'diagram.annotations', errors, readAnnotation);
-  const groups = readArray(v.groups, 'diagram.groups', errors, readGroup);
-  if (!domain || !meta || !sheet || !components || !connections || !junctions || !annotations || !groups) {
+  const sheets = readArray(v.sheets, 'drawing.sheets', errors, readDrawingSheet);
+  if (sheets && sheets.length === 0) errors.push('drawing.sheets: mindestens ein Blatt erwartet');
+  if (!domain || !meta || !sheets || sheets.length === 0) return undefined;
+  return { domain, meta, sheets };
+}
+
+function readDrawingSheet(v: unknown, path: string, errors: string[]): DrawingSheet | undefined {
+  if (!isObject(v)) {
+    errors.push(`${path}: Objekt erwartet`);
     return undefined;
   }
-  return { domain, meta, sheet, components, connections, junctions, annotations, groups };
+  const id = nonEmpty(v.id, `${path}.id`, errors);
+  const name = str(v.name, `${path}.name`, errors);
+  const sheet = readSheet(v.sheet, `${path}.sheet`, errors);
+  const components = readArray(v.components, `${path}.components`, errors, readComponent);
+  const connections = readArray(v.connections, `${path}.connections`, errors, readConnection);
+  const junctions = readArray(v.junctions, `${path}.junctions`, errors, readJunction);
+  const annotations = readArray(v.annotations, `${path}.annotations`, errors, readAnnotation);
+  const groups = readArray(v.groups, `${path}.groups`, errors, readGroup);
+  if (
+    id === undefined || name === undefined || !sheet || !components || !connections || !junctions ||
+    !annotations || !groups
+  ) {
+    return undefined;
+  }
+  return { id, name, sheet, components, connections, junctions, annotations, groups };
 }
 
 function readGroup(v: unknown, path: string, errors: string[]): Group | undefined {
@@ -257,15 +310,15 @@ function readJunction(v: unknown, path: string, errors: string[]): Junction | un
   return { id, position };
 }
 
-function readSheet(v: unknown, errors: string[]): Sheet | undefined {
+function readSheet(v: unknown, path: string, errors: string[]): Sheet | undefined {
   if (!isObject(v)) {
-    errors.push('diagram.sheet: Objekt erwartet');
+    errors.push(`${path}: Objekt erwartet`);
     return undefined;
   }
-  const format = oneOf(v.format, SHEET_FORMAT_KEYS, 'diagram.sheet.format', errors);
-  const orientation = oneOf(v.orientation, ORIENTATIONS, 'diagram.sheet.orientation', errors);
-  const frame = bool(v.frame, 'diagram.sheet.frame', errors);
-  const lineJumps = v.lineJumps === undefined ? undefined : bool(v.lineJumps, 'diagram.sheet.lineJumps', errors);
+  const format = oneOf(v.format, SHEET_FORMAT_KEYS, `${path}.format`, errors);
+  const orientation = oneOf(v.orientation, ORIENTATIONS, `${path}.orientation`, errors);
+  const frame = bool(v.frame, `${path}.frame`, errors);
+  const lineJumps = v.lineJumps === undefined ? undefined : bool(v.lineJumps, `${path}.lineJumps`, errors);
   if (!format || !orientation || frame === undefined || (v.lineJumps !== undefined && lineJumps === undefined)) {
     return undefined;
   }
@@ -274,14 +327,14 @@ function readSheet(v: unknown, errors: string[]): Sheet | undefined {
 
 function readMeta(v: unknown, errors: string[]): DiagramMeta | undefined {
   if (!isObject(v)) {
-    errors.push('diagram.meta: Objekt erwartet');
+    errors.push('drawing.meta: Objekt erwartet');
     return undefined;
   }
   const keys = [
     'title', 'author', 'drawingNumber', 'organization', 'checkedBy', 'revision', 'created', 'modified',
   ] as const satisfies readonly (keyof DiagramMeta)[];
   const before = errors.length;
-  const meta = Object.fromEntries(keys.map((k) => [k, str(v[k], `diagram.meta.${k}`, errors)]));
+  const meta = Object.fromEntries(keys.map((k) => [k, str(v[k], `drawing.meta.${k}`, errors)]));
   return errors.length === before ? (meta as unknown as DiagramMeta) : undefined;
 }
 

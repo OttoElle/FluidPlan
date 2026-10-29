@@ -19,9 +19,11 @@ export interface ExportOptions {
   portLabels: boolean;
   /** Auflösung beim PNG-Export. */
   dpi: number;
+  /** Alle Blätter (PDF: eine Seite je Blatt, SVG/PNG: eine Datei je Blatt) oder nur das angezeigte. */
+  sheets: 'all' | 'current';
 }
 
-export const DEFAULT_EXPORT_OPTIONS: ExportOptions = { portLabels: true, dpi: 300 };
+export const DEFAULT_EXPORT_OPTIONS: ExportOptions = { portLabels: true, dpi: 300, sheets: 'all' };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const FONT = 'Arial, Helvetica, sans-serif';
@@ -111,17 +113,29 @@ export function svgText(svg: SVGSVGElement): string {
   return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(svg);
 }
 
-export async function exportDiagram(
-  live: SVGSVGElement,
-  diagram: Diagram,
+/**
+ * Exportiert Blätter; `drawn[i]` ist das gezeichnete SVG zu `diagrams[i]`.
+ * PDF ergibt eine Datei mit einer Seite je Blatt, SVG und PNG eine Datei je Blatt.
+ */
+export async function exportSheets(
+  drawn: SVGSVGElement[],
+  diagrams: Diagram[],
   format: ExportFormat,
   options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
 ): Promise<void> {
-  const svg = printableSvg(live, diagram, options);
-  const name = fileNameFor(diagram.meta.title, `.${format}`);
-  if (format === 'svg') downloadBlob(new Blob([svgText(svg)], { type: 'image/svg+xml' }), name);
-  else if (format === 'png') downloadBlob(await renderPng(svg, diagram, options.dpi), name);
-  else downloadBlob(await renderPdf(svg, diagram), name);
+  const svgs = drawn.map((live, i) => printableSvg(live, diagrams[i]!, options));
+  const title = diagrams[0]!.meta.title;
+  if (format === 'pdf') {
+    downloadBlob(await renderPdf(svgs, diagrams), fileNameFor(title, '.pdf'));
+    return;
+  }
+  for (const [i, svg] of svgs.entries()) {
+    const d = diagrams[i]!;
+    // Bei mehreren Dateien die Blattnummer anhängen, damit die Namen verschieden sind.
+    const name = fileNameFor(svgs.length > 1 ? `${title} - Blatt ${d.page?.number ?? i + 1}` : title, `.${format}`);
+    if (format === 'svg') downloadBlob(new Blob([svgText(svg)], { type: 'image/svg+xml' }), name);
+    else downloadBlob(await renderPng(svg, d, options.dpi), name);
+  }
 }
 
 /** Rastert das SVG in der gewünschten Auflösung auf weißem Grund. */
@@ -153,24 +167,31 @@ export async function renderPng(svg: SVGSVGElement, diagram: Diagram, dpi: numbe
   }
 }
 
-/** Vektor-PDF mit genau einer Seite im Blattformat. Die Bibliotheken werden erst hier geladen. */
-export async function renderPdf(svg: SVGSVGElement, diagram: Diagram): Promise<Blob> {
+/**
+ * Vektor-PDF mit einer Seite je Blatt, jede im Format ihres Blatts.
+ * Die Bibliotheken werden erst hier geladen.
+ */
+export async function renderPdf(svgs: SVGSVGElement[], diagrams: Diagram[]): Promise<Blob> {
   const [{ jsPDF }, { svg2pdf }] = await Promise.all([import('jspdf'), import('svg2pdf.js')]);
-  const mm = paperSizeMm(diagram);
-  const doc = new jsPDF({
-    unit: 'mm',
-    format: [mm.width, mm.height],
-    orientation: mm.width > mm.height ? 'landscape' : 'portrait',
-    compress: true,
-  });
-  doc.setProperties({ title: diagram.meta.title, author: diagram.meta.author, creator: 'FluidPlan' });
+  const pageOf = (d: Diagram) => {
+    const mm = paperSizeMm(d);
+    return { mm, orientation: mm.width > mm.height ? ('landscape' as const) : ('portrait' as const) };
+  };
+  const first = pageOf(diagrams[0]!);
+  const doc = new jsPDF({ unit: 'mm', format: [first.mm.width, first.mm.height], orientation: first.orientation, compress: true });
+  const { meta } = diagrams[0]!;
+  doc.setProperties({ title: meta.title, author: meta.author, creator: 'FluidPlan' });
   // svg2pdf liest Maße und Schrift aus dem Dokument; vorübergehend unsichtbar einhängen.
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-10000px;top:0;visibility:hidden';
-  host.append(svg);
   document.body.append(host);
   try {
-    await svg2pdf(svg, doc, { x: 0, y: 0, width: mm.width, height: mm.height });
+    for (const [i, svg] of svgs.entries()) {
+      const { mm, orientation } = pageOf(diagrams[i]!);
+      if (i > 0) doc.addPage([mm.width, mm.height], orientation);
+      host.replaceChildren(svg);
+      await svg2pdf(svg, doc, { x: 0, y: 0, width: mm.width, height: mm.height });
+    }
   } finally {
     host.remove();
   }

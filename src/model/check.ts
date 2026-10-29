@@ -21,6 +21,8 @@ export interface Issue {
   /** Betroffene Bauteile bzw. Leitungen, zum Auswählen in der Zeichnung. */
   components: string[];
   connections: string[];
+  /** Blatt (ab 0), auf dem die Teile liegen; nur bei der Prüfung einer ganzen Zeichnung. */
+  sheet?: number;
 }
 
 /** Name eines Bauteils in Meldungen: Kennzeichen, sonst Bauteilname. */
@@ -123,4 +125,47 @@ export function checkDiagram(diagram: Diagram): Issue[] {
   }
 
   return issues.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1));
+}
+
+/**
+ * Prüft alle Blätter einer Zeichnung. Zusätzlich zur Prüfung je Blatt müssen
+ * Kennzeichen in der ganzen Zeichnung eindeutig sein. Jede Meldung trägt ihr
+ * Blatt; Meldungen des Blatts `current` stehen vorn.
+ */
+export function checkSheets(diagrams: Diagram[], current = 0): Issue[] {
+  const issues = diagrams.flatMap((d, sheet) => checkDiagram(d).map((i) => ({ ...i, sheet })));
+
+  // Kennzeichen, die auf mehr als einem Blatt vorkommen
+  const where = new Map<string, Map<number, string[]>>();
+  diagrams.forEach((d, sheet) => {
+    for (const c of d.components) {
+      const label = c.label.trim();
+      if (!label) continue;
+      const bySheet = where.get(label) ?? new Map<number, string[]>();
+      bySheet.set(sheet, [...(bySheet.get(sheet) ?? []), c.id]);
+      where.set(label, bySheet);
+    }
+  });
+  for (const [label, bySheet] of where) {
+    if (bySheet.size < 2) continue;
+    for (const [sheet, ids] of bySheet) {
+      const others = [...bySheet.keys()].filter((s) => s !== sheet).map((s) => sheetName(diagrams[s]!, s));
+      issues.push({
+        severity: 'error',
+        message: `Kennzeichen ${label} ist auch auf ${others.join(', ')} vergeben.`,
+        components: ids,
+        connections: [],
+        sheet,
+      });
+    }
+  }
+
+  const rank = (i: Issue) => (i.severity === 'error' ? 0 : 2) + (i.sheet === current ? 0 : 1);
+  return issues.sort((a, b) => rank(a) - rank(b) || (a.sheet ?? 0) - (b.sheet ?? 0));
+}
+
+/** „Blatt 2 (Steuerung)“ bzw. nur „Blatt 2“, wenn der Name nichts anderes sagt. */
+export function sheetName(d: Diagram, index: number): string {
+  const name = d.page?.name.trim();
+  return name && name !== `Blatt ${index + 1}` ? `Blatt ${index + 1} (${name})` : `Blatt ${index + 1}`;
 }

@@ -9,7 +9,7 @@ import {
   textLines,
   type NewAnnotation,
 } from '../model/annotations.ts';
-import { MM_PER_UNIT, drawingArea, sheetSize, titleBlock, titleCells, type TitleField } from '../model/sheet.ts';
+import { MM_PER_UNIT, drawingArea, sheetSize, titleBlock, titleCells, type TitleCell, type TitleField } from '../model/sheet.ts';
 import {
   componentBox,
   branchDots,
@@ -872,12 +872,16 @@ function SheetFrame({ diagram, onPick }: { diagram: Diagram; onPick?: (field: Ti
   const area = drawingArea(diagram.sheet);
   const block = titleBlock(diagram.sheet);
   const { sheet, meta } = diagram;
+  const page = diagram.page ?? { name: '', number: 1, count: 1 };
   const value = (field: TitleField): string =>
     field === 'date'
       ? meta.modified.slice(0, 10)
       : field === 'format'
         ? `${sheet.format} ${ORIENTATION_NAMES[sheet.orientation]}`
-        : meta[field];
+        : field === 'sheet'
+          ? page.name
+          : meta[field];
+  const caption = (c: TitleCell) => (c.field === 'sheet' ? `Blatt ${page.number} von ${page.count}` : c.caption);
   const editable = (field: TitleField) => field !== 'date' && field !== 'format';
   return (
     <g className="sheet-frame" pointerEvents="none">
@@ -886,7 +890,7 @@ function SheetFrame({ diagram, onPick }: { diagram: Diagram; onPick?: (field: Ti
         <g key={c.field}>
           <rect x={c.x} y={c.y} width={c.width} height={c.height} className="cell" />
           <text x={c.x + 6} y={c.y + 11} className="caption">
-            {c.caption}
+            {caption(c)}
           </text>
           <text x={c.x + 6} y={c.y + c.height - 7} className={c.big ? 'value big' : 'value'}>
             {value(c.field)}
@@ -905,7 +909,7 @@ function SheetFrame({ diagram, onPick }: { diagram: Diagram; onPick?: (field: Ti
                 onPick(c.field);
               }}
             >
-              <title>{c.caption} bearbeiten</title>
+              <title>{c.field === 'sheet' ? 'Blattbenennung' : c.caption} bearbeiten</title>
             </rect>
           )}
         </g>

@@ -1,9 +1,9 @@
-import type { Diagram } from '../model/types.ts';
-import { FILE_EXTENSION, parseDiagram, serializeDiagram, type ParseResult } from './json.ts';
+import type { Drawing } from '../model/types.ts';
+import { FILE_EXTENSION, parseDrawing, serializeDrawing, type ParseResult } from './json.ts';
 
-/** Bietet den Schaltplan als Datei zum Herunterladen an. */
-export function downloadDiagram(diagram: Diagram): void {
-  downloadBlob(new Blob([serializeDiagram(diagram)], { type: 'application/json' }), fileNameFor(diagram.meta.title));
+/** Bietet die Zeichnung mit allen Blättern als Datei zum Herunterladen an. */
+export function downloadDrawing(drawing: Drawing): void {
+  downloadBlob(new Blob([serializeDrawing(drawing)], { type: 'application/json' }), fileNameFor(drawing.meta.title));
 }
 
 export function downloadBlob(blob: Blob, fileName: string): void {
@@ -17,8 +17,8 @@ export function downloadBlob(blob: Blob, fileName: string): void {
 }
 
 /** Liest eine vom Nutzer gewählte Datei ein. */
-export async function readDiagramFile(file: File): Promise<ParseResult> {
-  return parseDiagram(await file.text());
+export async function readDrawingFile(file: File): Promise<ParseResult> {
+  return parseDrawing(await file.text());
 }
 
 export function fileNameFor(title: string, extension = FILE_EXTENSION): string {

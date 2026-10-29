@@ -36,32 +36,43 @@ import {
   Waypoints,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   DiagramError,
   addComponent,
   connect,
-  createDiagram,
   lineKindFor,
   moveJunction,
   splitConnection,
-  touch,
   updateConnection,
 } from '../model/diagram.ts';
+import {
+  addSheet,
+  allSheetViews,
+  createDrawing,
+  deleteSheet,
+  drawingOf,
+  duplicateSheet,
+  moveSheet,
+  renameSheet,
+  sheetIndex,
+  sheetView,
+  withSheet,
+} from '../model/drawing.ts';
 import {
   addAnnotation,
   moveAnnotations,
   updateAnnotation,
   type NewAnnotation,
 } from '../model/annotations.ts';
-import { checkDiagram, type Issue } from '../model/check.ts';
+import { checkSheets, sheetName, type Issue } from '../model/check.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
-import { autoLabel } from '../model/labels.ts';
+import { autoLabelSheets } from '../model/labels.ts';
 import { MODULE, PALETTE_GROUPS, definitionOf, paletteFor, type PaletteEntry } from '../model/library.ts';
 import { drawingArea, type TitleField } from '../model/sheet.ts';
-import type { Annotation, Diagram, DiagramMeta, LineKind, Point, StrokeStyle } from '../model/types.ts';
-import { downloadDiagram, readDiagramFile } from '../io/browser.ts';
-import { exportDiagram, type ExportFormat, type ExportOptions } from '../io/export.ts';
+import type { Annotation, Diagram, DiagramMeta, Drawing, LineKind, Point, StrokeStyle } from '../model/types.ts';
+import { downloadDrawing, readDrawingFile } from '../io/browser.ts';
+import { exportSheets, type ExportFormat, type ExportOptions } from '../io/export.ts';
 import { CheckPanel } from './CheckPanel.tsx';
 import { DiagramView, SYMBOL_DRAG_TYPE, type AnnotationTool } from './DiagramView.tsx';
 import { HelpDialog } from './HelpDialog.tsx';
@@ -86,6 +97,8 @@ import {
 } from '../model/selection.ts';
 import { ExportDialog } from './ExportDialog.tsx';
 import { IconButton } from './IconButton.tsx';
+import { renderSheetSvgs } from './renderSheets.tsx';
+import { SheetTabs } from './SheetTabs.tsx';
 import { SymbolPreview } from './SymbolPreview.tsx';
 import { Tooltip } from './Tooltip.tsx';
 import { useHistory } from './useHistory.ts';
@@ -128,8 +141,19 @@ function describe(s: Selection): string {
 }
 
 export function App() {
-  const history = useHistory<Diagram>(exampleHydraulicDiagram);
-  const { present: diagram, edit } = history;
+  const history = useHistory<Drawing>(() => drawingOf(exampleHydraulicDiagram()));
+  const drawing = history.present;
+  /** Angezeigtes Blatt; fehlt es (z. B. nach Rückgängig), gilt das erste. */
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const active = sheetIndex(drawing, activeId);
+  const diagram = useMemo(() => sheetView(drawing, active), [drawing, active]);
+  const historyEdit = history.edit;
+  /** Ändert das angezeigte Blatt (und Schriftfeld-Angaben, die für alle Blätter gelten). */
+  const edit = useCallback(
+    (update: Diagram | ((d: Diagram) => Diagram), group?: string) =>
+      historyEdit((dr) => withSheet(dr, active, typeof update === 'function' ? update(sheetView(dr, active)) : update), group),
+    [historyEdit, active],
+  );
   const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
   const [message, setMessage] = useState<string | null>(null);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
@@ -141,21 +165,23 @@ export function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const [paletteWidth, startPaletteResize, resetPaletteWidth] = usePaletteWidth();
-  const issues = useMemo(() => (checking ? checkDiagram(diagram) : []), [checking, diagram]);
+  const issues = useMemo(() => (checking ? checkSheets(allSheetViews(drawing), active) : []), [checking, drawing, active]);
   const fileInput = useRef<HTMLInputElement>(null);
   const palette = paletteFor(diagram.domain);
 
   const startNew = ({ domain, title, sheet }: NewDocument) => {
     setNewDialogOpen(false);
-    history.reset(createDiagram(domain, title, new Date(), sheet));
+    history.reset(createDrawing(domain, title, new Date(), sheet));
+    setActiveId(null);
     setSelection(EMPTY_SELECTION);
     setMessage(null);
   };
 
   const open = async (file: File) => {
-    const result = await readDiagramFile(file);
+    const result = await readDrawingFile(file);
     if (result.ok) {
-      history.reset(result.diagram);
+      history.reset(result.drawing);
+      setActiveId(null);
       setSelection(EMPTY_SELECTION);
       setMessage(null);
     } else {
@@ -164,31 +190,89 @@ export function App() {
   };
 
   const save = () => {
-    const saved = touch(diagram);
+    const saved: Drawing = { ...drawing, meta: { ...drawing.meta, modified: new Date().toISOString() } };
     history.replace(saved);
-    downloadDiagram(saved);
+    downloadDrawing(saved);
+  };
+
+  // --- Blätter ---------------------------------------------------------------
+
+  const showSheet = (id: string) => {
+    if (id === drawing.sheets[active]!.id) return;
+    setActiveId(id);
+    setSelection(EMPTY_SELECTION);
+    setTool(null);
+  };
+
+  const newSheet = () => {
+    const r = addSheet(drawing, active);
+    history.edit(r.drawing);
+    showSheet(r.sheet.id);
+  };
+
+  const sheetAction = (index: number, action: 'duplicate' | 'left' | 'right' | 'delete') => {
+    if (action === 'duplicate') {
+      const r = duplicateSheet(drawing, index);
+      history.edit(r.drawing);
+      showSheet(r.sheet.id);
+    } else if (action === 'delete') {
+      const next = drawing.sheets[index + 1] ?? drawing.sheets[index - 1];
+      history.edit(deleteSheet(drawing, index));
+      if (next && index === active) showSheet(next.id);
+    } else {
+      history.edit(moveSheet(drawing, index, index + (action === 'left' ? -1 : 1)));
+    }
+  };
+
+  // Nach Rückgängig/Wiederholen das Blatt zeigen, auf dem sich etwas geändert hat.
+  const followUndo = useRef(false);
+  const previous = useRef(drawing);
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = drawing;
+    if (!followUndo.current) return;
+    followUndo.current = false;
+    const changed = (id: string) => before.sheets.find((s) => s.id === id) !== drawing.sheets.find((s) => s.id === id);
+    const shown = drawing.sheets[active]!;
+    if (changed(shown.id)) return;
+    const other = drawing.sheets.find((s) => changed(s.id));
+    if (other) showSheet(other.id);
+    // showSheet hängt nur von Werten dieses Renderns ab.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawing]);
+  const undo = () => {
+    followUndo.current = true;
+    history.undo();
+  };
+  const redo = () => {
+    followUndo.current = true;
+    history.redo();
   };
 
   const runExport = async (format: ExportFormat, options: ExportOptions) => {
     setExportOpen(false);
-    const svg = document.querySelector<SVGSVGElement>('svg.diagram');
-    if (!svg) return;
+    const diagrams = options.sheets === 'all' ? allSheetViews(drawing) : [diagram];
     try {
-      await exportDiagram(svg, diagram, format, options);
+      await exportSheets(renderSheetSvgs(diagrams), diagrams, format, options);
     } catch (err) {
       setMessage(`Export fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
   const label = () => {
-    const next = autoLabel(diagram);
-    const changed = next.components.filter((c, i) => c.label !== diagram.components[i]!.label).length;
-    if (changed) edit(next);
+    const before = allSheetViews(drawing);
+    const after = autoLabelSheets(before);
+    const changed = after.reduce(
+      (n, d, s) => n + d.components.filter((c, i) => c.label !== before[s]!.components[i]!.label).length,
+      0,
+    );
+    if (changed) history.edit(after.reduce((dr, d, s) => withSheet(dr, s, d), drawing));
     setMessage(changed ? null : 'Alle Kennzeichen sind schon aktuell.');
   };
 
   /** Klick auf eine Prüfmeldung: betroffenes Teil auswählen. */
   const pickIssue = (issue: Issue) => {
+    if (issue.sheet !== undefined && issue.sheet !== active) showSheet(drawing.sheets[issue.sheet]!.id);
     setSelection({ ...EMPTY_SELECTION, components: issue.components, connections: issue.connections });
   };
 
@@ -361,8 +445,15 @@ export function App() {
       if (t.closest('input, textarea, select, [contenteditable], dialog')) return;
       if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === 'z' || key === 'y')) {
         e.preventDefault();
-        if (key === 'y' || e.shiftKey) history.redo();
-        else history.undo();
+        if (key === 'y' || e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      // Strg+Bild auf/ab: voriges bzw. nächstes Blatt.
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'PageUp' || e.key === 'PageDown')) {
+        e.preventDefault();
+        const next = drawing.sheets[active + (e.key === 'PageUp' ? -1 : 1)];
+        if (next) showSheet(next.id);
         return;
       }
       if ((e.ctrlKey || e.metaKey) && key === 'a') {
@@ -466,8 +557,8 @@ export function App() {
           <IconButton icon={FileCog} label="Blatt und Schriftfeld" onClick={() => setSheetDialog({})} />
         </div>
         <div className="tool-group">
-          <IconButton icon={Undo2} label="Rückgängig" shortcut="Strg+Z" onClick={history.undo} disabled={!history.canUndo} />
-          <IconButton icon={Redo2} label="Wiederholen" shortcut="Strg+Y" onClick={history.redo} disabled={!history.canRedo} />
+          <IconButton icon={Undo2} label="Rückgängig" shortcut="Strg+Z" onClick={undo} disabled={!history.canUndo} />
+          <IconButton icon={Redo2} label="Wiederholen" shortcut="Strg+Y" onClick={redo} disabled={!history.canRedo} />
         </div>
         <div className="tool-group">
           <IconButton icon={Scissors} label="Ausschneiden" shortcut="Strg+X" disabled={!canCopy} onClick={() => toSystemClipboard(cut())} />
@@ -527,6 +618,7 @@ export function App() {
       <ExportDialog
         open={exportOpen}
         diagram={diagram}
+        sheetCount={drawing.sheets.length}
         onExport={(format, options) => void runExport(format, options)}
         onClose={() => setExportOpen(false)}
       />
@@ -536,7 +628,9 @@ export function App() {
         open={sheetDialog !== null}
         diagram={diagram}
         focus={sheetDialog?.focus}
-        onApply={(sheet, meta) => edit((d) => ({ ...d, sheet, meta }))}
+        onApply={(sheet, meta, name) =>
+          history.edit((dr) => renameSheet(withSheet(dr, active, { ...sheetView(dr, active), sheet, meta }), active, name))
+        }
         onClose={() => setSheetDialog(null)}
       />
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
@@ -588,62 +682,80 @@ export function App() {
       </aside>
 
       <main className="canvas">
-        <div
-          className="palette-resizer"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Breite der Bauteilliste"
-          data-tooltip="Ziehen ändert die Breite, Doppelklick setzt sie zurück"
-          data-tooltip-pos="below"
-          onPointerDown={startPaletteResize}
-          onDoubleClick={resetPaletteWidth}
-        />
-        <DiagramView
-          diagram={diagram}
-          selection={current}
-          onSelect={setSelection}
-          onMove={(target, delta) =>
-            edit((d) => moveAnnotations(moveComponents(d, target.components, delta), target.annotations, delta), 'move')
-          }
-          tool={tool}
-          onCreateAnnotation={createAnnotation}
-          onReshapeAnnotation={(id, changes) => edit((d) => updateAnnotation(d, id, changes), `shape:${id}`)}
-          onOpenProperties={setProperties}
-          onDropSymbol={(key, point) => {
-            const entry = palette.find((e) => e.key === key);
-            if (entry) add(entry, point);
-          }}
-          onEditTitleField={(field) => setSheetDialog({ focus: field })}
-          onConnect={(from, to, waypoints) => {
-            try {
-              const r = connect(diagram, from, to, lineKindFor(diagram, from, to), waypoints);
-              edit(r.diagram);
-              setSelection(selectConnection(r.connection.id));
-              setMessage(null);
-            } catch (err) {
-              if (!(err instanceof DiagramError)) throw err;
-              setMessage(err.message);
+        <div className="canvas-area">
+          <div
+            className="palette-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Breite der Bauteilliste"
+            data-tooltip="Ziehen ändert die Breite, Doppelklick setzt sie zurück"
+            data-tooltip-pos="below"
+            onPointerDown={startPaletteResize}
+            onDoubleClick={resetPaletteWidth}
+          />
+          <DiagramView
+            diagram={diagram}
+            selection={current}
+            onSelect={setSelection}
+            onMove={(target, delta) =>
+              edit((d) => moveAnnotations(moveComponents(d, target.components, delta), target.annotations, delta), 'move')
             }
-          }}
-          onConnectToLine={(from, lineId, path, point, waypoints) => {
-            try {
-              const split = splitConnection(diagram, lineId, path, point);
-              const to = { junctionId: split.junction.id };
-              const r = connect(split.diagram, from, to, lineKindFor(split.diagram, from, to), waypoints);
-              edit(r.diagram);
-              setSelection(selectConnection(r.connection.id));
-              setMessage(null);
-            } catch (err) {
-              if (!(err instanceof DiagramError)) throw err;
-              setMessage(err.message);
-            }
-          }}
-          onRouteChange={(id, waypoints) => edit((d) => updateConnection(d, id, { waypoints }), `route:${id}`)}
-          onMoveJunction={(id, position) => edit((d) => keepRoutes(d, moveJunction(d, id, position)), `junction:${id}`)}
-          onGestureEnd={history.seal}
+            tool={tool}
+            onCreateAnnotation={createAnnotation}
+            onReshapeAnnotation={(id, changes) => edit((d) => updateAnnotation(d, id, changes), `shape:${id}`)}
+            onOpenProperties={setProperties}
+            onDropSymbol={(key, point) => {
+              const entry = palette.find((e) => e.key === key);
+              if (entry) add(entry, point);
+            }}
+            onEditTitleField={(field) => setSheetDialog({ focus: field })}
+            onConnect={(from, to, waypoints) => {
+              try {
+                const r = connect(diagram, from, to, lineKindFor(diagram, from, to), waypoints);
+                edit(r.diagram);
+                setSelection(selectConnection(r.connection.id));
+                setMessage(null);
+              } catch (err) {
+                if (!(err instanceof DiagramError)) throw err;
+                setMessage(err.message);
+              }
+            }}
+            onConnectToLine={(from, lineId, path, point, waypoints) => {
+              try {
+                const split = splitConnection(diagram, lineId, path, point);
+                const to = { junctionId: split.junction.id };
+                const r = connect(split.diagram, from, to, lineKindFor(split.diagram, from, to), waypoints);
+                edit(r.diagram);
+                setSelection(selectConnection(r.connection.id));
+                setMessage(null);
+              } catch (err) {
+                if (!(err instanceof DiagramError)) throw err;
+                setMessage(err.message);
+              }
+            }}
+            onRouteChange={(id, waypoints) => edit((d) => updateConnection(d, id, { waypoints }), `route:${id}`)}
+            onMoveJunction={(id, position) => edit((d) => keepRoutes(d, moveJunction(d, id, position)), `junction:${id}`)}
+            onGestureEnd={history.seal}
+          />
+          {contextBar}
+          {checking && (
+            <CheckPanel
+              issues={issues}
+              sheetLabel={(i) => (drawing.sheets.length > 1 && i !== active ? sheetName(sheetView(drawing, i), i) : undefined)}
+              onPick={pickIssue}
+              onClose={() => setChecking(false)}
+            />
+          )}
+        </div>
+        <SheetTabs
+          sheets={drawing.sheets}
+          active={active}
+          onSelect={(i) => showSheet(drawing.sheets[i]!.id)}
+          onAdd={newSheet}
+          onRename={(i, name) => history.edit(renameSheet(drawing, i, name))}
+          onMove={(from, to) => history.edit(moveSheet(drawing, from, to))}
+          onAction={sheetAction}
         />
-        {contextBar}
-        {checking && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setChecking(false)} />}
       </main>
     </div>
   );

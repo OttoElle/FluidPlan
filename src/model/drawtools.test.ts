@@ -90,7 +90,7 @@ describe('Gruppen', () => {
 
   it('weist Gruppen mit unbekannten Teilen zurück', () => {
     const file = JSON.parse(serializeDiagram(base()));
-    file.diagram.groups = [{ id: 'g1', components: ['c1', 'c99'], connections: [], junctions: [], annotations: [] }];
+    file.drawing.sheets[0].groups = [{ id: 'g1', components: ['c1', 'c99'], connections: [], junctions: [], annotations: [] }];
     const r = parseDiagram(JSON.stringify(file));
     expect(r.ok).toBe(false);
   });
@@ -117,7 +117,10 @@ describe('Neue Grafikarten', () => {
   it('lädt Dateien der Version 4 ohne Gruppen', () => {
     const file = JSON.parse(serializeDiagram(base()));
     file.version = 4;
-    delete file.diagram.groups;
+    const { sheets, ...rest } = file.drawing;
+    const { id: _id, name: _name, groups: _groups, ...content } = sheets[0];
+    file.diagram = { ...rest, ...content };
+    delete file.drawing;
     const r = parseDiagram(JSON.stringify(file));
     expect(r.ok && r.diagram.groups).toEqual([]);
   });

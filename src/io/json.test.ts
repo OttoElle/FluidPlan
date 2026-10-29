@@ -12,6 +12,15 @@ function mutate(fn: (file: any) => void): string {
   return JSON.stringify(file);
 }
 
+/** Baut eine Datei im Format bis Version 5 nach (ein Schaltplan unter "diagram"). */
+function toV5(f: any, version: number): void {
+  const { sheets, ...rest } = f.drawing;
+  const { id: _id, name: _name, ...content } = sheets[0];
+  f.version = version;
+  f.diagram = { ...rest, ...content };
+  delete f.drawing;
+}
+
 function errorsOf(text: string): string[] {
   const r = parseDiagram(text);
   if (r.ok) throw new Error('Fehler erwartet, aber Datei wurde akzeptiert');
@@ -37,14 +46,14 @@ describe('JSON speichern und laden', () => {
   it('meldet fehlerhafte Grafik', () => {
     const errors = errorsOf(
       mutate((f) => {
-        f.diagram.annotations = [
+        f.drawing.sheets[0].annotations = [
           { id: 'a1', kind: 'rect', position: { x: 0, y: 0 }, width: 0, height: 10, style: 'solid' },
           { id: 'a1', kind: 'kreis' },
         ];
       }),
     );
-    expect(errors).toContain('diagram.annotations[0].width: positive Zahl erwartet');
-    expect(errors).toContain('diagram.annotations[1].kind: einer von "text", "line", "rect", "circle", "ellipse", "polyline" erwartet');
+    expect(errors).toContain('drawing.sheets[0].annotations[0].width: positive Zahl erwartet');
+    expect(errors).toContain('drawing.sheets[0].annotations[1].kind: einer von "text", "line", "rect", "circle", "ellipse", "polyline" erwartet');
   });
 
   it('schreibt Format und Version in die Datei', () => {
@@ -65,21 +74,21 @@ describe('JSON speichern und laden', () => {
   it('meldet Strukturfehler mit Pfad', () => {
     const errors = errorsOf(
       mutate((f) => {
-        f.diagram.components[0].rotation = 45;
-        f.diagram.connections[1].from = 'c1';
+        f.drawing.sheets[0].components[0].rotation = 45;
+        f.drawing.sheets[0].connections[1].from = 'c1';
       }),
     );
-    expect(errors).toContain('diagram.components[0].rotation: einer von 0, 90, 180, 270 erwartet');
-    expect(errors).toContain('diagram.connections[1].from: Objekt erwartet');
+    expect(errors).toContain('drawing.sheets[0].components[0].rotation: einer von 0, 90, 180, 270 erwartet');
+    expect(errors).toContain('drawing.sheets[0].connections[1].from: Objekt erwartet');
   });
 
   it('meldet unbekannte Typen, doppelte IDs und ungültige Verweise', () => {
     const errors = errorsOf(
       mutate((f) => {
-        f.diagram.components[1].id = f.diagram.components[0].id;
-        f.diagram.components[2].type = 'gibt.es.nicht';
-        f.diagram.connections[0].to.portId = 'Z';
-        f.diagram.connections[1].from.componentId = 'c99';
+        f.drawing.sheets[0].components[1].id = f.drawing.sheets[0].components[0].id;
+        f.drawing.sheets[0].components[2].type = 'gibt.es.nicht';
+        f.drawing.sheets[0].connections[0].to.portId = 'Z';
+        f.drawing.sheets[0].connections[1].from.componentId = 'c99';
       }),
     );
     expect(errors).toEqual(
@@ -101,7 +110,7 @@ describe('JSON speichern und laden', () => {
 describe('Migration', () => {
   it('ergänzt bei Version-1-Dateien ein passendes Blatt', () => {
     const v1 = mutate((f) => {
-      f.version = 1;
+      toV5(f, 1);
       delete f.diagram.sheet;
     });
     const r = parseDiagram(v1);
@@ -110,7 +119,7 @@ describe('Migration', () => {
 
   it('wählt ein größeres Blatt, wenn die Bauteile sonst nicht passen', () => {
     const v1 = mutate((f) => {
-      f.version = 1;
+      toV5(f, 1);
       delete f.diagram.sheet;
       f.diagram.components[0].position = { x: 1500, y: 900 };
     });
@@ -120,7 +129,7 @@ describe('Migration', () => {
 
   it('ergänzt bei Version-3-Dateien Grafikliste und Schriftfeld-Angaben', () => {
     const v3 = mutate((f) => {
-      f.version = 3;
+      toV5(f, 3);
       delete f.diagram.annotations;
       f.diagram.meta = { title: 'Alt', author: 'Otto', created: 'x', modified: 'y' };
     });
@@ -132,6 +141,6 @@ describe('Migration', () => {
   });
 
   it('meldet ein ungültiges Blatt', () => {
-    expect(errorsOf(mutate((f) => (f.diagram.sheet.format = 'B5')))[0]).toMatch(/diagram.sheet.format/);
+    expect(errorsOf(mutate((f) => (f.drawing.sheets[0].sheet.format = 'B5')))[0]).toMatch(/drawing.sheets\[0\].sheet.format/);
   });
 });

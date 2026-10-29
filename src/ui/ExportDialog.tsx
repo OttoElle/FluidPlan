@@ -13,11 +13,14 @@ const DPI_CHOICES = [150, 300, 600];
 export function ExportDialog({
   open,
   diagram,
+  sheetCount,
   onExport,
   onClose,
 }: {
   open: boolean;
+  /** Das angezeigte Blatt. */
   diagram: Diagram;
+  sheetCount: number;
   onExport: (format: ExportFormat, options: ExportOptions) => void;
   onClose: () => void;
 }) {
@@ -47,6 +50,29 @@ export function ExportDialog({
             </label>
           ))}
         </fieldset>
+        {sheetCount > 1 && (
+          <fieldset className="column">
+            <legend>Blätter</legend>
+            <label className="check">
+              <input
+                type="radio"
+                name="sheets"
+                checked={options.sheets === 'all'}
+                onChange={() => setOptions({ ...options, sheets: 'all' })}
+              />
+              Alle {sheetCount} Blätter{format === 'pdf' ? ' (eine Seite je Blatt)' : ' (eine Datei je Blatt)'}
+            </label>
+            <label className="check">
+              <input
+                type="radio"
+                name="sheets"
+                checked={options.sheets === 'current'}
+                onChange={() => setOptions({ ...options, sheets: 'current' })}
+              />
+              Nur dieses Blatt ({diagram.page?.name || `Blatt ${diagram.page?.number ?? 1}`})
+            </label>
+          </fieldset>
+        )}
         {format === 'png' && (
           <label>
             Auflösung

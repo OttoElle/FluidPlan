@@ -22,7 +22,7 @@ describe('Zeichenblatt', () => {
     const block = titleBlock(sheet);
     const cells = titleCells(sheet);
     expect(cells.map((c) => c.field)).toEqual([
-      'title', 'drawingNumber', 'organization', 'author', 'checkedBy', 'date', 'format', 'revision',
+      'title', 'drawingNumber', 'organization', 'author', 'checkedBy', 'date', 'format', 'revision', 'sheet',
     ]);
     expect(cells.reduce((sum, c) => sum + c.width * c.height, 0)).toBe(block.width * block.height);
     for (const c of cells) {

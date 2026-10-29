@@ -72,7 +72,7 @@ export function smallestSheetFor(right: number, bottom: number): Sheet {
 }
 
 /** Feld im Schriftfeld: bearbeitbare Angaben aus `meta` oder automatisch gefüllte. */
-export type TitleField = keyof Omit<DiagramMeta, 'created' | 'modified'> | 'date' | 'format';
+export type TitleField = keyof Omit<DiagramMeta, 'created' | 'modified'> | 'date' | 'format' | 'sheet';
 
 export interface TitleCell extends Rect {
   field: TitleField;
@@ -81,16 +81,21 @@ export interface TitleCell extends Rect {
   big?: boolean;
 }
 
-/** Aufteilung des Schriftfelds in mm: Spalten 0 | 55 | 95 | 140, Zeilen 11 + 8 + 8. */
+/**
+ * Aufteilung des Schriftfelds in mm: Spalten 0 | 55 | 95 | 140, Zeilen 11 + 8 + 8;
+ * die untere Zeile teilt sich in 0 | 30 | 55 | 95 | 140. „Blatt“ zeigt die
+ * Blattbenennung, die Überschrift dazu die Blattnummer („Blatt 2 von 3“).
+ */
 const TITLE_CELLS_MM: readonly (Omit<TitleCell, 'x' | 'y' | 'width' | 'height'> & { mm: [number, number, number, number] })[] = [
   { field: 'title', caption: 'Titel', big: true, mm: [0, 0, 95, 11] },
   { field: 'drawingNumber', caption: 'Zeichnungsnummer', mm: [95, 0, 45, 11] },
   { field: 'organization', caption: 'Firma / Abteilung', mm: [0, 11, 55, 8] },
   { field: 'author', caption: 'Erstellt von', mm: [55, 11, 40, 8] },
   { field: 'checkedBy', caption: 'Geprüft von', mm: [95, 11, 45, 8] },
-  { field: 'date', caption: 'Datum', mm: [0, 19, 55, 8] },
-  { field: 'format', caption: 'Format', mm: [55, 19, 40, 8] },
-  { field: 'revision', caption: 'Änderungsstand', mm: [95, 19, 45, 8] },
+  { field: 'date', caption: 'Datum', mm: [0, 19, 30, 8] },
+  { field: 'format', caption: 'Format', mm: [30, 19, 25, 8] },
+  { field: 'revision', caption: 'Änderungsstand', mm: [55, 19, 40, 8] },
+  { field: 'sheet', caption: 'Blatt', mm: [95, 19, 45, 8] },
 ];
 
 /** Felder des Schriftfelds mit ihrer Lage auf dem Blatt. */

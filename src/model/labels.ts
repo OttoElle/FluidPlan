@@ -131,24 +131,52 @@ export function circuitsOf(diagram: Diagram): Map<string, number> {
   return circuit;
 }
 
-/** Vergibt alle Kennzeichen neu. Bauteile ohne Kennzeichenpflicht bleiben unverändert. */
-export function autoLabel(diagram: Diagram): Diagram {
+/**
+ * Zählerstand der Kennzeichnung über mehrere Blätter: Schaltkreise und laufende
+ * Nummern zählen auf dem nächsten Blatt weiter, damit jedes Kennzeichen in der
+ * ganzen Zeichnung nur einmal vorkommt.
+ */
+export interface LabelCounter {
+  /** Schaltkreise (Antriebe) auf den vorigen Blättern. */
+  circuits: number;
+  /** Zuletzt vergebene Nummer je Kreis und Kennbuchstabe, z. B. "0P" → 2. */
+  numbers: Map<string, number>;
+}
+
+export const newLabelCounter = (): LabelCounter => ({ circuits: 0, numbers: new Map() });
+
+/**
+ * Vergibt alle Kennzeichen neu. Bauteile ohne Kennzeichenpflicht bleiben unverändert.
+ * Mit `counter` wird ab dem Stand der vorigen Blätter weitergezählt und der Zähler fortgeschrieben.
+ */
+export function autoLabel(diagram: Diagram, counter: LabelCounter = newLabelCounter()): Diagram {
   const circuit = circuitsOf(diagram);
+  const offset = counter.circuits;
   const groups = new Map<string, ComponentInstance[]>();
   for (const c of diagram.components) {
     if (!needsLabel(c)) continue;
-    const key = `${circuit.get(c.id)}${componentCode(c.type)}`;
+    const n = circuit.get(c.id)!;
+    const key = `${n === 0 ? 0 : n + offset}${componentCode(c.type)}`;
     groups.set(key, [...(groups.get(key) ?? []), c]);
   }
   const labels = new Map<string, string>();
   for (const [key, members] of groups) {
+    const start = counter.numbers.get(key) ?? 0;
     members
       .map((c) => ({ c, p: center(c) }))
       .sort((a, b) => a.p.y - b.p.y || a.p.x - b.p.x)
-      .forEach(({ c }, i) => labels.set(c.id, `${key}${i + 1}`));
+      .forEach(({ c }, i) => labels.set(c.id, `${key}${start + i + 1}`));
+    counter.numbers.set(key, start + members.length);
   }
+  counter.circuits += diagram.components.filter((c) => componentCode(c.type) === 'A').length;
   return {
     ...diagram,
     components: diagram.components.map((c) => (labels.has(c.id) ? { ...c, label: labels.get(c.id)! } : c)),
   };
+}
+
+/** Kennzeichnet alle Blätter der Reihe nach mit durchlaufenden Nummern. */
+export function autoLabelSheets(diagrams: Diagram[]): Diagram[] {
+  const counter = newLabelCounter();
+  return diagrams.map((d) => autoLabel(d, counter));
 }

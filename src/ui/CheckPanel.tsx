@@ -8,10 +8,13 @@ import { IconButton } from './IconButton.tsx';
  */
 export function CheckPanel({
   issues,
+  sheetLabel,
   onPick,
   onClose,
 }: {
   issues: Issue[];
+  /** Blattangabe für Meldungen, die nicht das angezeigte Blatt betreffen. */
+  sheetLabel?: (sheet: number) => string | undefined;
   onPick: (issue: Issue) => void;
   onClose: () => void;
 }) {
@@ -32,7 +35,12 @@ export function CheckPanel({
             <li key={i}>
               <button className={issue.severity} onClick={() => onPick(issue)}>
                 <span className="badge">{issue.severity === 'error' ? 'Fehler' : 'Hinweis'}</span>
-                {issue.message}
+                <span>
+                  {issue.sheet !== undefined && sheetLabel?.(issue.sheet) && (
+                    <span className="sheet-ref">{sheetLabel(issue.sheet)}: </span>
+                  )}
+                  {issue.message}
+                </span>
               </button>
             </li>
           ))}

@@ -269,7 +269,11 @@ export interface Group {
   annotations: string[];
 }
 
-/** Ein kompletter Schaltplan. */
+/**
+ * Ein Schaltplan auf einem Blatt. Alle Bearbeitungsfunktionen arbeiten auf
+ * diesem Typ; bei mehreren Blättern ist es die Sicht auf eines davon
+ * (siehe drawing.ts), mit Medium und Schriftfeld der ganzen Zeichnung.
+ */
 export interface Diagram {
   domain: Domain;
   meta: DiagramMeta;
@@ -279,4 +283,36 @@ export interface Diagram {
   junctions: Junction[];
   annotations: Annotation[];
   groups: Group[];
+  /** Nur in der Sicht auf ein Blatt einer Zeichnung: Name und Nummer fürs Schriftfeld. */
+  page?: PageInfo;
+}
+
+/** Lage eines Blatts in der Zeichnung, z. B. „Blatt 2 von 3“. */
+export interface PageInfo {
+  name: string;
+  /** Ab 1 gezählt. */
+  number: number;
+  count: number;
+}
+
+/** Inhalt eines Blatts; Medium und Schriftfeld-Angaben gelten für die ganze Zeichnung. */
+export type SheetContent = Pick<Diagram, 'sheet' | 'components' | 'connections' | 'junctions' | 'annotations' | 'groups'>;
+
+/** Ein Blatt der Zeichnung mit eigenem Format und eigenem Inhalt. */
+export interface DrawingSheet extends SheetContent {
+  /** Eindeutig innerhalb der Zeichnung, z. B. "s2". */
+  id: string;
+  /** Blattbenennung, erscheint im Schriftfeld. */
+  name: string;
+}
+
+/**
+ * Eine Zeichnung (= eine Datei) mit einem oder mehreren Blättern. Bauteile
+ * gehören immer zu genau einem Blatt; Leitungen verbinden nur Bauteile
+ * desselben Blatts.
+ */
+export interface Drawing {
+  domain: Domain;
+  meta: DiagramMeta;
+  sheets: DrawingSheet[];
 }
