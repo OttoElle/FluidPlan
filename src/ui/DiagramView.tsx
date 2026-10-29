@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { endpointPosition, sameEndpoint, transformLocalPoint } from '../model/diagram.ts';
 import { definitionOf } from '../model/library.ts';
 import {
@@ -23,26 +23,61 @@ import {
   routeAll,
 } from '../model/routing.ts';
 import { EMPTY_SELECTION, toggle, union, type Selection } from '../model/selection.ts';
+import { expandGroups } from '../model/groups.ts';
+import { DEFAULT_SNAP, FINE, snapPoint as snapToTargets, snapTargets, type SnapKind, type SnapOptions, type SnapTargets } from '../model/snap.ts';
 import type { Annotation, ComponentInstance, Diagram, Endpoint, LineKind, Point } from '../model/types.ts';
 import { ComponentSymbol, hasSymbol } from './symbols.tsx';
 import { IconButton } from './IconButton.tsx';
 import type { PropertiesTarget } from './properties/PropertiesDialog.tsx';
-import { Maximize, ZoomIn, ZoomOut } from 'lucide-react';
+import { Grid3x3, Magnet, Maximize, Plug, Ruler, Spline, ZoomIn, ZoomOut } from 'lucide-react';
+import { Rulers } from './Rulers.tsx';
 
 export type { Selection };
 
 /** Zeichenwerkzeug für freie Grafik; `null` = Auswählen. */
-export type AnnotationTool = 'text' | 'line' | 'rect';
+export type AnnotationTool = 'text' | 'line' | 'rect' | 'circle' | 'ellipse' | 'polyline';
+
+/** Werkzeuge, deren Form durch Aufziehen entsteht. */
+type DragTool = 'line' | 'rect' | 'circle' | 'ellipse';
 
 /** Was beim Verschieben mitwandert. */
 export type MoveTarget = Pick<Selection, 'components' | 'annotations'>;
 
-/** Anfasser einer Linie (Anfang, Ende) bzw. eines Rechtecks (Ecken). */
-type Handle = 'from' | 'to' | 'nw' | 'ne' | 'sw' | 'se';
+/**
+ * Anfasser einer Linie (Anfang, Ende), eines Rechtecks bzw. einer Ellipse (Ecken des
+ * Umrisses), eines Kreises (Radius) oder eines Linienzugs (Nummer des Punkts).
+ */
+type Handle = 'from' | 'to' | 'nw' | 'ne' | 'sw' | 'se' | 'radius' | number;
 
-/** Größe von Linie und Rechteck, wenn nur geklickt statt gezogen wird. */
+/** Größe der Formen, wenn nur geklickt statt gezogen wird. */
 const DEFAULT_LINE = 100;
 const DEFAULT_RECT = { width: 200, height: 120 };
+const DEFAULT_RADIUS = 40;
+const DEFAULT_ELLIPSE = { rx: 80, ry: 50 };
+
+/** Fangradius in Bildschirmpixeln. */
+const SNAP_RADIUS_PX = 8;
+
+/** Ansichtseinstellungen, die der Browser sich merkt (nicht Teil der Datei). */
+interface ViewSettings {
+  snap: SnapOptions;
+  grid: boolean;
+  rulers: boolean;
+}
+const VIEW_SETTINGS_KEY = 'fluidplan.view';
+const DEFAULT_VIEW_SETTINGS: ViewSettings = { snap: DEFAULT_SNAP, grid: true, rulers: false };
+
+function loadViewSettings(): ViewSettings {
+  try {
+    const raw = JSON.parse(localStorage.getItem(VIEW_SETTINGS_KEY) ?? 'null');
+    if (raw && typeof raw === 'object') {
+      return { ...DEFAULT_VIEW_SETTINGS, ...raw, snap: { ...DEFAULT_SNAP, ...raw.snap } };
+    }
+  } catch {
+    // Kein Speicher (z. B. privates Fenster): Standard verwenden.
+  }
+  return DEFAULT_VIEW_SETTINGS;
+}
 
 const GRID = 10;
 /** Datentyp beim Ziehen eines Symbols aus der Bauteilliste; Inhalt ist der Schlüssel des Eintrags. */
@@ -102,8 +137,17 @@ interface View {
 
 type Drag =
   | { kind: 'move'; target: MoveTarget; start: Point; moved: Point }
-  | { kind: 'create'; tool: 'line' | 'rect'; start: Point; end: Point }
-  | { kind: 'handle'; annotation: Annotation; handle: Handle; start: Point; last: Point }
+  | { kind: 'create'; tool: DragTool; start: Point; end: Point }
+  | {
+      kind: 'handle';
+      annotation: Annotation;
+      handle: Handle;
+      /** Lage des Anfassers zu Beginn und Mauszeiger zu Beginn. */
+      origin: Point;
+      start: Point;
+      last: Point;
+      targets: SnapTargets;
+    }
   | { kind: 'band'; start: Point; end: Point; additive: boolean; moved: boolean }
   | { kind: 'pan'; startX: number; startY: number; origin: View; moved: boolean }
   | { kind: 'segment'; id: string; index: number; path: Point[]; start: Point; offset: number }
@@ -146,7 +190,27 @@ export function DiagramView({
   const [hoverPort, setHoverPort] = useState<Endpoint | null>(null);
   const [band, setBand] = useState<{ start: Point; end: Point } | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
-  const [creating, setCreating] = useState<{ tool: 'line' | 'rect'; start: Point; end: Point } | null>(null);
+  const [creating, setCreating] = useState<{ tool: DragTool; start: Point; end: Point } | null>(null);
+  /** Linienzug, der gerade Punkt für Punkt gezeichnet wird. */
+  const [poly, setPoly] = useState<{ points: Point[]; cursor: Point } | null>(null);
+  /** Wo der nächste Punkt einrasten würde (Anzeige beim Zeichnen). */
+  const [snapMark, setSnapMark] = useState<{ point: Point; kind: SnapKind | null } | null>(null);
+  const [settings, setSettings] = useState<ViewSettings>(loadViewSettings);
+
+  const changeSettings = (next: ViewSettings) => {
+    setSettings(next);
+    try {
+      localStorage.setItem(VIEW_SETTINGS_KEY, JSON.stringify(next));
+    } catch {
+      // Nicht speicherbar: gilt dann nur für diese Sitzung.
+    }
+  };
+
+  // Werkzeugwechsel verwirft einen angefangenen Linienzug.
+  useEffect(() => {
+    setPoly(null);
+    setSnapMark(null);
+  }, [tool]);
 
   // Leertaste gedrückt halten: Ziehen mit der linken Maustaste verschiebt die Ansicht.
   useEffect(() => {
@@ -255,7 +319,43 @@ export function DiagramView({
   const snapPoint = (p: Point): Point => ({ x: snap(p.x), y: snap(p.y) });
 
   const obstacles = obstaclesOf(diagram);
-  const paths = routeAll(diagram);
+  const paths = useMemo(() => routeAll(diagram), [diagram]);
+  const targets = useMemo(() => (tool ? snapTargets(diagram, paths) : null), [tool, diagram, paths]);
+
+  /** Fängt einen Punkt beim Zeichnen bzw. Ändern freier Grafik (siehe model/snap.ts). */
+  const snapFree = (p: Point, t: SnapTargets | null = targets) =>
+    snapToTargets(p, t ?? { connectors: [], endpoints: [] }, settings.snap, SNAP_RADIUS_PX / (view?.scale ?? 1));
+
+  /** Fangpunkte beim Zeichnen eines Linienzugs: auch seine eigenen Punkte (zum Schließen). */
+  const polyTargets = (points: Point[]): SnapTargets | null =>
+    targets && { ...targets, endpoints: [...points, ...targets.endpoints] };
+
+  const finishPoly = (points: Point[], closed: boolean) => {
+    // Doppelklick setzt denselben Punkt zweimal.
+    const clean = points.filter((p, i) => i === 0 || p.x !== points[i - 1]!.x || p.y !== points[i - 1]!.y);
+    setPoly(null);
+    if (clean.length >= 2) onCreateAnnotation?.({ kind: 'polyline', points: clean, closed: closed && clean.length >= 3, style: 'solid' });
+  };
+
+  // Linienzug: Enter beendet, Esc bricht ab, Rücktaste nimmt den letzten Punkt zurück.
+  useEffect(() => {
+    if (!poly) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+      if (e.key === 'Enter') finishPoly(poly.points, false);
+      else if (e.key === 'Escape') {
+        e.stopImmediatePropagation();
+        setPoly(null);
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setPoly(poly.points.length > 1 ? { ...poly, points: poly.points.slice(0, -1) } : null);
+      } else return;
+    };
+    // Vor dem Fenster-Listener der App, damit Esc nicht auch das Werkzeug abwählt.
+    window.addEventListener('keydown', onKey, { capture: true });
+    return () => window.removeEventListener('keydown', onKey, { capture: true });
+  });
   const dots = branchDots(diagram.connections, paths);
   const jumps = sheet.lineJumps ? crossings(paths) : new Map<string, Point[]>();
 
@@ -286,6 +386,9 @@ export function DiagramView({
   };
 
   const samePort = sameEndpoint;
+
+  /** Ein Teil einer Gruppe wählt die ganze Gruppe. */
+  const pick = (s: Selection) => expandGroups(diagram, s);
 
   /** Knickpunkte der fertigen Leitung aus den beim Zeichnen geklickten Punkten. */
   const draftWaypoints = (d: Draft, end: Point, endDir?: Point): Point[] => {
@@ -332,10 +435,13 @@ export function DiagramView({
   const percent = view ? Math.round((view.scale / (PX_PER_MM * MM_PER_UNIT)) * 100) : 100;
   // Rasterpunkte sollen auf dem Bildschirm etwa 1 px groß bleiben.
   const dot = view ? Math.min(1.5, 1 / view.scale) : 0.5;
-  const showGrid = !view || view.scale * GRID >= 4;
+  const showGrid = settings.grid && (!view || view.scale * GRID >= 4);
+  const toggleSnap = (key: keyof SnapOptions) =>
+    changeSettings({ ...settings, snap: { ...settings.snap, [key]: !settings.snap[key] } });
 
   return (
-    <div className="diagram-wrap">
+    <div className={settings.rulers ? 'diagram-wrap with-rulers' : 'diagram-wrap'}>
+      {settings.rulers && view && size && <Rulers view={view} size={size} />}
       <svg
         ref={svgRef}
         className={panning ? 'diagram panning' : spaceDown ? 'diagram pan-ready' : tool ? 'diagram placing' : 'diagram'}
@@ -355,7 +461,16 @@ export function DiagramView({
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
           if (e.button === 0 && !spaceDown && tool) {
-            const p = snapPoint(toDiagram(e));
+            if (tool === 'polyline') {
+              const points = poly?.points ?? [];
+              const p = snapFree(toDiagram(e), polyTargets(points)).point;
+              const first = points[0];
+              // Klick auf den ersten Punkt schließt den Linienzug.
+              if (first && points.length >= 3 && p.x === first.x && p.y === first.y) finishPoly(points, true);
+              else setPoly({ points: [...points, p], cursor: p });
+              return;
+            }
+            const p = snapFree(toDiagram(e)).point;
             if (tool === 'text') {
               onCreateAnnotation?.({ kind: 'text', position: p, text: 'Text', size: 14 });
               return;
@@ -373,10 +488,24 @@ export function DiagramView({
           drag.current = { kind: 'pan', startX: e.clientX, startY: e.clientY, origin: view, moved: false };
           setPanning(true);
         }}
-        onContextMenu={(e) => draft && e.preventDefault()}
+        onContextMenu={(e) => {
+          if (draft) e.preventDefault();
+          // Rechtsklick beendet den Linienzug.
+          if (poly) {
+            e.preventDefault();
+            finishPoly(poly.points, false);
+          }
+        }}
+        onDoubleClick={() => poly && finishPoly(poly.points, false)}
+        onPointerLeave={() => setSnapMark(null)}
         onPointerMove={(e) => {
           if (draft) setDraft({ ...draft, cursor: toDiagram(e) });
           const d = drag.current;
+          if (tool && (!d || d.kind === 'create')) {
+            const mark = snapFree(toDiagram(e), poly ? polyTargets(poly.points) : targets);
+            setSnapMark(mark);
+            if (poly) setPoly({ ...poly, cursor: mark.point });
+          }
           if (!d) return;
           if (d.kind === 'segment') {
             const p = toDiagram(e);
@@ -396,20 +525,25 @@ export function DiagramView({
             }
           } else if (d.kind === 'move') {
             const p = toDiagram(e);
-            const total = { x: snap(p.x - d.start.x), y: snap(p.y - d.start.y) };
+            // Bauteile bleiben im Raster; reine Grafik nur, wenn das Raster-Fangen an ist.
+            const step = d.target.components.length > 0 || settings.snap.grid ? GRID : FINE;
+            const round = (v: number) => Math.round(v / step) * step;
+            const total = { x: round(p.x - d.start.x), y: round(p.y - d.start.y) };
             if (total.x !== d.moved.x || total.y !== d.moved.y) {
               onMove(d.target, { x: total.x - d.moved.x, y: total.y - d.moved.y });
               d.moved = total;
             }
           } else if (d.kind === 'create') {
-            d.end = snapPoint(toDiagram(e));
+            d.end = snapFree(toDiagram(e)).point;
             setCreating({ tool: d.tool, start: d.start, end: d.end });
           } else if (d.kind === 'handle') {
             const p = toDiagram(e);
-            const delta = { x: snap(p.x - d.start.x), y: snap(p.y - d.start.y) };
-            if (delta.x !== d.last.x || delta.y !== d.last.y) {
-              d.last = delta;
-              onReshapeAnnotation?.(d.annotation.id, reshape(d.annotation, d.handle, delta));
+            const mark = snapFree({ x: d.origin.x + p.x - d.start.x, y: d.origin.y + p.y - d.start.y }, d.targets);
+            setSnapMark(mark);
+            const to = mark.point;
+            if (to.x !== d.last.x || to.y !== d.last.y) {
+              d.last = to;
+              onReshapeAnnotation?.(d.annotation.id, reshape(d.annotation, d.handle, to));
             }
           } else if (d.kind === 'band') {
             d.end = toDiagram(e);
@@ -443,9 +577,10 @@ export function DiagramView({
           }
           setBand(null);
           setCreating(null);
+          if (d?.kind === 'handle') setSnapMark(null);
           if (d?.kind === 'create') onCreateAnnotation?.(createdShape(d.tool, d.start, d.end));
           if (d?.kind === 'band') {
-            const picked = d.moved ? inBand(d.start, d.end) : EMPTY_SELECTION;
+            const picked = d.moved ? pick(inBand(d.start, d.end)) : EMPTY_SELECTION;
             // Ein Klick ohne Ziehen auf freie Fläche hebt die Auswahl auf (außer mit Umschalt).
             if (d.additive) onSelect(union(selection, picked));
             else onSelect(picked);
@@ -482,8 +617,9 @@ export function DiagramView({
               onPointerDown={(e) => {
                 if (e.button !== 0 || draft || tool) return;
                 e.stopPropagation();
+                const own = pick({ ...EMPTY_SELECTION, annotations: [a.id] });
                 if (e.shiftKey || e.ctrlKey || e.metaKey) {
-                  onSelect(toggle(selection, { ...EMPTY_SELECTION, annotations: [a.id] }));
+                  onSelect(toggle(selection, own));
                   return;
                 }
                 if (isDoubleClick(`a:${a.id}`, e)) {
@@ -492,17 +628,23 @@ export function DiagramView({
                   return;
                 }
                 e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
-                const target = selected
-                  ? { components: selection.components, annotations: selection.annotations }
-                  : { components: [], annotations: [a.id] };
-                if (!selected) onSelect({ ...EMPTY_SELECTION, annotations: [a.id] });
+                const target = selected ? selection : own;
+                if (!selected) onSelect(own);
                 drag.current = { kind: 'move', target, start: toDiagram(e), moved: { x: 0, y: 0 } };
               }}
-              onHandlePointerDown={(handle, e) => {
-                if (e.button !== 0) return;
+              onHandlePointerDown={(handle, origin, e) => {
+                if (e.button !== 0 || tool) return;
                 e.stopPropagation();
                 (e.currentTarget as SVGElement).ownerSVGElement?.setPointerCapture(e.pointerId);
-                drag.current = { kind: 'handle', annotation: a, handle, start: toDiagram(e), last: { x: 0, y: 0 } };
+                drag.current = {
+                  kind: 'handle',
+                  annotation: a,
+                  handle,
+                  origin,
+                  start: toDiagram(e),
+                  last: origin,
+                  targets: snapTargets(diagram, paths, a.id),
+                };
               }}
             />
           );
@@ -531,14 +673,15 @@ export function DiagramView({
                         if (draft && !drag.current) lineClicked(l.id, a, b, toDiagram(e));
                       }}
                       onPointerDown={(e) => {
-                        if (e.button !== 0) return;
+                        if (e.button !== 0 || tool) return;
                         e.stopPropagation();
                         if (draft) {
                           lineClicked(l.id, a, b, toDiagram(e));
                           return;
                         }
+                        const own = pick({ ...EMPTY_SELECTION, connections: [l.id] });
                         if (e.shiftKey || e.ctrlKey || e.metaKey) {
-                          onSelect(toggle(selection, { ...EMPTY_SELECTION, connections: [l.id] }));
+                          onSelect(toggle(selection, own));
                           return;
                         }
                         if (isDoubleClick(`l:${l.id}`, e)) {
@@ -547,7 +690,7 @@ export function DiagramView({
                           return;
                         }
                         e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
-                        onSelect({ ...EMPTY_SELECTION, connections: [l.id] });
+                        onSelect(own);
                         drag.current = { kind: 'segment', id: l.id, index: i, path, start: toDiagram(e), offset: 0 };
                       }}
                     />
@@ -567,18 +710,19 @@ export function DiagramView({
               key={j.id}
               className={selected ? 'junction-node selected' : 'junction-node'}
               onPointerDown={(e) => {
-                if (e.button !== 0) return;
+                if (e.button !== 0 || tool) return;
                 e.stopPropagation();
                 if (draft) {
                   portClicked(ref);
                   return;
                 }
+                const own = pick({ ...EMPTY_SELECTION, junctions: [j.id] });
                 if (e.shiftKey || e.ctrlKey || e.metaKey) {
-                  onSelect(toggle(selection, { ...EMPTY_SELECTION, junctions: [j.id] }));
+                  onSelect(toggle(selection, own));
                   return;
                 }
                 e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
-                onSelect({ ...EMPTY_SELECTION, junctions: [j.id] });
+                onSelect(own);
                 drag.current = { kind: 'junction', id: j.id, start: toDiagram(e), origin: j.position, last: j.position };
               }}
               onPointerUp={() => draft && !samePort(draft.from, ref) && portClicked(ref)}
@@ -599,10 +743,11 @@ export function DiagramView({
             selected={selection.components.includes(c.id)}
             drawing={draft !== null}
             onPointerDown={(e) => {
-              if (e.button !== 0 || draft) return; // mittlere Taste: Ansicht verschieben
+              if (e.button !== 0 || draft || tool) return; // mittlere Taste: Ansicht verschieben
               e.stopPropagation();
+              const own = pick({ ...EMPTY_SELECTION, components: [c.id] });
               if (e.shiftKey || e.ctrlKey || e.metaKey) {
-                onSelect(toggle(selection, { ...EMPTY_SELECTION, components: [c.id] }));
+                onSelect(toggle(selection, own));
                 return;
               }
               if (isDoubleClick(`c:${c.id}`, e)) {
@@ -611,15 +756,14 @@ export function DiagramView({
                 return;
               }
               (e.currentTarget.ownerSVGElement ?? e.currentTarget).setPointerCapture?.(e.pointerId);
-              // Ziehen an einem ausgewählten Bauteil verschiebt die ganze Auswahl.
-              const target = selection.components.includes(c.id)
-                ? { components: selection.components, annotations: selection.annotations }
-                : { components: [c.id], annotations: [] };
-              if (!selection.components.includes(c.id)) onSelect({ ...EMPTY_SELECTION, components: [c.id] });
+              // Ziehen an einem ausgewählten Bauteil verschiebt die ganze Auswahl (samt Gruppe).
+              const target = selection.components.includes(c.id) ? selection : own;
+              if (!selection.components.includes(c.id)) onSelect(own);
               drag.current = { kind: 'move', target, start: toDiagram(e), moved: { x: 0, y: 0 } };
             }}
             onPortPointerDown={(portId, e) => {
-              if (e.button !== 0) return;
+              // Beim Zeichnen freier Grafik fängt der Klick nur den Anschluss.
+              if (e.button !== 0 || tool) return;
               e.stopPropagation();
               portClicked({ componentId: c.id, portId });
             }}
@@ -634,18 +778,26 @@ export function DiagramView({
         ))}
 
         {draft && <polyline className="line draft" points={toPoints(draftPath(draft))} />}
-        {creating &&
-          (creating.tool === 'line' ? (
-            <line
-              className="note-line creating"
-              x1={creating.start.x}
-              y1={creating.start.y}
-              x2={creating.end.x}
-              y2={creating.end.y}
-            />
-          ) : (
-            <rect className="note-line creating" {...rectProps(rectFromCorners(creating.start, creating.end))} />
-          ))}
+        {creating && (
+          <AnnotationShape
+            annotation={{ id: 'creating', ...createdShape(creating.tool, creating.start, creating.end, false) } as Annotation}
+            className="creating"
+          />
+        )}
+        {poly && (
+          <polyline className="note-line creating" points={toPoints([...poly.points, poly.cursor])} />
+        )}
+        <GroupFrames diagram={diagram} selection={selection} paths={paths} />
+        {snapMark && snapMark.kind !== 'grid' && snapMark.kind !== null && (
+          <circle
+            className={`snap-mark ${snapMark.kind}`}
+            cx={snapMark.point.x}
+            cy={snapMark.point.y}
+            r={5 / (view?.scale ?? 1)}
+          >
+            <title>{snapMark.kind === 'connector' ? 'Anschluss' : 'Endpunkt'}</title>
+          </circle>
+        )}
         {band && (
           <rect
             className="band"
@@ -656,6 +808,45 @@ export function DiagramView({
           />
         )}
       </svg>
+
+      <div className="canvas-controls">
+        <IconButton
+          icon={Grid3x3}
+          label="Raster anzeigen"
+          tooltip="above"
+          aria-pressed={settings.grid}
+          onClick={() => changeSettings({ ...settings, grid: !settings.grid })}
+        />
+        <IconButton
+          icon={Ruler}
+          label="Lineale anzeigen (mm)"
+          tooltip="above"
+          aria-pressed={settings.rulers}
+          onClick={() => changeSettings({ ...settings, rulers: !settings.rulers })}
+        />
+        <span className="separator" />
+        <IconButton
+          icon={Magnet}
+          label="Am Raster fangen (Text und Grafik; Bauteile bleiben immer im Raster)"
+          tooltip="above"
+          aria-pressed={settings.snap.grid}
+          onClick={() => toggleSnap('grid')}
+        />
+        <IconButton
+          icon={Plug}
+          label="An Anschlüssen fangen"
+          tooltip="above"
+          aria-pressed={settings.snap.connector}
+          onClick={() => toggleSnap('connector')}
+        />
+        <IconButton
+          icon={Spline}
+          label="An Endpunkten fangen (Linienenden, Ecken, Leitungsknicke)"
+          tooltip="above"
+          aria-pressed={settings.snap.endpoint}
+          onClick={() => toggleSnap('endpoint')}
+        />
+      </div>
 
       <div className="zoom-controls">
         <IconButton icon={ZoomOut} label="Verkleinern" tooltip="above" onClick={() => zoomCenter(1 / 1.25)} />
@@ -728,63 +919,111 @@ const rectProps = (r: { position: Point; width: number; height: number }) => ({
   height: r.height,
 });
 
-/** Neue Linie bzw. neues Rechteck aus dem aufgezogenen Bereich; ein bloßer Klick ergibt eine Standardgröße. */
-function createdShape(tool: 'line' | 'rect', start: Point, end: Point): NewAnnotation {
-  const clicked = start.x === end.x && start.y === end.y;
-  if (tool === 'line') {
-    return { kind: 'line', from: start, to: clicked ? { x: start.x + DEFAULT_LINE, y: start.y } : end, style: 'solid' };
+/**
+ * Neue Form aus dem aufgezogenen Bereich. Linie und Rechteck bzw. Ellipse gehen
+ * von Ecke zu Ecke, der Kreis vom Mittelpunkt bis zum Rand. Ein bloßer Klick
+ * ergibt beim Anlegen (`final`) eine Standardgröße.
+ */
+function createdShape(tool: DragTool, start: Point, end: Point, final = true): NewAnnotation {
+  const clicked = final && start.x === end.x && start.y === end.y;
+  switch (tool) {
+    case 'line':
+      return { kind: 'line', from: start, to: clicked ? { x: start.x + DEFAULT_LINE, y: start.y } : end, style: 'solid' };
+    case 'circle': {
+      const radius = clicked ? DEFAULT_RADIUS : Math.round(Math.hypot(end.x - start.x, end.y - start.y));
+      return { kind: 'circle', center: start, radius, style: 'solid' };
+    }
+    case 'ellipse': {
+      if (clicked) return { kind: 'ellipse', center: start, ...DEFAULT_ELLIPSE, style: 'solid' };
+      return { kind: 'ellipse', ...ellipseFromCorners(start, end), style: 'solid' };
+    }
+    case 'rect': {
+      const corner = clicked ? { x: start.x + DEFAULT_RECT.width, y: start.y + DEFAULT_RECT.height } : end;
+      return { kind: 'rect', ...rectFromCorners(start, corner), style: 'dashdot' };
+    }
   }
-  const corner = clicked ? { x: start.x + DEFAULT_RECT.width, y: start.y + DEFAULT_RECT.height } : end;
-  return { kind: 'rect', ...rectFromCorners(start, corner), style: 'dashdot' };
 }
 
-/** Neue Lage nach Ziehen eines Anfassers um `delta` (seit Beginn des Ziehens). */
-function reshape(a: Annotation, handle: Handle, delta: Point): Partial<Annotation> {
-  const add = (p: Point) => ({ x: p.x + delta.x, y: p.y + delta.y });
-  if (a.kind === 'line') return handle === 'from' ? { from: add(a.from) } : { to: add(a.to) };
-  if (a.kind !== 'rect') return {};
-  const x0 = a.position.x;
-  const y0 = a.position.y;
-  const x1 = x0 + a.width;
-  const y1 = y0 + a.height;
+function ellipseFromCorners(a: Point, b: Point): { center: Point; rx: number; ry: number } {
+  return {
+    center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+    rx: Math.abs(b.x - a.x) / 2,
+    ry: Math.abs(b.y - a.y) / 2,
+  };
+}
+
+/** Umriss als zwei gegenüberliegende Ecken (Rechteck, Ellipse). */
+function outline(a: Annotation): [Point, Point] | null {
+  if (a.kind === 'rect') return [a.position, { x: a.position.x + a.width, y: a.position.y + a.height }];
+  if (a.kind === 'ellipse') {
+    return [
+      { x: a.center.x - a.rx, y: a.center.y - a.ry },
+      { x: a.center.x + a.rx, y: a.center.y + a.ry },
+    ];
+  }
+  return null;
+}
+
+const CORNERS = ['nw', 'ne', 'sw', 'se'] as const;
+
+function corner([p, q]: [Point, Point], h: (typeof CORNERS)[number]): Point {
+  return { x: h === 'nw' || h === 'sw' ? p.x : q.x, y: h === 'nw' || h === 'ne' ? p.y : q.y };
+}
+
+/** Lage der Anfasser einer Grafik. */
+function handlesOf(a: Annotation): [Handle, Point][] {
+  if (a.kind === 'line') return [['from', a.from], ['to', a.to]];
+  if (a.kind === 'circle') return [['radius', { x: a.center.x + a.radius, y: a.center.y }]];
+  if (a.kind === 'polyline') return a.points.map((p, i) => [i, p]);
+  const box = outline(a);
+  return box ? CORNERS.map((h) => [h, corner(box, h)]) : [];
+}
+
+/** Neue Lage, wenn der Anfasser `handle` nach `to` gezogen wird. */
+function reshape(a: Annotation, handle: Handle, to: Point): Partial<Annotation> {
+  if (a.kind === 'line') return handle === 'from' ? { from: to } : { to };
+  if (a.kind === 'circle') {
+    const radius = Math.round(Math.hypot(to.x - a.center.x, to.y - a.center.y));
+    return radius > 0 ? { radius } : {};
+  }
+  if (a.kind === 'polyline' && typeof handle === 'number') {
+    return { points: a.points.map((p, i) => (i === handle ? to : p)) };
+  }
+  const box = outline(a);
+  if (!box || typeof handle !== 'string' || !CORNERS.includes(handle as (typeof CORNERS)[number])) return {};
   // Gezogene Ecke bewegen, die gegenüberliegende bleibt stehen.
-  const moved = {
-    nw: [add({ x: x0, y: y0 }), { x: x1, y: y1 }],
-    ne: [add({ x: x1, y: y0 }), { x: x0, y: y1 }],
-    sw: [add({ x: x0, y: y1 }), { x: x1, y: y0 }],
-    se: [add({ x: x1, y: y1 }), { x: x0, y: y0 }],
-  }[handle as 'nw' | 'ne' | 'sw' | 'se'];
-  const r = rectFromCorners(moved[0]!, moved[1]!);
-  // Ein Rechteck ohne Fläche wäre nicht mehr anzufassen.
-  return r.width > 0 && r.height > 0 ? r : {};
+  const opposite = { nw: 'se', ne: 'sw', sw: 'ne', se: 'nw' } as const;
+  const fixed = corner(box, opposite[handle as (typeof CORNERS)[number]]);
+  // Eine Form ohne Fläche wäre nicht mehr anzufassen.
+  if (to.x === fixed.x || to.y === fixed.y) return {};
+  return a.kind === 'rect' ? rectFromCorners(to, fixed) : ellipseFromCorners(to, fixed);
 }
 
 function AnnotationShape({
   annotation: a,
-  selected,
-  handles,
+  selected = false,
+  handles = false,
+  className,
   onPointerDown,
   onHandlePointerDown,
 }: {
   annotation: Annotation;
-  selected: boolean;
-  handles: boolean;
-  onPointerDown: (e: React.PointerEvent<SVGGElement>) => void;
-  onHandlePointerDown: (handle: Handle, e: React.PointerEvent) => void;
+  selected?: boolean;
+  handles?: boolean;
+  /** Zusätzliche Klasse, z. B. "creating" für die Vorschau beim Aufziehen. */
+  className?: string;
+  onPointerDown?: (e: React.PointerEvent<SVGGElement>) => void;
+  onHandlePointerDown?: (handle: Handle, origin: Point, e: React.PointerEvent) => void;
 }) {
-  const handle = (h: Handle, p: Point) => (
-    <rect
-      key={h}
-      className={`handle ${h}`}
-      x={p.x - 3}
-      y={p.y - 3}
-      width={6}
-      height={6}
-      onPointerDown={(e) => onHandlePointerDown(h, e)}
-    />
+  const dash = 'style' in a ? STROKE_DASH[a.style] : undefined;
+  /** Unsichtbare breite Kontur zum Anklicken und die sichtbare Linie. */
+  const stroke = (el: (props: { className: string; strokeDasharray?: string }) => React.ReactNode) => (
+    <>
+      {el({ className: 'stroke-hit' })}
+      {el({ className: 'note-line', strokeDasharray: dash })}
+    </>
   );
   let shape: React.ReactNode;
-  let grips: React.ReactNode = null;
   if (a.kind === 'text') {
     const box = annotationBox(a);
     shape = (
@@ -794,47 +1033,96 @@ function AnnotationShape({
           {textLines(a).map((line, i) => (
             <tspan key={i} x={a.position.x} dy={i === 0 ? 0 : a.size * LINE_HEIGHT}>
               {/* Leere Zeilen brauchen Inhalt, sonst zählt dy nicht. */}
-              {line || '\u00a0'}
+              {line || ' '}
             </tspan>
           ))}
         </text>
       </>
     );
   } else if (a.kind === 'line') {
-    const ends = { x1: a.from.x, y1: a.from.y, x2: a.to.x, y2: a.to.y };
-    shape = (
-      <>
-        <line {...ends} className="stroke-hit" />
-        <line {...ends} className="note-line" strokeDasharray={STROKE_DASH[a.style]} />
-      </>
-    );
-    if (handles) grips = [handle('from', a.from), handle('to', a.to)];
+    shape = stroke((p) => <line {...p} x1={a.from.x} y1={a.from.y} x2={a.to.x} y2={a.to.y} />);
+  } else if (a.kind === 'rect') {
+    shape = stroke((p) => <rect {...p} {...rectProps(a)} />);
+  } else if (a.kind === 'circle') {
+    shape = stroke((p) => <circle {...p} cx={a.center.x} cy={a.center.y} r={a.radius} />);
+  } else if (a.kind === 'ellipse') {
+    shape = stroke((p) => <ellipse {...p} cx={a.center.x} cy={a.center.y} rx={a.rx} ry={a.ry} />);
   } else {
-    const r = rectProps(a);
-    shape = (
-      <>
-        <rect {...r} className="stroke-hit" />
-        <rect {...r} className="note-line" strokeDasharray={STROKE_DASH[a.style]} />
-      </>
-    );
-    const { x, y } = a.position;
-    if (handles) {
-      grips = [
-        handle('nw', { x, y }),
-        handle('ne', { x: x + a.width, y }),
-        handle('sw', { x, y: y + a.height }),
-        handle('se', { x: x + a.width, y: y + a.height }),
-      ];
-    }
+    const points = toPoints(a.points);
+    shape = stroke((p) => (a.closed ? <polygon {...p} points={points} /> : <polyline {...p} points={points} />));
   }
+  const grips = handles
+    ? handlesOf(a).map(([h, p]) => (
+        <rect
+          key={h}
+          className={`handle ${typeof h === 'number' ? 'point' : h}`}
+          x={p.x - 3}
+          y={p.y - 3}
+          width={6}
+          height={6}
+          onPointerDown={(e) => onHandlePointerDown?.(h, p, e)}
+        />
+      ))
+    : null;
   return (
     <g
-      className={`annotation ${a.kind}${selected ? ' selected' : ''}`}
+      className={`annotation ${a.kind}${selected ? ' selected' : ''}${className ? ' ' + className : ''}`}
       onPointerDown={onPointerDown}
     >
       {shape}
       {grips}
     </g>
+  );
+}
+
+/** Gestrichelter Rahmen um ausgewählte Gruppen. */
+function GroupFrames({
+  diagram,
+  selection,
+  paths,
+}: {
+  diagram: Diagram;
+  selection: Selection;
+  paths: ReadonlyMap<string, Point[]>;
+}) {
+  const frames = diagram.groups.filter((g) => g.components.some((id) => selection.components.includes(id)) ||
+    g.annotations.some((id) => selection.annotations.includes(id)) ||
+    g.connections.some((id) => selection.connections.includes(id)) ||
+    g.junctions.some((id) => selection.junctions.includes(id)));
+  return (
+    <>
+      {frames.map((g) => {
+        const points: Point[] = [];
+        for (const c of diagram.components) {
+          if (!g.components.includes(c.id)) continue;
+          const box = componentBox(c);
+          if (box) points.push({ x: box.minX, y: box.minY }, { x: box.maxX, y: box.maxY });
+        }
+        for (const a of diagram.annotations) {
+          if (!g.annotations.includes(a.id)) continue;
+          const box = annotationBox(a);
+          points.push({ x: box.minX, y: box.minY }, { x: box.maxX, y: box.maxY });
+        }
+        for (const id of g.connections) points.push(...(paths.get(id) ?? []));
+        for (const j of diagram.junctions) if (g.junctions.includes(j.id)) points.push(j.position);
+        if (points.length === 0) return null;
+        const pad = 6;
+        const xs = points.map((p) => p.x);
+        const ys = points.map((p) => p.y);
+        const x = Math.min(...xs) - pad;
+        const y = Math.min(...ys) - pad;
+        return (
+          <rect
+            key={g.id}
+            className="group-frame"
+            x={x}
+            y={y}
+            width={Math.max(...xs) + pad - x}
+            height={Math.max(...ys) + pad - y}
+          />
+        );
+      })}
+    </>
   );
 }
 

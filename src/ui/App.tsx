@@ -5,18 +5,24 @@ import {
   AlignEndVertical,
   AlignStartHorizontal,
   AlignStartVertical,
+  Circle,
   CircleQuestionMark,
+  ClipboardPaste,
+  Copy,
+  Ellipse,
   FileCog,
   FilePlus2,
   FileDown,
   TrianglesCenterlineDashedHorizontal,
   TrianglesCenterlineDashedVertical,
   FolderOpen,
+  Group,
   ListChecks,
   Redo2,
   RotateCw,
   Route,
   Save,
+  Scissors,
   Slash,
   SlidersHorizontal,
   Square,
@@ -26,6 +32,8 @@ import {
   Trash2,
   Type,
   Undo2,
+  Ungroup,
+  Waypoints,
   type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
@@ -81,6 +89,9 @@ import { IconButton } from './IconButton.tsx';
 import { SymbolPreview } from './SymbolPreview.tsx';
 import { Tooltip } from './Tooltip.tsx';
 import { useHistory } from './useHistory.ts';
+import { copySelection, pasteFragment } from '../model/clipboard.ts';
+import { group, groupsIn, ungroup } from '../model/groups.ts';
+import { parseDiagram, serializeDiagram } from '../io/json.ts';
 
 import { DOMAIN_NAMES, NewDocumentDialog, type NewDocument } from './SheetSettings.tsx';
 
@@ -88,7 +99,13 @@ const TOOLS: [AnnotationTool, LucideIcon, string][] = [
   ['text', Type, 'Text: Klick auf das Blatt setzt einen Text'],
   ['line', Slash, 'Linie auf dem Blatt aufziehen'],
   ['rect', Square, 'Rechteck aufziehen, z. B. als Baugruppen-Umrandung'],
+  ['circle', Circle, 'Kreis vom Mittelpunkt aus aufziehen'],
+  ['ellipse', Ellipse, 'Ellipse aufziehen'],
+  ['polyline', Waypoints, 'Linienzug: Punkte anklicken; Doppelklick, Enter oder Rechtsklick beendet, Klick auf den ersten Punkt schließt ihn'],
 ];
+
+/** Versatz beim wiederholten Einfügen (2 Rasterschritte). */
+const PASTE_STEP = 20;
 
 const ALIGNMENTS: [Alignment, LucideIcon, string][] = [
   ['left', AlignStartVertical, 'Linke Kanten bündig'],
@@ -232,6 +249,92 @@ export function App() {
     edit((d) => deleteSelected(d, current));
     setSelection(EMPTY_SELECTION);
   };
+
+  /**
+   * Zuletzt kopierter Ausschnitt als Datei-Text (siehe model/clipboard.ts) und
+   * wie oft er schon eingefügt wurde; jedes Einfügen rückt zwei Raster weiter.
+   * Strg+C/X/V gehen zusätzlich über die Zwischenablage des Systems, so lässt
+   * sich auch zwischen zwei Fenstern kopieren.
+   */
+  const clipboard = useRef<{ text: string; pasted: number } | null>(null);
+  const canCopy = current.components.length > 0 || current.annotations.length > 0;
+
+  const copy = (): string | null => {
+    const fragment = copySelection(diagram, current);
+    if (!fragment) return null;
+    const text = serializeDiagram(fragment);
+    clipboard.current = { text, pasted: 1 };
+    return text;
+  };
+
+  const cut = (): string | null => {
+    const text = copy();
+    if (text === null) return null;
+    // Ausgeschnittenes kommt beim ersten Einfügen an dieselbe Stelle.
+    clipboard.current = { text, pasted: 0 };
+    deleteSelection();
+    return text;
+  };
+
+  /** Fügt `text` (aus der System-Zwischenablage) oder den zuletzt kopierten Ausschnitt ein. */
+  const paste = (text?: string) => {
+    const known = clipboard.current;
+    const source = text === undefined || text === known?.text ? known : { text, pasted: 1 };
+    if (!source) return;
+    const parsed = parseDiagram(source.text);
+    // Fremder Text in der Zwischenablage: nichts einfügen.
+    if (!parsed.ok) return;
+    if (parsed.diagram.domain !== diagram.domain && parsed.diagram.components.length > 0) {
+      setMessage(`Bauteile aus einem ${DOMAIN_NAMES[parsed.diagram.domain]}-Plan lassen sich hier nicht einfügen.`);
+      return;
+    }
+    const step = source.pasted * PASTE_STEP;
+    const r = pasteFragment(diagram, parsed.diagram, { x: step, y: step });
+    edit(r.diagram);
+    setSelection(r.selection);
+    clipboard.current = { ...source, pasted: source.pasted + 1 };
+  };
+
+  /** Schaltflächen: zusätzlich in die System-Zwischenablage schreiben, wenn der Browser es erlaubt. */
+  const toSystemClipboard = (text: string | null) => {
+    if (text !== null) navigator.clipboard?.writeText(text).catch(() => {});
+  };
+
+  const canGroup = selectionCount(current) >= 2;
+  const canUngroup = groupsIn(diagram, current).length > 0;
+  const groupSelection = () => {
+    const r = group(diagram, current);
+    if (r.group) edit(r.diagram);
+  };
+  const ungroupSelection = () => {
+    if (canUngroup) edit(ungroup(diagram, current));
+  };
+
+  // Strg+C/X/V außerhalb von Eingabefeldern: Ausschnitt statt Text kopieren.
+  useEffect(() => {
+    const outsideFields = (e: ClipboardEvent) =>
+      !(e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]');
+    const onCopy = (e: ClipboardEvent) => {
+      if (!outsideFields(e)) return;
+      const text = e.type === 'cut' ? cut() : copy();
+      if (text === null) return;
+      e.preventDefault();
+      e.clipboardData?.setData('text/plain', text);
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      if (!outsideFields(e)) return;
+      e.preventDefault();
+      paste(e.clipboardData?.getData('text/plain') || undefined);
+    };
+    window.addEventListener('copy', onCopy);
+    window.addEventListener('cut', onCopy);
+    window.addEventListener('paste', onPaste);
+    return () => {
+      window.removeEventListener('copy', onCopy);
+      window.removeEventListener('cut', onCopy);
+      window.removeEventListener('paste', onPaste);
+    };
+  });
   const rotate = () => edit((d) => rotateComponents(d, selectedIds));
   const mirror = (axis: 'horizontal' | 'vertical') => edit((d) => mirrorComponents(d, selectedIds, axis));
   const align = (alignment: Alignment) => edit((d) => alignComponents(d, selectedIds, alignment));
@@ -265,6 +368,12 @@ export function App() {
       if ((e.ctrlKey || e.metaKey) && key === 'a') {
         e.preventDefault();
         setSelection(selectAll(diagram));
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && key === 'g') {
+        e.preventDefault();
+        if (e.shiftKey) ungroupSelection();
+        else groupSelection();
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -359,6 +468,19 @@ export function App() {
         <div className="tool-group">
           <IconButton icon={Undo2} label="Rückgängig" shortcut="Strg+Z" onClick={history.undo} disabled={!history.canUndo} />
           <IconButton icon={Redo2} label="Wiederholen" shortcut="Strg+Y" onClick={history.redo} disabled={!history.canRedo} />
+        </div>
+        <div className="tool-group">
+          <IconButton icon={Scissors} label="Ausschneiden" shortcut="Strg+X" disabled={!canCopy} onClick={() => toSystemClipboard(cut())} />
+          <IconButton icon={Copy} label="Kopieren" shortcut="Strg+C" disabled={!canCopy} onClick={() => toSystemClipboard(copy())} />
+          <IconButton icon={ClipboardPaste} label="Einfügen" shortcut="Strg+V" onClick={() => paste()} />
+          <IconButton icon={Group} label="Gruppieren" shortcut="Strg+G" disabled={!canGroup} onClick={groupSelection} />
+          <IconButton
+            icon={Ungroup}
+            label="Gruppierung aufheben"
+            shortcut="Strg+Umschalt+G"
+            disabled={!canUngroup}
+            onClick={ungroupSelection}
+          />
         </div>
         <div className="tool-group">
           <IconButton icon={Tag} label="Kennzeichnen nach ISO 1219-2 (1A1, 1V1, 0P1, …)" onClick={label} />

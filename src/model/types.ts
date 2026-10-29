@@ -198,11 +198,56 @@ export interface RectAnnotation {
   style: StrokeStyle;
 }
 
+export interface CircleAnnotation {
+  id: string;
+  kind: 'circle';
+  center: Point;
+  radius: number;
+  style: StrokeStyle;
+}
+
+export interface EllipseAnnotation {
+  id: string;
+  kind: 'ellipse';
+  center: Point;
+  /** Halbachsen waagerecht und senkrecht. */
+  rx: number;
+  ry: number;
+  style: StrokeStyle;
+}
+
+/** Linienzug durch mindestens zwei Punkte; `closed` verbindet den letzten mit dem ersten. */
+export interface PolylineAnnotation {
+  id: string;
+  kind: 'polyline';
+  points: Point[];
+  closed: boolean;
+  style: StrokeStyle;
+}
+
 /**
  * Freier Text und einfache Grafik auf dem Blatt (z. B. Baugruppen-Umrandung).
  * Sie gehören zu keinem Bauteil und haben keine Anschlüsse.
  */
-export type Annotation = TextAnnotation | LineAnnotation | RectAnnotation;
+export type Annotation =
+  | TextAnnotation
+  | LineAnnotation
+  | RectAnnotation
+  | CircleAnnotation
+  | EllipseAnnotation
+  | PolylineAnnotation;
+
+/**
+ * Gruppe: Teile, die zusammen ausgewählt und verschoben werden.
+ * Ein Teil gehört zu höchstens einer Gruppe; Gruppen sind nicht verschachtelt.
+ */
+export interface Group {
+  id: string;
+  components: string[];
+  connections: string[];
+  junctions: string[];
+  annotations: string[];
+}
 
 /** Ein kompletter Schaltplan. */
 export interface Diagram {
@@ -213,4 +258,5 @@ export interface Diagram {
   connections: Connection[];
   junctions: Junction[];
   annotations: Annotation[];
+  groups: Group[];
 }

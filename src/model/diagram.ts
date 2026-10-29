@@ -41,6 +41,7 @@ export function createDiagram(
     connections: [],
     junctions: [],
     annotations: [],
+    groups: [],
   };
 }
 

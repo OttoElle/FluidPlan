@@ -61,6 +61,9 @@ const EDITOR_ONLY = [
   '.band',
   '.port circle',
   '.draft',
+  '.creating',
+  '.group-frame',
+  '.snap-mark',
 ];
 
 /** Papiermaß in mm. */

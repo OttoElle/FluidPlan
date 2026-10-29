@@ -1,5 +1,6 @@
 import { removeAnnotation } from './annotations.ts';
 import { removeComponent, removeConnection, removeJunction } from './diagram.ts';
+import { pruneGroups } from './groups.ts';
 import type { Diagram } from './types.ts';
 
 /**
@@ -73,5 +74,5 @@ export function deleteSelected(diagram: Diagram, s: Selection): Diagram {
   // Abzweige können beim Löschen schon verschmolzen bzw. entfallen sein.
   for (const id of s.junctions) if (d.junctions.some((j) => j.id === id)) d = removeJunction(d, id);
   for (const id of s.annotations) d = removeAnnotation(d, id);
-  return d;
+  return pruneGroups(d);
 }

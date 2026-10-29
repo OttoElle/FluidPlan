@@ -44,7 +44,7 @@ describe('JSON speichern und laden', () => {
       }),
     );
     expect(errors).toContain('diagram.annotations[0].width: positive Zahl erwartet');
-    expect(errors).toContain('diagram.annotations[1].kind: einer von "text", "line", "rect" erwartet');
+    expect(errors).toContain('diagram.annotations[1].kind: einer von "text", "line", "rect", "circle", "ellipse", "polyline" erwartet');
   });
 
   it('schreibt Format und Version in die Datei', () => {

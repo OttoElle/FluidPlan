@@ -7,6 +7,7 @@ import type {
   DiagramMeta,
   Domain,
   Endpoint,
+  Group,
   Junction,
   LineKind,
   Orientation,
@@ -17,17 +18,18 @@ import type {
   StrokeStyle,
 } from '../model/types.ts';
 import { SHEET_FORMATS, smallestSheetFor } from '../model/sheet.ts';
+import { pruneGroups } from '../model/groups.ts';
 
 /**
  * Dateiformat (.fluidplan.json):
  *
- *   { "format": "fluidplan", "version": 4, "diagram": { ... } }
+ *   { "format": "fluidplan", "version": 5, "diagram": { ... } }
  *
  * `version` wird erhöht, sobald sich das Format inkompatibel ändert.
  * Ältere Versionen werden dann beim Laden in `migrate` hochgezogen.
  */
 export const FILE_FORMAT = 'fluidplan';
-export const FILE_VERSION = 4;
+export const FILE_VERSION = 5;
 export const FILE_EXTENSION = '.fluidplan.json';
 
 interface FileEnvelope {
@@ -37,7 +39,8 @@ interface FileEnvelope {
 }
 
 export function serializeDiagram(diagram: Diagram): string {
-  const envelope: FileEnvelope = { format: FILE_FORMAT, version: FILE_VERSION, diagram };
+  // Gruppen können noch auf Gelöschtes verweisen; das soll nicht in die Datei.
+  const envelope: FileEnvelope = { format: FILE_FORMAT, version: FILE_VERSION, diagram: pruneGroups(diagram) };
   return JSON.stringify(envelope, null, 2) + '\n';
 }
 
@@ -104,6 +107,7 @@ function upgradeLegacyTypes(diagram: Diagram): Diagram {
  * 2 → 3: Abzweigpunkte (`junctions`); Leitungsenden können auf sie verweisen.
  * 3 → 4: Freier Text und Grafik (`annotations`) sowie weitere Schriftfeld-Angaben
  *        in `meta` (Zeichnungsnummer, Firma, Geprüft von, Änderungsstand).
+ * 4 → 5: Gruppen (`groups`); neue Grafikarten Kreis, Ellipse und Linienzug.
  */
 function migrate(version: number, diagram: unknown): unknown {
   let d = diagram;
@@ -113,6 +117,7 @@ function migrate(version: number, diagram: unknown): unknown {
     const meta = isObject(d.meta) ? { ...META_DEFAULTS, ...d.meta } : d.meta;
     d = { ...d, meta, annotations: [] };
   }
+  if (version < 5 && isObject(d)) d = { ...d, groups: [] };
   return d;
 }
 
@@ -145,7 +150,7 @@ const LINE_KINDS: readonly LineKind[] = ['working', 'pilot', 'drain'];
 const SHEET_FORMAT_KEYS = Object.keys(SHEET_FORMATS) as SheetFormat[];
 const ORIENTATIONS: readonly Orientation[] = ['portrait', 'landscape'];
 const STROKE_STYLES: readonly StrokeStyle[] = ['solid', 'dashed', 'dashdot'];
-const ANNOTATION_KINDS: readonly Annotation['kind'][] = ['text', 'line', 'rect'];
+const ANNOTATION_KINDS: readonly Annotation['kind'][] = ['text', 'line', 'rect', 'circle', 'ellipse', 'polyline'];
 
 function readDiagram(v: unknown, errors: string[]): Diagram | undefined {
   if (!isObject(v)) {
@@ -159,8 +164,27 @@ function readDiagram(v: unknown, errors: string[]): Diagram | undefined {
   const connections = readArray(v.connections, 'diagram.connections', errors, readConnection);
   const junctions = readArray(v.junctions, 'diagram.junctions', errors, readJunction);
   const annotations = readArray(v.annotations, 'diagram.annotations', errors, readAnnotation);
-  if (!domain || !meta || !sheet || !components || !connections || !junctions || !annotations) return undefined;
-  return { domain, meta, sheet, components, connections, junctions, annotations };
+  const groups = readArray(v.groups, 'diagram.groups', errors, readGroup);
+  if (!domain || !meta || !sheet || !components || !connections || !junctions || !annotations || !groups) {
+    return undefined;
+  }
+  return { domain, meta, sheet, components, connections, junctions, annotations, groups };
+}
+
+function readGroup(v: unknown, path: string, errors: string[]): Group | undefined {
+  if (!isObject(v)) {
+    errors.push(`${path}: Objekt erwartet`);
+    return undefined;
+  }
+  const id = nonEmpty(v.id, `${path}.id`, errors);
+  const ids = (key: 'components' | 'connections' | 'junctions' | 'annotations') =>
+    readArray(v[key], `${path}.${key}`, errors, nonEmpty);
+  const components = ids('components');
+  const connections = ids('connections');
+  const junctions = ids('junctions');
+  const annotations = ids('annotations');
+  if (id === undefined || !components || !connections || !junctions || !annotations) return undefined;
+  return { id, components, connections, junctions, annotations };
 }
 
 function readAnnotation(v: unknown, path: string, errors: string[]): Annotation | undefined {
@@ -184,6 +208,26 @@ function readAnnotation(v: unknown, path: string, errors: string[]): Annotation 
     const to = point(v.to, `${path}.to`, errors);
     if (!from || !to || !style) return undefined;
     return { id, kind, from, to, style };
+  }
+  if (kind === 'circle') {
+    const center = point(v.center, `${path}.center`, errors);
+    const radius = positive(v.radius, `${path}.radius`, errors);
+    if (!center || radius === undefined || !style) return undefined;
+    return { id, kind, center, radius, style };
+  }
+  if (kind === 'ellipse') {
+    const center = point(v.center, `${path}.center`, errors);
+    const rx = positive(v.rx, `${path}.rx`, errors);
+    const ry = positive(v.ry, `${path}.ry`, errors);
+    if (!center || rx === undefined || ry === undefined || !style) return undefined;
+    return { id, kind, center, rx, ry, style };
+  }
+  if (kind === 'polyline') {
+    const points = readArray(v.points, `${path}.points`, errors, point);
+    const closed = bool(v.closed, `${path}.closed`, errors);
+    if (points && points.length < 2) errors.push(`${path}.points: mindestens zwei Punkte erwartet`);
+    if (!points || points.length < 2 || closed === undefined || !style) return undefined;
+    return { id, kind, points, closed, style };
   }
   const position = point(v.position, `${path}.position`, errors);
   const width = positive(v.width, `${path}.width`, errors);
@@ -405,5 +449,26 @@ function checkReferences(diagram: Diagram, errors: string[]): void {
   for (const a of diagram.annotations) {
     if (annotationIds.has(a.id)) errors.push(`Grafik-ID "${a.id}" ist doppelt vergeben`);
     annotationIds.add(a.id);
+  }
+
+  // Jedes Teil gehört zu höchstens einer Gruppe, und es muss existieren.
+  const existing = {
+    components: new Set(components.keys()),
+    connections: connectionIds,
+    junctions: new Set(junctionLines.keys()),
+    annotations: annotationIds,
+  };
+  const grouped = new Set<string>();
+  const groupIds = new Set<string>();
+  for (const g of diagram.groups) {
+    if (groupIds.has(g.id)) errors.push(`Gruppen-ID "${g.id}" ist doppelt vergeben`);
+    groupIds.add(g.id);
+    for (const key of ['components', 'connections', 'junctions', 'annotations'] as const) {
+      for (const id of g[key]) {
+        if (!existing[key].has(id)) errors.push(`Gruppe "${g.id}": "${id}" existiert nicht`);
+        if (grouped.has(`${key}:${id}`)) errors.push(`Gruppe "${g.id}": "${id}" gehört schon zu einer anderen Gruppe`);
+        grouped.add(`${key}:${id}`);
+      }
+    }
   }
 }
