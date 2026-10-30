@@ -115,7 +115,7 @@ function Field({ x0, width, config, paths }: { x0: number; width: number; config
 }
 
 /** Welle der mechanischen Betätigungen: 3M lang, zwei Linien 1M auseinander (8.5.3). */
-const SHAFT = 3;
+export const SHAFT = 3;
 
 /**
  * Ein Betätigungselement nach DIN ISO 1219-1, Abschnitt 8.5. Gezeichnet für
@@ -123,7 +123,7 @@ const SHAFT = 3;
  * der Mittellinie des Elements. Die linke Seite wird gespiegelt.
  * `reach` ist die Breite der Seite; bis dorthin läuft die Steuerleitung.
  */
-function ActuatorElement({ kind, medium, reach }: { kind: Actuator; medium: DirectionalValveConfig['medium']; reach: number }) {
+export function ActuatorElement({ kind, medium, reach }: { kind: Actuator; medium: DirectionalValveConfig['medium']; reach: number }) {
   const shaft = (
     <>
       <line x1={0} y1={-0.5} x2={SHAFT} y2={-0.5} />

@@ -5,11 +5,13 @@ import {
   PISTON,
   PLUNGER,
   ROD,
+  rodActuatorExtra,
   THROUGH_ROD,
   type CylinderConfig,
   type CylinderLayout,
 } from '../model/cylinder.ts';
 import { FlowArrow, pts } from './symbolParts.tsx';
+import { ActuatorElement, SHAFT } from './valveSymbol.tsx';
 
 /** Oberkante der 1M dicken Kolbenstange. */
 const ROD_Y = 1.5;
@@ -53,6 +55,7 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
   const { bodyX: bx, pistonX: px } = l;
   const bodyEnd = bx + BODY_WIDTH;
   const through = config.rod === 'through';
+  const actuator = config.rodActuator ?? 'none';
   const rodEnd = px + PISTON + (through ? THROUGH_ROD : ROD);
   const zigzag = (from: number, to: number) => {
     const points: [number, number][] = [];
@@ -71,7 +74,18 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
         <polyline points={pts([bodyEnd, ROD_Y], [bodyEnd, 0], [bx, 0], [bx, BODY_HEIGHT], [bodyEnd, BODY_HEIGHT], [bodyEnd, ROD_Y + 1])} />
       )}
       <rect x={px} y={0} width={PISTON} height={BODY_HEIGHT} />
-      <rect x={px + PISTON} y={ROD_Y} width={rodEnd - px - PISTON} height={1} />
+      {actuator === 'none' ? (
+        <rect x={px + PISTON} y={ROD_Y} width={rodEnd - px - PISTON} height={1} />
+      ) : (
+        <>
+          {/* Die letzten 3M der Stange sind der Schaft des Betätigungselements (8.5) */}
+          <polyline points={pts([rodEnd - SHAFT, ROD_Y], [px + PISTON, ROD_Y], [px + PISTON, ROD_Y + 1], [rodEnd - SHAFT, ROD_Y + 1])} />
+          {/* nach unten geklappt, damit Hebel und Pedal nicht über den Rahmen hinausragen */}
+          <g transform={`translate(${rodEnd - SHAFT} ${ROD_Y + 0.5}) scale(1 -1)`}>
+            <ActuatorElement kind={actuator} medium="hydraulic" reach={SHAFT + rodActuatorExtra(actuator)} />
+          </g>
+        </>
+      )}
       {through && <rect x={px - THROUGH_ROD} y={ROD_Y} width={THROUGH_ROD} height={1} />}
 
       {config.spring === 'rod' && zigzag(px + PISTON, bodyEnd)}

@@ -15,7 +15,8 @@ die Ruhestellung per Optionsfeld und die Betätigungen links und rechts in drei
 Symbolauswahlen (Muskelkraft, mechanisch, elektrisch/Druck) plus „Federrückstellung“
 und „Vorgesteuert“. Beim Zylinder: Zylinderart als Symbol, einfachwirkend drückend/ziehend
 oder doppeltwirkend, Rückstellfeder, Endlagendämpfung (kolben-/stangenseitig, einstellbar),
-Kolbenstange einseitig/durchgehend und Kolbenstellung als Schieberegler. Leitungen an Anschlüssen, die dabei
+Kolbenstange einseitig/durchgehend, Betätigung am Stangenende (Muskelkraft, Druckknopf,
+Hebel, Pedal, Rolle, Stößel) und Kolbenstellung als Schieberegler. Leitungen an Anschlüssen, die dabei
 wegfallen, werden entfernt.
 
 **Weitere Grundsymbole mit Konfigurator** (je ein Eintrag in der Bauteilliste, Auswahl

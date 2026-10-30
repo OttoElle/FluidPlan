@@ -1,5 +1,6 @@
 import { configReader } from './configRead.ts';
 import type { PortDefinition } from './types.ts';
+import { ACTUATOR_NAMES, ACTUATOR_WIDTH, type Actuator } from './valve.ts';
 
 /**
  * Konfigurierbarer Zylinder nach DIN ISO 1219-1.
@@ -24,6 +25,8 @@ export type CylinderRod = 'single' | 'through';
 /** rod = Feder im Stangenraum (drückend, Rückstellung), piston = im Kolbenraum (ziehend). */
 export type CylinderSpring = 'none' | 'rod' | 'piston';
 export type Cushion = 'none' | 'fixed' | 'adjustable';
+/** Betätigung am Ende der Kolbenstange (z. B. Pedal am Geberzylinder). */
+export type RodActuator = 'none' | Extract<Actuator, 'manual' | 'pushbutton' | 'lever' | 'pedal' | 'roller' | 'plunger'>;
 
 export interface CylinderConfig {
   kind: 'cylinder';
@@ -38,6 +41,8 @@ export interface CylinderConfig {
   cushion: { piston: Cushion; rod: Cushion };
   /** Gezeichnete Kolbenstellung in Prozent des Hubs (0 = eingefahren). */
   stroke: number;
+  /** Betätigung am Stangenende, nur bei Kolbenzylindern; fehlt in älteren Dateien (dann keine). */
+  rodActuator: RodActuator;
 }
 
 export const DESIGN_NAMES: Record<CylinderDesign, string> = {
@@ -64,6 +69,18 @@ export const CUSHION_NAMES: Record<Cushion, string> = {
   adjustable: 'Einstellbar',
 };
 
+export const ROD_ACTUATORS: readonly Exclude<RodActuator, 'none'>[] = ['manual', 'pushbutton', 'lever', 'pedal', 'roller', 'plunger'];
+export const ROD_ACTUATOR_NAMES: Record<RodActuator, string> = {
+  none: 'Keine',
+  ...(Object.fromEntries(ROD_ACTUATORS.map((a) => [a, ACTUATOR_NAMES[a]])) as Record<Exclude<RodActuator, 'none'>, string>),
+};
+
+/**
+ * Das Betätigungselement setzt auf den letzten 3M der Kolbenstange auf (die
+ * Stange ist sein Schaft); um so viel ragt es über das Stangenende hinaus.
+ */
+export const rodActuatorExtra = (a: RodActuator) => (a === 'none' ? 0 : Math.max(0, ACTUATOR_WIDTH[a] - 3));
+
 export function defaultCylinderConfig(action: CylinderAction = 'double', design: CylinderDesign = 'piston'): CylinderConfig {
   return normalizeCylinder({
     kind: 'cylinder',
@@ -73,6 +90,7 @@ export function defaultCylinderConfig(action: CylinderAction = 'double', design:
     spring: action === 'single' ? 'rod' : 'none',
     cushion: { piston: 'none', rod: 'none' },
     stroke: 0,
+    rodActuator: 'none',
   });
 }
 
@@ -82,7 +100,7 @@ export function normalizeCylinder(config: CylinderConfig): CylinderConfig {
   if (config.design === 'piston') {
     return { ...config, stroke, spring: config.action === 'double' ? 'none' : config.spring };
   }
-  const none = { rod: 'single', spring: 'none', cushion: { piston: 'none', rod: 'none' } } as const;
+  const none = { rod: 'single', spring: 'none', cushion: { piston: 'none', rod: 'none' }, rodActuator: 'none' } as const;
   if (config.design === 'plunger') return { ...config, ...none, action: 'single', stroke };
   // Doppeltwirkender Teleskopzylinder: Anschluss C sitzt an der ersten Stufe, daher immer eingefahren.
   return { ...config, ...none, stroke: config.action === 'double' ? 0 : stroke };
@@ -95,7 +113,8 @@ export function cylinderTitle(config: CylinderConfig): string {
   if (config.design === 'plunger') return 'Plungerzylinder';
   if (config.design === 'telescopic') return `Teleskopzylinder, ${ACTION_NAMES[config.action].toLowerCase()}`;
   const base = config.action === 'double' ? 'Doppeltwirkender Zylinder' : 'Einfachwirkender Zylinder';
-  return config.rod === 'through' ? `${base}, durchgehende Stange` : base;
+  const name = config.rod === 'through' ? `${base}, durchgehende Stange` : base;
+  return config.rodActuator && config.rodActuator !== 'none' ? `${name}, ${ROD_ACTUATOR_NAMES[config.rodActuator]}` : name;
 }
 
 export const BODY_WIDTH = 9;
@@ -143,7 +162,7 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
     let bodyX = 1.5;
     while (through && bodyX + offset - THROUGH_ROD < 0) bodyX += 2;
     const pistonX = bodyX + offset;
-    const rodEnd = pistonX + PISTON + (through ? THROUGH_ROD : ROD);
+    const rodEnd = pistonX + PISTON + (through ? THROUGH_ROD : ROD) + rodActuatorExtra(config.rodActuator ?? 'none');
     const height = BODY_HEIGHT + PORT_LINE;
     const hasA = config.action === 'double' || config.spring !== 'piston';
     const hasB = config.action === 'double' || config.spring === 'piston';
@@ -219,6 +238,7 @@ export function readCylinderConfig(v: unknown, path: string, errors: string[]): 
   const piston = cushion?.oneOf('piston', CUSHION_NAMES);
   const rodCushion = cushion?.oneOf('rod', CUSHION_NAMES);
   const stroke = r.number('stroke', 0, 100, 0);
+  const rodActuator = r.oneOf('rodActuator', ROD_ACTUATOR_NAMES, 'none');
   if (!r.ok || !piston || !rodCushion) return undefined;
-  return normalizeCylinder({ kind: 'cylinder', design, action, rod, spring, cushion: { piston, rod: rodCushion }, stroke });
+  return normalizeCylinder({ kind: 'cylinder', design, action, rod, spring, cushion: { piston, rod: rodCushion }, stroke, rodActuator });
 }

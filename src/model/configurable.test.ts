@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseDiagram, serializeDiagram } from '../io/json.ts';
 import { BORES, WAYS, type BallValveConfig } from './ballValve.ts';
 import { CHECK_COUNTS, type CouplingConfig } from './coupling.ts';
-import { defaultCylinderConfig, normalizeCylinder, type CylinderConfig } from './cylinder.ts';
+import { defaultCylinderConfig, normalizeCylinder, ROD_ACTUATORS, type CylinderConfig } from './cylinder.ts';
 import { addComponent, configureComponent, connect, createDiagram, transformLocalPoint } from './diagram.ts';
 import { exampleHydraulicDiagram } from './example.ts';
 import { definitionOf, typeOfConfig } from './library.ts';
@@ -42,6 +42,9 @@ function cylinderVariants(): CylinderConfig[] {
         for (const spring of ['none', 'rod', 'piston'] as const)
           for (const stroke of [0, 35, 50, 100])
             out.push(normalizeCylinder({ ...defaultCylinderConfig(action, design), rod, spring, stroke }));
+  for (const rodActuator of ROD_ACTUATORS)
+    for (const stroke of [0, 50])
+      out.push(normalizeCylinder({ ...defaultCylinderConfig('single'), rodActuator, stroke }));
   return out;
 }
 
@@ -111,6 +114,14 @@ describe('Konfigurierbare Bauteile', () => {
     const telescopic = defaultCylinderConfig('double', 'telescopic');
     expect(definition(telescopic).ports.map((p) => p.id)).toEqual(['A', 'B', 'C']);
     expect(normalizeCylinder({ ...telescopic, stroke: 60 }).stroke).toBe(0);
+  });
+
+  it('setzen die Betätigung ans Stangenende, nur beim Kolbenzylinder', () => {
+    const plain = definition(defaultCylinderConfig('single'));
+    const pedal = definition({ ...defaultCylinderConfig('single'), rodActuator: 'pedal' });
+    expect(pedal.size.width).toBeGreaterThan(plain.size.width);
+    expect(pedal.ports).toEqual(plain.ports);
+    expect(normalizeCylinder({ ...defaultCylinderConfig('single', 'plunger'), rodActuator: 'pedal' }).rodActuator).toBe('none');
   });
 
   it('fahren den Kolben mit der Kolbenstellung aus, ohne die Anschlüsse zu verschieben', () => {
@@ -233,9 +244,11 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
     const cyl = file.drawing.sheets[0].components.find((c: { type: string }) => c.type === 'actuator.cylinder');
     delete cyl.config.design;
     delete cyl.config.stroke;
+    delete cyl.config.rodActuator;
     const r = parseDiagram(JSON.stringify(file));
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.diagram.components.find((c) => c.type === 'actuator.cylinder')?.config).toMatchObject({ design: 'piston', stroke: 0 });
+    if (r.ok)
+      expect(r.diagram.components.find((c) => c.type === 'actuator.cylinder')?.config).toMatchObject({ design: 'piston', stroke: 0, rodActuator: 'none' });
   });
 
   it('stellen alte feste Ventil- und Zylindertypen um', () => {

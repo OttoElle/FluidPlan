@@ -5,7 +5,10 @@ import {
   DESIGN_NAMES,
   hasStroke,
   normalizeCylinder,
+  ROD_ACTUATOR_NAMES,
+  ROD_ACTUATORS,
   ROD_NAMES,
+  type RodActuator,
   type Cushion,
   type CylinderConfig,
   type CylinderDesign,
@@ -26,6 +29,7 @@ import {
 } from '../../model/storage.ts';
 import type { ComponentConfig } from '../../model/types.ts';
 import { SymbolPreview } from '../SymbolPreview.tsx';
+import { ActuatorIcon } from '../valveSymbol.tsx';
 import type { ConfigEditorProps } from './configEditors.tsx';
 import { Segmented, type SegmentOption } from './Segmented.tsx';
 import { SymbolPicker } from './SymbolPicker.tsx';
@@ -168,6 +172,15 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
               onChange={(rod) => rod && set({ rod })}
               options={keys(ROD_NAMES).map((rod) => ({ value: rod, label: ROD_NAMES[rod], icon: variantIcon(variant({ rod })) }))}
             />
+            <div className="actuation-row">
+              <SymbolPicker<RodActuator>
+                label="Betätigung am Stangenende"
+                value={config.rodActuator === 'none' ? undefined : config.rodActuator}
+                onChange={(a) => set({ rodActuator: a ?? 'none' })}
+                options={ROD_ACTUATORS.map((a) => ({ value: a, label: ROD_ACTUATOR_NAMES[a], icon: <ActuatorIcon kind={a} medium="hydraulic" /> }))}
+              />
+              <span>Betätigung am Stangenende</span>
+            </div>
           </fieldset>
         </div>
       )}
