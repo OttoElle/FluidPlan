@@ -521,7 +521,7 @@ export function DiagramView({
   const grid: GridLook | null = !settings.grid
     ? null
     : pxPerUnit * GRID >= 5
-      ? { dot: Math.min(1.5, 1 / pxPerUnit), major: Math.min(2.5, 1.6 / pxPerUnit), minor: true }
+      ? { dot: Math.min(1.5, 1 / pxPerUnit), major: Math.min(2, 1.4 / pxPerUnit), minor: true }
       : pxPerUnit * GRID * MAJOR_EVERY >= 6
         ? { dot: 0, major: Math.min(2.5, 1.2 / pxPerUnit), minor: false }
         : null;
