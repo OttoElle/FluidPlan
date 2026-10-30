@@ -17,7 +17,15 @@ import {
   type MotorConfig,
   type PumpConfig,
 } from './rotary.ts';
-import { defaultSensorConfig, readSensorConfig, sensorGeometry, sensorTitle, type SensorConfig } from './sensor.ts';
+import {
+  defaultSensorConfig,
+  readSensorConfig,
+  sensorGeometry,
+  sensorTitle,
+  type Quantity,
+  type SensorConfig,
+  type SensorOutput,
+} from './sensor.ts';
 import {
   accumulatorGeometry,
   accumulatorTitle,
@@ -306,12 +314,8 @@ export interface PaletteEntry {
   group: string;
   type: string;
   config?: ComponentConfig;
-  /**
-   * Symbolgruppe: ein konfigurierbarer Typ, der viele Symbole umfasst
-   * (z. B. alle Wegeventile). Er steht nur einmal in der Liste, die
-   * Ausführung wählt man im Konfigurator.
-   */
-  isGroup?: boolean;
+  /** Einzelheiten wie Betätigung oder Wirkungsweise stellt man nach dem Einfügen im Konfigurator ein. */
+  configurable?: boolean;
 }
 
 export const PALETTE_GROUPS = [
@@ -341,38 +345,59 @@ function groupOfFixed(type: string): PaletteGroup {
 }
 
 /**
- * Symbolgruppen in der Bauteilliste: genau ein Eintrag je konfigurierbarem
- * Typ, mit Startkonfiguration und Namen je Medium.
+ * Konfigurierbare Einträge der Bauteilliste: ein Eintrag je Grundform
+ * (z. B. 3/2- und 4/3-Wegeventil, Plunger- und Teleskopzylinder), aber keine
+ * eigenen Einträge für Betätigung, Wirkungsweise und ähnliche Einzelheiten.
  */
-const GROUP_ENTRIES: [type: ConfigurableType<any>, group: PaletteGroup, hydraulic: string, pneumatic: string][] = [
-  [PUMP, 'Energieversorgung', 'Hydropumpe', 'Kompressor'],
-  [CYLINDER, 'Antriebe', 'Zylinder', 'Zylinder'],
-  [MOTOR, 'Antriebe', 'Hydromotor', 'Druckluftmotor'],
-  [VALVE, 'Wegeventile', 'Wegeventil', 'Wegeventil'],
-  [BALL_VALVE, 'Sperrventile', 'Kugelhahn', 'Kugelhahn'],
-  [TANK, 'Speicher und Behälter', 'Tank', 'Tank'],
-  [ACCUMULATOR, 'Speicher und Behälter', 'Hydrospeicher', 'Luftbehälter'],
-  [COUPLING, 'Verbindungen', 'Schnelltrennkupplung', 'Schnelltrennkupplung'],
-  [SENSOR, 'Messen und Sensoren', 'Sensor / Schalter', 'Sensor / Schalter'],
-];
+function configurableEntries(domain: Domain): PaletteEntry[] {
+  const hydraulic = domain === 'hydraulic';
+  const e = (key: string, name: string, group: PaletteGroup, t: ConfigurableType<any>, config: ComponentConfig): PaletteEntry => ({
+    key,
+    name,
+    group,
+    type: t.type,
+    config,
+    configurable: true,
+  });
+  const valve = (ports: DirectionalValveConfig['ports'], positions: number) =>
+    e(`valve-${ports}-${positions}`, `${ports}/${positions}-Wegeventil`, 'Wegeventile', VALVE, defaultValveConfig(domain, ports, positions));
+  const sensor = (key: string, name: string, quantity: Quantity, output: SensorOutput) =>
+    e(key, name, 'Messen und Sensoren', SENSOR, defaultSensorConfig(quantity, output));
+  return [
+    e('pump', hydraulic ? 'Hydropumpe' : 'Kompressor', 'Energieversorgung', PUMP, defaultPumpConfig(domain)),
+    e('cylinder', 'Zylinder', 'Antriebe', CYLINDER, defaultCylinderConfig('double')),
+    ...(hydraulic
+      ? [
+          e('cyl-plunger', 'Plungerzylinder', 'Antriebe', CYLINDER, defaultCylinderConfig('single', 'plunger')),
+          e('cyl-telescopic', 'Teleskopzylinder', 'Antriebe', CYLINDER, defaultCylinderConfig('single', 'telescopic')),
+        ]
+      : []),
+    e('motor', hydraulic ? 'Hydromotor' : 'Druckluftmotor', 'Antriebe', MOTOR, defaultMotorConfig(domain)),
+    ...(hydraulic
+      ? [valve(2, 2), valve(3, 2), valve(4, 2), valve(4, 3)]
+      : [valve(2, 2), valve(3, 2), valve(5, 2), valve(5, 3)]),
+    e('ball-valve', 'Kugelhahn', 'Sperrventile', BALL_VALVE, defaultBallValveConfig(2)),
+    ...(hydraulic
+      ? [
+          e('tank', 'Tank', 'Speicher und Behälter', TANK, defaultTankConfig()),
+          e('tank-return', 'Behälterrückführung', 'Speicher und Behälter', TANK, { ...defaultTankConfig(), size: 'small' }),
+        ]
+      : []),
+    e('accumulator', hydraulic ? 'Hydrospeicher' : 'Luftbehälter', 'Speicher und Behälter', ACCUMULATOR, defaultAccumulatorConfig(domain)),
+    e('coupling', 'Schnelltrennkupplung', 'Verbindungen', COUPLING, defaultCouplingConfig()),
+    sensor('pressure-sensor', 'Drucksensor / -schalter', 'pressure', 'switching'),
+    sensor('flow-sensor', 'Durchflusssensor', 'flow', 'analog'),
+    sensor('temperature-sensor', 'Temperatursensor', 'temperature', 'analog'),
+    sensor('position-sensor', 'Näherungsschalter', 'position', 'switching'),
+  ];
+}
 
 /** Bauteilliste für ein Medium, gruppiert über `group`. */
 export function paletteFor(domain: Domain): PaletteEntry[] {
-  const hydraulic = domain === 'hydraulic';
-  const groups = GROUP_ENTRIES.filter(([t]) => t.domains.includes(domain)).map(
-    ([t, group, hName, pName]): PaletteEntry => ({
-      key: t.type,
-      name: hydraulic ? hName : pName,
-      group,
-      type: t.type,
-      config: t.defaultConfig(domain),
-      isGroup: true,
-    }),
-  );
   const fixedEntries = definitionsFor(domain).map(
     (d): PaletteEntry => ({ key: d.type, name: d.name, group: groupOfFixed(d.type), type: d.type }),
   );
-  return [...groups, ...fixedEntries];
+  return [...configurableEntries(domain), ...fixedEntries];
 }
 
 // --- Ältere Bauteiltypen ----------------------------------------------------

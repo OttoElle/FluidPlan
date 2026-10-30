@@ -17,7 +17,6 @@ import {
   TrianglesCenterlineDashedVertical,
   FolderOpen,
   Group,
-  Layers,
   ListChecks,
   Redo2,
   RotateCw,
@@ -28,6 +27,7 @@ import {
   SlidersHorizontal,
   Square,
   Sun,
+  Layers,
   Moon,
   Tag,
   Trash2,
@@ -717,10 +717,10 @@ export function App() {
                 {entries.map((entry) => (
                   <button
                     key={entry.key}
-                    className={entry.isGroup ? 'palette-item is-group' : 'palette-item'}
+                    className={entry.configurable ? 'palette-item is-configurable' : 'palette-item'}
                     title={
-                      entry.isGroup
-                        ? `${entry.name} (Symbolgruppe): klicken oder aufs Blatt ziehen, Ausführung per Doppelklick im Konfigurator wählen`
+                      entry.configurable
+                        ? `${entry.name} (konfigurierbar): klicken oder aufs Blatt ziehen, Betätigung und Einzelheiten per Doppelklick im Konfigurator einstellen`
                         : `${entry.name}: klicken oder aufs Blatt ziehen`
                     }
                     draggable
@@ -734,7 +734,7 @@ export function App() {
                   >
                     <SymbolPreview component={entry} />
                     <span>{entry.name}</span>
-                    {entry.isGroup && <Layers className="palette-group-badge" size={12} aria-label="Symbolgruppe" />}
+                    {entry.configurable && <SlidersHorizontal className="palette-config-badge" size={12} aria-label="konfigurierbar" />}
                   </button>
                 ))}
               </div>
