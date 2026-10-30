@@ -1,4 +1,5 @@
 import type { Domain, PortDefinition, PortKind } from './types.ts';
+import { isObject, type Obj } from './configRead.ts';
 
 /**
  * Konfigurierbares Wegeventil nach DIN ISO 1219-1.
@@ -376,8 +377,6 @@ const ROLES: readonly ValveRole[] = ['P', 'T', 'A', 'B', 'R', 'S'];
 const PATH_KINDS: readonly PathKind[] = ['flow', 'both', 'open'];
 const DOMAINS: readonly Domain[] = ['hydraulic', 'pneumatic'];
 
-type Obj = Record<string, unknown>;
-const isObject = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** Prüft eine Konfiguration aus einer Datei; Fehler landen mit Pfad in `errors`. */
 export function readValveConfig(v: unknown, path: string, errors: string[]): DirectionalValveConfig | undefined {

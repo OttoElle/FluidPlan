@@ -17,7 +17,7 @@ import type { Diagram, Drawing, Layer } from './types.ts';
  */
 
 export const DEFAULT_LAYER_ID = '0';
-export const DEFAULT_LAYER: Layer = { id: DEFAULT_LAYER_ID, name: 'Standard', visible: true, locked: false };
+const DEFAULT_LAYER: Layer = { id: DEFAULT_LAYER_ID, name: 'Standard', visible: true, locked: false };
 
 /** Ebenen der Zeichnung; ältere Dateien haben nur die Standardebene. */
 export function layersOf(drawing: Pick<Drawing, 'layers'>): Layer[] {

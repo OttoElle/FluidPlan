@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { defaultConfigFor, isConfigurable } from '../model/library.ts';
+import { defaultConfigFor, isConfigurable, MODULE } from '../model/library.ts';
 import type { ComponentConfig, ComponentInstance } from '../model/types.ts';
 import { AccumulatorSymbol, BallValveSymbol, CouplingSymbol, HoseSymbol, SensorSymbol, TankSymbol } from './accessorySymbols.tsx';
 import { CylinderSymbol } from './cylinderSymbol.tsx';
@@ -26,8 +26,7 @@ import { ValveSymbol } from './valveSymbol.tsx';
  * aus ihrer Konfiguration gezeichnet (valveSymbol.tsx, cylinderSymbol.tsx,
  * rotarySymbol.tsx, accessorySymbols.tsx).
  */
-export const MODULE = 10;
-export const LINE_WIDTH = 0.125;
+const LINE_WIDTH = 0.125;
 
 // --- Energieversorgung ---------------------------------------------------------
 //

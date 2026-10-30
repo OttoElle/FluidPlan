@@ -164,7 +164,7 @@ function requirePort(diagram: Diagram, ref: PortRef): void {
 }
 
 /** Höchstzahl Leitungen an einem Abzweigpunkt (je Richtung eine). */
-export const MAX_LINES_PER_JUNCTION = 4;
+const MAX_LINES_PER_JUNCTION = 4;
 
 function requireEndpoint(diagram: Diagram, ref: Endpoint): void {
   if (!isJunctionRef(ref)) return requirePort(diagram, ref);
@@ -387,9 +387,4 @@ export function transformLocalPoint(
   }
   // `+ 0` normalisiert -0 zu 0, damit Vergleiche und JSON sauber bleiben.
   return { x: component.position.x + cx + dx + 0, y: component.position.y + cy + dy + 0 };
-}
-
-/** Setzt den Änderungszeitstempel, z. B. direkt vor dem Speichern. */
-export function touch(diagram: Diagram, now = new Date()): Diagram {
-  return { ...diagram, meta: { ...diagram.meta, modified: now.toISOString() } };
 }

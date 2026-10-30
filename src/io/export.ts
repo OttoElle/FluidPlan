@@ -76,7 +76,7 @@ export function paperSizeMm(diagram: Diagram): { width: number; height: number }
 }
 
 /** Eigenständige, druckfertige Kopie der Zeichenfläche. */
-export function printableSvg(live: SVGSVGElement, diagram: Diagram, options: ExportOptions): SVGSVGElement {
+function printableSvg(live: SVGSVGElement, diagram: Diagram, options: ExportOptions): SVGSVGElement {
   const svg = live.cloneNode(true) as SVGSVGElement;
   const paper = sheetSize(diagram.sheet);
   const mm = paperSizeMm(diagram);
@@ -109,7 +109,7 @@ export function printableSvg(live: SVGSVGElement, diagram: Diagram, options: Exp
   return svg;
 }
 
-export function svgText(svg: SVGSVGElement): string {
+function svgText(svg: SVGSVGElement): string {
   return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(svg);
 }
 
@@ -139,7 +139,7 @@ export async function exportSheets(
 }
 
 /** Rastert das SVG in der gewünschten Auflösung auf weißem Grund. */
-export async function renderPng(svg: SVGSVGElement, diagram: Diagram, dpi: number): Promise<Blob> {
+async function renderPng(svg: SVGSVGElement, diagram: Diagram, dpi: number): Promise<Blob> {
   const mm = paperSizeMm(diagram);
   const width = Math.round((mm.width / 25.4) * dpi);
   const height = Math.round((mm.height / 25.4) * dpi);
@@ -171,7 +171,7 @@ export async function renderPng(svg: SVGSVGElement, diagram: Diagram, dpi: numbe
  * Vektor-PDF mit einer Seite je Blatt, jede im Format ihres Blatts.
  * Die Bibliotheken werden erst hier geladen.
  */
-export async function renderPdf(svgs: SVGSVGElement[], diagrams: Diagram[]): Promise<Blob> {
+async function renderPdf(svgs: SVGSVGElement[], diagrams: Diagram[]): Promise<Blob> {
   const [{ jsPDF }, { svg2pdf }] = await Promise.all([import('jspdf'), import('svg2pdf.js')]);
   const pageOf = (d: Diagram) => {
     const mm = paperSizeMm(d);

@@ -44,7 +44,7 @@ export function useTheme(): [Theme, () => void] {
   return [theme, toggle];
 }
 
-export const PALETTE_WIDTH = { min: 180, default: 260, max: 600 };
+const PALETTE_WIDTH = { min: 180, default: 260, max: 600 };
 const clampWidth = (w: number) => Math.round(Math.min(PALETTE_WIDTH.max, Math.max(PALETTE_WIDTH.min, w)));
 
 /**

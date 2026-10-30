@@ -8,7 +8,7 @@ export type Obj = Record<string, unknown>;
 
 export const isObject = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-export const keysOf = <T extends string>(r: Record<T, string>) => Object.keys(r) as T[];
+const keysOf = <T extends string>(r: Record<T, string>) => Object.keys(r) as T[];
 
 export class ConfigReader {
   private readonly before: number;

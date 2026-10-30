@@ -93,7 +93,7 @@ body { margin: 0; }
   cursor: pointer;
 }
 
-.palette, .inspector {
+.palette {
   padding: 12px;
   background: var(--panel);
   overflow-y: auto;
@@ -112,7 +112,6 @@ body { margin: 0; }
   border-right: 1px solid var(--border);
 }
 .palette { flex: 1; min-height: 0; }
-.inspector { grid-area: inspector; border-left: 1px solid var(--border); }
 h2 { font-size: 13px; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .row { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -216,11 +215,10 @@ select {
 .configurator .row label { flex: 1 1 0; min-width: 0; font-size: 12px; }
 .configurator select { width: 100%; min-width: 0; }
 .configurator .path select { flex: 1 1 0; width: auto; }
-.configurator .path button, .configurator .chip button { flex: none; padding: 2px 6px; }
+.configurator .path button { flex: none; padding: 2px 6px; }
 .configurator fieldset { border: 1px solid var(--border); border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 4px; margin: 0; }
 .configurator legend { font-size: 12px; color: var(--muted); }
 .configurator .path { flex-wrap: nowrap; align-items: center; }
-.configurator .chip { justify-content: space-between; align-items: center; font-size: 13px; }
 
 /* Mehrfachauswahl */
 .band { fill: color-mix(in srgb, var(--accent) 10%, transparent); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
@@ -318,7 +316,7 @@ textarea { font: inherit; font-size: 13px; color: var(--text); background: var(-
 .tooltip.below { transform: translateX(-50%); }
 .tooltip.above { transform: translate(-50%, -100%); }
 .tooltip.left { transform: translate(-100%, -50%); }
-.inspector .row .icon-button, .check-panel header .icon-button { border-color: var(--border); }
+.check-panel header .icon-button { border-color: var(--border); }
 .check-panel header .icon-button { width: 24px; height: 24px; border-color: transparent; }
 .configurator .icon-button { width: 24px; height: 24px; }
 .palette-tools { flex-direction: row; gap: 4px; }

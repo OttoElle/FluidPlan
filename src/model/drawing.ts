@@ -126,10 +126,6 @@ export function deleteSheet(drawing: Drawing, index: number): Drawing {
   return { ...drawing, sheets: drawing.sheets.filter((_, i) => i !== index) };
 }
 
-export function isEmptySheet(s: SheetContent): boolean {
-  return s.components.length === 0 && s.annotations.length === 0 && s.connections.length === 0;
-}
-
 /** Abstand der Blätter auf der Zeichenfläche: 20 mm. */
 export const SHEET_GAP = 80;
 

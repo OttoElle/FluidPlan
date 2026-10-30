@@ -60,7 +60,7 @@ const nodeOf = (e: Endpoint) => (isJunctionRef(e) ? `j:${e.junctionId}` : e.comp
 const portOf = (e: Endpoint) => (isJunctionRef(e) ? undefined : e.portId);
 
 /** Schaltkreisnummer je Bauteil-ID. */
-export function circuitsOf(diagram: Diagram): Map<string, number> {
+function circuitsOf(diagram: Diagram): Map<string, number> {
   const byId = new Map(diagram.components.map((c) => [c.id, c]));
   const edges = new Map<string, Edge[]>();
   const link = (from: Endpoint, to: Endpoint) => {
@@ -143,7 +143,7 @@ export interface LabelCounter {
   numbers: Map<string, number>;
 }
 
-export const newLabelCounter = (): LabelCounter => ({ circuits: 0, numbers: new Map() });
+const newLabelCounter = (): LabelCounter => ({ circuits: 0, numbers: new Map() });
 
 /**
  * Vergibt alle Kennzeichen neu. Bauteile ohne Kennzeichenpflicht bleiben unverändert.

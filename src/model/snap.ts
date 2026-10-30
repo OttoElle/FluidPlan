@@ -1,6 +1,7 @@
 import { annotationSnapPoints } from './annotations.ts';
 import { portPosition } from './diagram.ts';
 import { definitionOf } from './library.ts';
+import { GRID } from './routing.ts';
 import type { Diagram, Point } from './types.ts';
 
 /**
@@ -18,8 +19,7 @@ export interface SnapOptions {
 
 export const DEFAULT_SNAP: SnapOptions = { grid: true, connector: true, endpoint: true };
 
-/** Rasterweite (1 M) und feine Schrittweite ohne Raster (1 Einheit = 0,25 mm). */
-export const GRID = 10;
+/** Feine Schrittweite ohne Raster (1 Einheit = 0,25 mm); Rasterweite GRID kommt aus routing.ts. */
 export const FINE = 1;
 
 export type SnapKind = 'grid' | 'connector' | 'endpoint';

@@ -22,6 +22,7 @@ import type {
 } from '../model/types.ts';
 import { SHEET_FORMATS, smallestSheetFor } from '../model/sheet.ts';
 import { pruneGroups } from '../model/groups.ts';
+import { isObject, type Obj } from '../model/configRead.ts';
 import { contentOf, drawingOf, sheetView } from '../model/drawing.ts';
 
 /**
@@ -36,7 +37,7 @@ import { contentOf, drawingOf, sheetView } from '../model/drawing.ts';
  * `version` wird erhöht, sobald sich das Format inkompatibel ändert.
  * Ältere Versionen werden dann beim Laden in `migrate` hochgezogen.
  */
-export const FILE_FORMAT = 'fluidplan';
+const FILE_FORMAT = 'fluidplan';
 export const FILE_VERSION = 7;
 export const FILE_EXTENSION = '.fluidplan.json';
 
@@ -180,11 +181,6 @@ function sheetForV1(d: Obj): Sheet {
 
 // --- Strukturprüfung -------------------------------------------------------
 
-type Obj = Record<string, unknown>;
-
-function isObject(v: unknown): v is Obj {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
 
 const DOMAINS: readonly Domain[] = ['hydraulic', 'pneumatic'];
 const ROTATIONS: readonly Rotation[] = [0, 90, 180, 270];

@@ -27,7 +27,7 @@ type ConfigOf<K extends ComponentConfig['kind']> = Extract<ComponentConfig, { ki
  * einen Eintrag ergänzen; TypeScript meldet fehlende Einträge. Der Eintrag
  * erscheint im Eigenschaften-Fenster als Reiter „Konfigurator“.
  */
-export const CONFIG_EDITORS: { [K in ComponentConfig['kind']]: ComponentType<ConfigEditorProps<ConfigOf<K>>> } = {
+const CONFIG_EDITORS: { [K in ComponentConfig['kind']]: ComponentType<ConfigEditorProps<ConfigOf<K>>> } = {
   'directional-valve': ValveConfigurator,
   cylinder: CylinderEditor,
   pump: RotaryEditor,

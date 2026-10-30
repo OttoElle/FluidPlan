@@ -2,7 +2,7 @@
 
 Leichtgewichtiger Editor für einfache **Hydraulik- und Pneumatik-Schaltpläne** im Browser.
 
-Stand: Projektgerüst mit Datenmodell, Bauteilbibliothek und Speichern/Laden als JSON.
+Stand: lauffähiger Editor mit mehreren Blättern, Ebenen, Rückgängig/Wiederholen, Prüfen und Export als PDF, SVG und PNG.
 Schaltzeichen nach DIN ISO 1219-1 für die Grundbauteile: Pumpen, Handpumpe, Kompressor, Motoren,
 Tank, Speicher, Filter, Wartungseinheit, Druck-, Strom- und Sperrventile, Kugelhahn,
 Zweidruckventil, Schnelltrennkupplung, Schlauchleitung, verschlossener Anschluss (Stopfen), Manometer und Sensoren.

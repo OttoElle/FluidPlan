@@ -50,7 +50,7 @@ export const DESIGN_NAMES: Record<CylinderDesign, string> = {
   plunger: 'Plungerzylinder',
   telescopic: 'Teleskopzylinder',
 };
-export const ACTION_NAMES: Record<CylinderAction, string> = {
+const ACTION_NAMES: Record<CylinderAction, string> = {
   double: 'Doppeltwirkend',
   single: 'Einfachwirkend',
 };
@@ -58,12 +58,12 @@ export const ROD_NAMES: Record<CylinderRod, string> = {
   single: 'Einseitige Kolbenstange',
   through: 'Durchgehende Kolbenstange',
 };
-export const SPRING_NAMES: Record<CylinderSpring, string> = {
+const SPRING_NAMES: Record<CylinderSpring, string> = {
   none: 'Ohne Feder (Rückhub durch Last)',
   rod: 'Federrückstellung',
   piston: 'Feder im Kolbenraum (ziehend)',
 };
-export const CUSHION_NAMES: Record<Cushion, string> = {
+const CUSHION_NAMES: Record<Cushion, string> = {
   none: 'Keine',
   fixed: 'Fest',
   adjustable: 'Einstellbar',
@@ -120,10 +120,10 @@ export function cylinderTitle(config: CylinderConfig): string {
 export const BODY_WIDTH = 9;
 export const BODY_HEIGHT = 4;
 /** Rahmenhöhe von Plunger- und Teleskopzylinder. */
-export const LARGE_BODY_HEIGHT = 5;
+const LARGE_BODY_HEIGHT = 5;
 export const PISTON = 2;
-export const ROD_OUT = 3;
-export const PORT_LINE = 2;
+const ROD_OUT = 3;
+const PORT_LINE = 2;
 /** Länge der durchgehenden Kolbenstange je Seite: ragt in jeder Kolbenstellung mindestens 1M heraus. */
 export const THROUGH_ROD = 7;
 /** Länge der einseitigen Kolbenstange ab Kolben: eingefahren 3M aus dem Rahmen. */

@@ -8,8 +8,8 @@ import { ArrowHead, DASH, FlowArrow, pts, Triangle, type P } from './symbolParts
  * oben und unten (Beispiele 6.2), Dreieck 2M Seitenlänge.
  */
 
-export const CX = 6;
-export const CY = 5;
+const CX = 6;
+const CY = 5;
 /** Sehne der Länge 2M im Kreis r = 3M liegt 2√2 M von der Mitte entfernt. */
 const CHORD = 2 * Math.SQRT2;
 const TRI_H = Math.sqrt(3);

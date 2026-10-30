@@ -44,7 +44,7 @@ export function componentBox(component: ComponentInstance): Box | undefined {
  * Richtung, in die eine Leitung den Anschluss verlässt: weg von der
  * Bauteilkante, auf der der Anschluss liegt.
  */
-export function portDirection(diagram: Diagram, ref: PortRef): Direction {
+function portDirection(diagram: Diagram, ref: PortRef): Direction {
   const component = diagram.components.find((c) => c.id === ref.componentId);
   const def = component && definitionOf(component);
   const port = def?.ports.find((p) => p.id === ref.portId);
@@ -73,7 +73,7 @@ export function endpointDirection(diagram: Diagram, ref: Endpoint): Direction | 
 const samePoint = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
 
 /** Entfernt doppelte Punkte und Punkte mitten auf einer geraden Strecke. */
-export function simplify(points: Point[]): Point[] {
+function simplify(points: Point[]): Point[] {
   const out: Point[] = [];
   for (const p of points) {
     if (out.length && samePoint(out[out.length - 1]!, p)) continue;
@@ -423,7 +423,7 @@ export function branchDots(connections: Connection[], paths: Map<string, Point[]
 }
 
 /** Radius eines Leitungssprungs. */
-export const JUMP_RADIUS = 4;
+const JUMP_RADIUS = 4;
 
 /**
  * Kreuzungen ohne Verbindung: Stellen, an denen ein waagerechtes Teilstück
