@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { endpointPosition, sameEndpoint, transformLocalPoint } from '../model/diagram.ts';
 import { definitionOf } from '../model/library.ts';
 import {
@@ -25,12 +25,14 @@ import {
 import { EMPTY_SELECTION, toggle, union, type Selection } from '../model/selection.ts';
 import { expandGroups } from '../model/groups.ts';
 import { DEFAULT_SNAP, FINE, snapPoint as snapToTargets, snapTargets, type SnapKind, type SnapOptions, type SnapTargets } from '../model/snap.ts';
+import { sheetLayout, type SheetRect } from '../model/drawing.ts';
 import type { Annotation, ComponentInstance, Diagram, Endpoint, LineKind, Point } from '../model/types.ts';
 import { ComponentSymbol, hasSymbol } from './symbols.tsx';
 import { IconButton } from './IconButton.tsx';
 import type { PropertiesTarget } from './properties/PropertiesDialog.tsx';
-import { Grid3x3, Magnet, Maximize, Plug, Ruler, Spline, ZoomIn, ZoomOut } from 'lucide-react';
-import { Rulers } from './Rulers.tsx';
+import { GalleryHorizontal, Grid3x3, Maximize, ZoomIn, ZoomOut } from 'lucide-react';
+import { RULER_SIZE, Rulers } from './Rulers.tsx';
+import { LABEL_HEIGHT, SheetLabels, type ScreenRect, type SheetAction } from './SheetLabels.tsx';
 
 export type { Selection };
 
@@ -58,21 +60,22 @@ const DEFAULT_ELLIPSE = { rx: 80, ry: 50 };
 /** Fangradius in Bildschirmpixeln. */
 const SNAP_RADIUS_PX = 8;
 
-/** Ansichtseinstellungen, die der Browser sich merkt (nicht Teil der Datei). */
+/**
+ * Ansichtseinstellungen, die der Browser sich merkt (nicht Teil der Datei).
+ * Fangen und Lineale sind immer an; Alt beim Zeichnen schaltet das Fangen kurz ab.
+ */
 interface ViewSettings {
-  snap: SnapOptions;
   grid: boolean;
-  rulers: boolean;
 }
 const VIEW_SETTINGS_KEY = 'fluidplan.view';
-const DEFAULT_VIEW_SETTINGS: ViewSettings = { snap: DEFAULT_SNAP, grid: true, rulers: false };
+const DEFAULT_VIEW_SETTINGS: ViewSettings = { grid: true };
+/** Fangen beim Zeichnen mit gedrückter Alt-Taste: frei in feinen Schritten. */
+const NO_SNAP: SnapOptions = { grid: false, connector: false, endpoint: false };
 
 function loadViewSettings(): ViewSettings {
   try {
     const raw = JSON.parse(localStorage.getItem(VIEW_SETTINGS_KEY) ?? 'null');
-    if (raw && typeof raw === 'object') {
-      return { ...DEFAULT_VIEW_SETTINGS, ...raw, snap: { ...DEFAULT_SNAP, ...raw.snap } };
-    }
+    if (raw && typeof raw === 'object' && typeof raw.grid === 'boolean') return { grid: raw.grid };
   } catch {
     // Kein Speicher (z. B. privates Fenster): Standard verwenden.
   }
@@ -90,11 +93,30 @@ export const LINE_DASH: Record<LineKind, string | undefined> = { working: undefi
 const PX_PER_MM = 96 / 25.4;
 const MIN_SCALE = 0.1;
 const MAX_SCALE = 12;
-/** Freiraum um das Blatt beim Einpassen, in Bildschirmpixeln. */
-const FIT_PADDING = 24;
+/**
+ * Freiraum um das Blatt beim Einpassen, in Bildschirmpixeln: Platz für Lineale,
+ * Blattname, „+“ und die Leisten unten.
+ */
+const FIT_PADDING = { left: RULER_SIZE + 24, top: RULER_SIZE + LABEL_HEIGHT + 12, right: 72, bottom: 64 };
+/** Raster: jeder fünfte Punkt ist kräftiger. */
+const MAJOR_EVERY = 5;
+
+/** Alle Blätter der Zeichnung nebeneinander auf einer Fläche. */
+export interface Pages {
+  /** Alle Blätter; `diagram` ist das bearbeitbare Blatt `active` davon. */
+  all: Diagram[];
+  active: number;
+  /** Klick auf ein anderes Blatt macht es zum bearbeitbaren. */
+  onActivate: (index: number) => void;
+  onAdd: () => void;
+  onRename: (index: number, name: string) => void;
+  onAction: (index: number, action: Exclude<SheetAction, 'rename'>) => void;
+}
 
 interface Props {
   diagram: Diagram;
+  /** Ohne Angabe (z. B. beim Export) nur `diagram` allein. */
+  pages?: Pages;
   selection: Selection;
   onSelect: (selection: Selection) => void;
   /** Verschiebt Bauteile und Grafik um `delta` (seit dem letzten Aufruf, im Raster). */
@@ -106,8 +128,11 @@ interface Props {
   onReshapeAnnotation?: (id: string, changes: Partial<Annotation>) => void;
   /** Doppelklick auf Bauteil, Leitung oder Grafik: Eigenschaften-Fenster öffnen. */
   onOpenProperties?: (target: PropertiesTarget) => void;
-  /** Symbol aus der Bauteilliste auf das Blatt gezogen; `point` ist die Stelle unter der Maus. */
-  onDropSymbol?: (key: string, point: Point) => void;
+  /**
+   * Symbol aus der Bauteilliste auf ein Blatt gezogen; `point` ist die Stelle
+   * unter der Maus in dessen Koordinaten, `sheet` seine Nummer in `pages.all`.
+   */
+  onDropSymbol?: (key: string, point: Point, sheet: number) => void;
   /** Klick auf ein Feld im Schriftfeld. */
   onEditTitleField?: (field: TitleField) => void;
   /** Neue Leitung; `waypoints` leer = automatisch führen. */
@@ -166,6 +191,7 @@ const clampScale = (s: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
  */
 export function DiagramView({
   diagram,
+  pages,
   selection,
   onSelect,
   onMove,
@@ -190,6 +216,8 @@ export function DiagramView({
   const [hoverPort, setHoverPort] = useState<Endpoint | null>(null);
   const [band, setBand] = useState<{ start: Point; end: Point } | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
+  /** Alt gedrückt: freie Grafik ohne Fangen zeichnen. */
+  const [altDown, setAltDown] = useState(false);
   const [creating, setCreating] = useState<{ tool: DragTool; start: Point; end: Point } | null>(null);
   /** Linienzug, der gerade Punkt für Punkt gezeichnet wird. */
   const [poly, setPoly] = useState<{ points: Point[]; cursor: Point } | null>(null);
@@ -219,13 +247,26 @@ export function DiagramView({
       e.preventDefault();
       setSpaceDown(e.type === 'keydown');
     };
-    const onBlur = () => setSpaceDown(false);
+    const onAlt = (e: KeyboardEvent) => {
+      if (e.key !== 'Alt') return;
+      // Sonst springt der Fokus unter Windows ins Browsermenü.
+      e.preventDefault();
+      setAltDown(e.type === 'keydown');
+    };
+    const onBlur = () => {
+      setSpaceDown(false);
+      setAltDown(false);
+    };
     window.addEventListener('keydown', onKey);
     window.addEventListener('keyup', onKey);
+    window.addEventListener('keydown', onAlt);
+    window.addEventListener('keyup', onAlt);
     window.addEventListener('blur', onBlur);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKey);
+      window.removeEventListener('keydown', onAlt);
+      window.removeEventListener('keyup', onAlt);
       window.removeEventListener('blur', onBlur);
     };
   }, []);
@@ -242,19 +283,36 @@ export function DiagramView({
 
   const { sheet } = diagram;
   const paper = sheetSize(sheet);
-  const area = drawingArea(sheet);
+  const activeIndex = pages?.active ?? 0;
+  const layout: SheetRect[] = pages
+    ? sheetLayout(pages.all.map((d, i) => (i === activeIndex ? sheet : d.sheet)))
+    : [{ x: 0, y: 0, ...paper }];
+  /** Lage des bearbeitbaren Blatts auf der Fläche; seine Koordinaten zählen ab hier. */
+  const origin = layout[activeIndex]!;
 
-  const fit = useCallback(() => {
-    if (!size) return;
-    const scale = clampScale(
-      Math.min((size.width - 2 * FIT_PADDING) / paper.width, (size.height - 2 * FIT_PADDING) / paper.height),
-    );
-    setView({
-      scale,
-      x: paper.width / 2 - size.width / scale / 2,
-      y: paper.height / 2 - size.height / scale / 2,
-    });
-  }, [size, paper.width, paper.height]);
+  /** Zeigt den Bereich `r` (Flächenkoordinaten) möglichst groß. */
+  const fitRect = useCallback(
+    (r: SheetRect) => {
+      if (!size) return;
+      const width = Math.max(1, size.width - FIT_PADDING.left - FIT_PADDING.right);
+      const height = Math.max(1, size.height - FIT_PADDING.top - FIT_PADDING.bottom);
+      const scale = clampScale(Math.min(width / r.width, height / r.height));
+      setView({
+        scale,
+        x: r.x - (FIT_PADDING.left + (width - r.width * scale) / 2) / scale,
+        y: r.y - (FIT_PADDING.top + (height - r.height * scale) / 2) / scale,
+      });
+    },
+    [size],
+  );
+  const fit = useCallback(
+    () => fitRect({ x: origin.x, y: origin.y, width: paper.width, height: paper.height }),
+    [fitRect, origin.x, origin.y, paper.width, paper.height],
+  );
+  const fitAll = () => {
+    const last = layout.at(-1)!;
+    fitRect({ x: 0, y: 0, width: last.x + last.width, height: Math.max(...layout.map((r) => r.height)) });
+  };
 
   // Größe der Zeichenfläche verfolgen.
   useEffect(() => {
@@ -267,15 +325,18 @@ export function DiagramView({
     return () => observer.disconnect();
   }, []);
 
-  // Beim ersten Anzeigen und bei neuem Blattformat das ganze Blatt einpassen.
+  // Beim ersten Anzeigen und bei neuem Blattformat das ganze Blatt einpassen. Wird ein
+  // anderes Blatt bearbeitbar (Strg+Bild ab, Rückgängig, „+“), das kaum zu sehen ist,
+  // dorthin springen.
   const fitKey = `${sheet.format}-${sheet.orientation}`;
-  const fittedFor = useRef<string | null>(null);
+  const fittedFor = useRef<{ active: number; key: string } | null>(null);
   useEffect(() => {
-    if (size && fittedFor.current !== fitKey) {
-      fittedFor.current = fitKey;
-      fit();
-    }
-  }, [size, fitKey, fit]);
+    if (!size) return;
+    const before = fittedFor.current;
+    fittedFor.current = { active: activeIndex, key: fitKey };
+    if (!before || (before.active === activeIndex && before.key !== fitKey)) fit();
+    else if (before.active !== activeIndex && view && visibleShare(view, size, origin, paper) < 0.25) fit();
+  }, [size, activeIndex, fitKey, fit, view, origin, paper]);
 
   /** Zoomt um den Bildschirmpunkt (px, py) relativ zur Zeichenfläche. */
   const zoomAt = useCallback((factor: number, px: number, py: number) => {
@@ -309,10 +370,16 @@ export function DiagramView({
     return double;
   };
 
-  const toDiagram = (e: { clientX: number; clientY: number }): Point => {
+  /** Bildschirmpunkt in Koordinaten der ganzen Fläche. */
+  const toWorld = (e: { clientX: number; clientY: number }): Point => {
     const ctm = svgRef.current!.getScreenCTM()!.inverse();
     const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm);
     return { x: p.x, y: p.y };
+  };
+  /** Bildschirmpunkt in Koordinaten des bearbeitbaren Blatts. */
+  const toDiagram = (e: { clientX: number; clientY: number }): Point => {
+    const p = toWorld(e);
+    return { x: p.x - origin.x, y: p.y - origin.y };
   };
 
   const snap = (v: number) => Math.round(v / GRID) * GRID;
@@ -324,7 +391,7 @@ export function DiagramView({
 
   /** Fängt einen Punkt beim Zeichnen bzw. Ändern freier Grafik (siehe model/snap.ts). */
   const snapFree = (p: Point, t: SnapTargets | null = targets) =>
-    snapToTargets(p, t ?? { connectors: [], endpoints: [] }, settings.snap, SNAP_RADIUS_PX / (view?.scale ?? 1));
+    snapToTargets(p, t ?? { connectors: [], endpoints: [] }, altDown ? NO_SNAP : DEFAULT_SNAP, SNAP_RADIUS_PX / (view?.scale ?? 1));
 
   /** Fangpunkte beim Zeichnen eines Linienzugs: auch seine eigenen Punkte (zum Schließen). */
   const polyTargets = (points: Point[]): SnapTargets | null =>
@@ -436,15 +503,35 @@ export function DiagramView({
 
   const zoomCenter = (factor: number) => size && zoomAt(factor, size.width / 2, size.height / 2);
   const percent = view ? Math.round((view.scale / (PX_PER_MM * MM_PER_UNIT)) * 100) : 100;
-  // Rasterpunkte sollen auf dem Bildschirm etwa 1 px groß bleiben.
-  const dot = view ? Math.min(1.5, 1 / view.scale) : 0.5;
-  const showGrid = settings.grid && (!view || view.scale * GRID >= 4);
-  const toggleSnap = (key: keyof SnapOptions) =>
-    changeSettings({ ...settings, snap: { ...settings.snap, [key]: !settings.snap[key] } });
+  // Rasterpunkte sollen auf dem Bildschirm etwa gleich groß bleiben; weit
+  // herausgezoomt bleibt nur jeder fünfte Punkt.
+  const pxPerUnit = view?.scale ?? 1;
+  const grid: GridLook | null = !settings.grid
+    ? null
+    : pxPerUnit * GRID >= 5
+      ? { dot: Math.min(1.5, 1 / pxPerUnit), major: Math.min(2.5, 1.6 / pxPerUnit), minor: true }
+      : pxPerUnit * GRID * MAJOR_EVERY >= 6
+        ? { dot: 0, major: Math.min(2.5, 1.2 / pxPerUnit), minor: false }
+        : null;
+
+  /** Bildschirmlage eines Bereichs der Fläche (für Blattnamen und „+“). */
+  const onScreen = (r: SheetRect): ScreenRect =>
+    view
+      ? {
+          left: (r.x - view.x) * view.scale,
+          top: (r.y - view.y) * view.scale,
+          width: r.width * view.scale,
+          height: r.height * view.scale,
+        }
+      : { left: 0, top: 0, width: 0, height: 0 };
+  /** Nummer des Blatts unter dem Punkt (Flächenkoordinaten), sonst -1. */
+  const sheetAt = (p: Point) =>
+    layout.findIndex((r) => p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height);
 
   return (
-    <div className={settings.rulers ? 'diagram-wrap with-rulers' : 'diagram-wrap'}>
-      {settings.rulers && view && size && <Rulers view={view} size={size} />}
+    <div className="diagram-wrap">
+      {/* Die Lineale messen ab der linken oberen Ecke des bearbeitbaren Blatts. */}
+      {view && size && <Rulers view={{ ...view, x: view.x - origin.x, y: view.y - origin.y }} size={size} />}
       <svg
         ref={svgRef}
         className={panning ? 'diagram panning' : spaceDown ? 'diagram pan-ready' : tool ? 'diagram placing' : 'diagram'}
@@ -528,8 +615,8 @@ export function DiagramView({
             }
           } else if (d.kind === 'move') {
             const p = toDiagram(e);
-            // Bauteile bleiben im Raster; reine Grafik nur, wenn das Raster-Fangen an ist.
-            const step = d.target.components.length > 0 || settings.snap.grid ? GRID : FINE;
+            // Bauteile bleiben im Raster; reine Grafik mit Alt auch frei.
+            const step = d.target.components.length > 0 || !e.altKey ? GRID : FINE;
             const round = (v: number) => Math.round(v / step) * step;
             const total = { x: round(p.x - d.start.x), y: round(p.y - d.start.y) };
             if (total.x !== d.moved.x || total.y !== d.moved.y) {
@@ -569,7 +656,10 @@ export function DiagramView({
           const key = e.dataTransfer.getData(SYMBOL_DRAG_TYPE);
           if (!key || !onDropSymbol) return;
           e.preventDefault();
-          onDropSymbol(key, toDiagram(e));
+          const p = toWorld(e);
+          const at = sheetAt(p);
+          const target = at >= 0 ? at : activeIndex;
+          onDropSymbol(key, { x: p.x - layout[target]!.x, y: p.y - layout[target]!.y }, target);
         }}
         onPointerUp={() => {
           const d = drag.current;
@@ -590,23 +680,31 @@ export function DiagramView({
           }
         }}
       >
-        <defs>
-          <pattern id="grid" x={area.x} y={area.y} width={GRID} height={GRID} patternUnits="userSpaceOnUse">
-            <circle cx={0} cy={0} r={dot} className="grid-dot" />
-          </pattern>
-        </defs>
-
-        <rect className="paper" width={paper.width} height={paper.height} />
-        {showGrid && (
-          <rect
-            x={area.x - dot}
-            y={area.y - dot}
-            width={area.width + 2 * dot}
-            height={area.height + 2 * dot}
-            fill="url(#grid)"
-            pointerEvents="none"
-          />
+        {pages?.all.map((d, i) =>
+          i === activeIndex ? null : (
+            <g
+              key={i}
+              className="sheet-inactive"
+              transform={`translate(${layout[i]!.x} ${layout[i]!.y})`}
+              onPointerDown={(e) => {
+                // Linke Taste macht das Blatt bearbeitbar; mittlere Taste verschiebt weiter die Ansicht.
+                if (e.button !== 0 || draft || spaceDown) return;
+                e.stopPropagation();
+                pages.onActivate(i);
+              }}
+            >
+              <title>{`${d.page?.name ?? `Blatt ${i + 1}`}: anklicken zum Bearbeiten`}</title>
+              <rect className="paper" width={layout[i]!.width} height={layout[i]!.height} />
+              {grid && <GridDots id={`grid-${i}`} sheet={d.sheet} look={grid} />}
+              <StaticSheet diagram={d} />
+            </g>
+          ),
         )}
+
+        <g transform={origin.x || origin.y ? `translate(${origin.x} ${origin.y})` : undefined}>
+        <rect className="paper" width={paper.width} height={paper.height} />
+        {pages && pages.all.length > 1 && <rect className="paper-active" width={paper.width} height={paper.height} />}
+        {grid && <GridDots id="grid" sheet={sheet} look={grid} />}
         {sheet.frame && <SheetFrame diagram={diagram} onPick={draft || tool ? undefined : onEditTitleField} />}
 
         {diagram.annotations.map((a) => {
@@ -810,7 +908,20 @@ export function DiagramView({
             height={Math.abs(band.end.y - band.start.y)}
           />
         )}
+        </g>
       </svg>
+
+      {pages && view && size && (
+        <SheetLabels
+          names={pages.all.map((d, i) => d.page?.name ?? `Blatt ${i + 1}`)}
+          rects={layout.map(onScreen)}
+          active={activeIndex}
+          onSelect={pages.onActivate}
+          onAdd={pages.onAdd}
+          onRename={pages.onRename}
+          onAction={pages.onAction}
+        />
+      )}
 
       <div className="canvas-controls">
         <IconButton
@@ -819,35 +930,6 @@ export function DiagramView({
           tooltip="above"
           aria-pressed={settings.grid}
           onClick={() => changeSettings({ ...settings, grid: !settings.grid })}
-        />
-        <IconButton
-          icon={Ruler}
-          label="Lineale anzeigen (mm)"
-          tooltip="above"
-          aria-pressed={settings.rulers}
-          onClick={() => changeSettings({ ...settings, rulers: !settings.rulers })}
-        />
-        <span className="separator" />
-        <IconButton
-          icon={Magnet}
-          label="Am Raster fangen (Text und Grafik; Bauteile bleiben immer im Raster)"
-          tooltip="above"
-          aria-pressed={settings.snap.grid}
-          onClick={() => toggleSnap('grid')}
-        />
-        <IconButton
-          icon={Plug}
-          label="An Anschlüssen fangen"
-          tooltip="above"
-          aria-pressed={settings.snap.connector}
-          onClick={() => toggleSnap('connector')}
-        />
-        <IconButton
-          icon={Spline}
-          label="An Endpunkten fangen (Linienenden, Ecken, Leitungsknicke)"
-          tooltip="above"
-          aria-pressed={settings.snap.endpoint}
-          onClick={() => toggleSnap('endpoint')}
         />
       </div>
 
@@ -861,6 +943,9 @@ export function DiagramView({
           {percent} %
         </button>
         <IconButton icon={ZoomIn} label="Vergrößern" tooltip="above" onClick={() => zoomCenter(1.25)} />
+        {pages && pages.all.length > 1 && (
+          <IconButton icon={GalleryHorizontal} label="Alle Blätter anzeigen" tooltip="left" onClick={fitAll} />
+        )}
         <IconButton icon={Maximize} label="Ganzes Blatt anzeigen" tooltip="left" onClick={fit} />
       </div>
     </div>
@@ -918,6 +1003,113 @@ function SheetFrame({ diagram, onPick }: { diagram: Diagram; onPick?: (field: Ti
     </g>
   );
 }
+
+/** Anteil des Blatts `r` (Größe `paper`), der gerade auf dem Bildschirm zu sehen ist. */
+function visibleShare(
+  view: View,
+  size: { width: number; height: number },
+  r: Point,
+  paper: { width: number; height: number },
+): number {
+  const w = Math.min(r.x + paper.width, view.x + size.width / view.scale) - Math.max(r.x, view.x);
+  const h = Math.min(r.y + paper.height, view.y + size.height / view.scale) - Math.max(r.y, view.y);
+  return w > 0 && h > 0 ? (w * h) / (paper.width * paper.height) : 0;
+}
+
+/** Größe der Rasterpunkte in Einheiten; `minor` = auch die feinen Punkte zeigen. */
+interface GridLook {
+  dot: number;
+  major: number;
+  minor: boolean;
+}
+
+/** Punktraster im Zeichenfeld; jeder fünfte Punkt ist kräftiger. */
+function GridDots({ id, sheet, look }: { id: string; sheet: Diagram['sheet']; look: GridLook }) {
+  const area = drawingArea(sheet);
+  const cell = GRID * MAJOR_EVERY;
+  // Die Kachel ist um eine halbe Kachel versetzt, damit kein Punkt an ihrem Rand abgeschnitten wird.
+  const half = cell / 2;
+  const steps = Array.from({ length: MAJOR_EVERY }, (_, k) => (k - (MAJOR_EVERY - 1) / 2) * GRID);
+  const pad = look.major;
+  return (
+    <>
+      <defs>
+        <pattern id={id} x={area.x - half} y={area.y - half} width={cell} height={cell} patternUnits="userSpaceOnUse">
+          {steps.flatMap((dx) =>
+            steps.map((dy) =>
+              dx === 0 && dy === 0 ? (
+                <circle key="major" cx={half} cy={half} r={look.major} className="grid-dot major" />
+              ) : look.minor ? (
+                <circle key={`${dx},${dy}`} cx={half + dx} cy={half + dy} r={look.dot} className="grid-dot" />
+              ) : null,
+            ),
+          )}
+        </pattern>
+      </defs>
+      {/* Rand um die Fläche, damit auch die Punkte auf der letzten Linie ganz zu sehen sind. */}
+      <rect
+        x={area.x - pad}
+        y={area.y - pad}
+        width={area.width + 2 * pad}
+        height={area.height + 2 * pad}
+        fill={`url(#${id})`}
+        pointerEvents="none"
+      />
+    </>
+  );
+}
+
+const SHEET_KEYS = ['sheet', 'components', 'connections', 'junctions', 'annotations', 'groups', 'meta', 'domain'] as const;
+
+/**
+ * Ein nicht bearbeitbares Blatt neben dem aktuellen: gleiche Darstellung, aber
+ * ohne Auswahl und Anfasser. Zeichnet nur neu, wenn sich das Blatt ändert.
+ */
+const StaticSheet = memo(
+  function StaticSheet({ diagram }: { diagram: Diagram }) {
+    const paths = useMemo(() => routeAll(diagram), [diagram]);
+    const dots = branchDots(diagram.connections, paths);
+    const jumps = diagram.sheet.lineJumps ? crossings(paths) : new Map<string, Point[]>();
+    return (
+      <>
+        {diagram.sheet.frame && <SheetFrame diagram={diagram} />}
+        {diagram.annotations.map((a) => (
+          <AnnotationShape key={a.id} annotation={a} />
+        ))}
+        {diagram.connections.map((l) => (
+          <g key={l.id} className="connection">
+            <path className="line" d={linePathData(paths.get(l.id)!, jumps.get(l.id))} strokeDasharray={LINE_DASH[l.kind]} />
+          </g>
+        ))}
+        {dots.map((p) => (
+          <circle key={`${p.x},${p.y}`} className="junction" cx={p.x} cy={p.y} r={2} />
+        ))}
+        {diagram.junctions.map((j) => (
+          <circle key={j.id} className="junction" cx={j.position.x} cy={j.position.y} r={2} />
+        ))}
+        {diagram.components.map((c) => (
+          <ComponentShape
+            key={c.id}
+            component={c}
+            selected={false}
+            drawing={false}
+            onPointerDown={noop}
+            onPortPointerDown={noop}
+            onPortPointerUp={noop}
+            onPortHover={noop}
+          />
+        ))}
+      </>
+    );
+  },
+  (a, b) =>
+    SHEET_KEYS.every((k) => a.diagram[k] === b.diagram[k]) &&
+    a.diagram.page?.name === b.diagram.page?.name &&
+    a.diagram.page?.number === b.diagram.page?.number &&
+    a.diagram.page?.count === b.diagram.page?.count,
+);
+
+const noop = () => {};
 
 const rectProps = (r: { position: Point; width: number; height: number }) => ({
   x: r.position.x,

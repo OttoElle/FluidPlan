@@ -1,4 +1,5 @@
 import { createDiagram, nextId } from './diagram.ts';
+import { sheetSize } from './sheet.ts';
 import type { Diagram, Domain, Drawing, DrawingSheet, Sheet, SheetContent } from './types.ts';
 
 /**
@@ -124,4 +125,29 @@ export function deleteSheet(drawing: Drawing, index: number): Drawing {
 
 export function isEmptySheet(s: SheetContent): boolean {
   return s.components.length === 0 && s.annotations.length === 0 && s.connections.length === 0;
+}
+
+/** Abstand der Blätter auf der Zeichenfläche: 20 mm. */
+export const SHEET_GAP = 80;
+
+export interface SheetRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Lage der Blätter auf der gemeinsamen Zeichenfläche: nebeneinander von links
+ * nach rechts, oben bündig. Jedes Blatt rechnet in eigenen Koordinaten ab
+ * seiner linken oberen Ecke; die Lage ist nur eine Verschiebung für die Anzeige.
+ */
+export function sheetLayout(sheets: readonly Sheet[]): SheetRect[] {
+  let x = 0;
+  return sheets.map((s) => {
+    const { width, height } = sheetSize(s);
+    const rect = { x, y: 0, width, height };
+    x += width + SHEET_GAP;
+    return rect;
+  });
 }

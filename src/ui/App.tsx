@@ -99,7 +99,6 @@ import {
 import { ExportDialog } from './ExportDialog.tsx';
 import { IconButton } from './IconButton.tsx';
 import { renderSheetSvgs } from './renderSheets.tsx';
-import { SheetTabs } from './SheetTabs.tsx';
 import { SymbolPreview } from './SymbolPreview.tsx';
 import { Tooltip } from './Tooltip.tsx';
 import { useHistory } from './useHistory.ts';
@@ -148,6 +147,7 @@ export function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = sheetIndex(drawing, activeId);
   const diagram = useMemo(() => sheetView(drawing, active), [drawing, active]);
+  const allViews = useMemo(() => allSheetViews(drawing), [drawing]);
   const historyEdit = history.edit;
   /** Ändert das angezeigte Blatt (und Schriftfeld-Angaben, die für alle Blätter gelten). */
   const edit = useCallback(
@@ -205,8 +205,16 @@ export function App() {
     setTool(null);
   };
 
+  /** Klick auf ein anderes Blatt der Zeichenfläche: das Werkzeug bleibt gewählt. */
+  const activateSheet = (index: number) => {
+    if (index === active) return;
+    setActiveId(drawing.sheets[index]!.id);
+    setSelection(EMPTY_SELECTION);
+  };
+
+  /** Neues Blatt hinten anfügen („+“ rechts neben dem letzten Blatt). */
   const newSheet = () => {
-    const r = addSheet(drawing, active);
+    const r = addSheet(drawing, drawing.sheets.length - 1);
     history.edit(r.drawing);
     showSheet(r.sheet.id);
   };
@@ -278,19 +286,25 @@ export function App() {
   };
 
   /** Bauteil einfügen: per Klick versetzt oben links, per Ziehen mittig unter der Maus. */
-  const add = (entry: PaletteEntry, at?: Point) => {
+  /** Fügt ein Bauteil ein; `sheet` = Blatt, auf das es gezogen wurde (sonst das aktuelle). */
+  const add = (entry: PaletteEntry, at?: Point, sheet = active) => {
+    const base = sheet === active ? diagram : sheetView(drawing, sheet);
     let position: Point;
     if (at) {
       const size = definitionOf(entry)?.size ?? { width: 0, height: 0 };
       const snap = (v: number) => Math.round(v / MODULE) * MODULE;
       position = { x: snap(at.x - size.width / 2), y: snap(at.y - size.height / 2) };
     } else {
-      const offset = (diagram.components.length % 10) * 10;
-      const area = drawingArea(diagram.sheet);
+      const offset = (base.components.length % 10) * 10;
+      const area = drawingArea(base.sheet);
       position = { x: area.x + 40 + offset, y: area.y + 40 + offset };
     }
-    const { diagram: next, component } = addComponent(diagram, entry.type, position, { config: entry.config });
-    edit(keepRoutes(diagram, next));
+    const { diagram: next, component } = addComponent(base, entry.type, position, { config: entry.config });
+    if (sheet === active) edit(keepRoutes(base, next));
+    else {
+      history.edit((dr) => withSheet(dr, sheet, keepRoutes(base, next)));
+      activateSheet(sheet);
+    }
     setSelection(selectComponent(component.id));
   };
 
@@ -701,6 +715,14 @@ export function App() {
           />
           <DiagramView
             diagram={diagram}
+            pages={{
+              all: allViews,
+              active,
+              onActivate: activateSheet,
+              onAdd: newSheet,
+              onRename: (i, name) => history.edit(renameSheet(drawing, i, name)),
+              onAction: sheetAction,
+            }}
             selection={current}
             onSelect={setSelection}
             onMove={(target, delta) =>
@@ -710,9 +732,9 @@ export function App() {
             onCreateAnnotation={createAnnotation}
             onReshapeAnnotation={(id, changes) => edit((d) => updateAnnotation(d, id, changes), `shape:${id}`)}
             onOpenProperties={setProperties}
-            onDropSymbol={(key, point) => {
+            onDropSymbol={(key, point, sheet) => {
               const entry = palette.find((e) => e.key === key);
-              if (entry) add(entry, point);
+              if (entry) add(entry, point, sheet);
             }}
             onEditTitleField={(field) => setSheetDialog({ focus: field })}
             onConnect={(from, to, waypoints) => {
@@ -753,15 +775,6 @@ export function App() {
             />
           )}
         </div>
-        <SheetTabs
-          sheets={drawing.sheets}
-          active={active}
-          onSelect={(i) => showSheet(drawing.sheets[i]!.id)}
-          onAdd={newSheet}
-          onRename={(i, name) => history.edit(renameSheet(drawing, i, name))}
-          onMove={(from, to) => history.edit(moveSheet(drawing, from, to))}
-          onAction={sheetAction}
-        />
       </main>
     </div>
   );

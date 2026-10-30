@@ -9,6 +9,8 @@ import {
   duplicateSheet,
   moveSheet,
   renameSheet,
+  SHEET_GAP,
+  sheetLayout,
   sheetView,
   withSheet,
 } from './drawing.ts';
@@ -107,5 +109,17 @@ describe('Zeichnung mit mehreren Blättern', () => {
     expect(issues[0]!.sheet).toBe(1);
     const relabeled = autoLabelSheets(allSheetViews(d));
     expect(checkSheets(relabeled).filter((i) => i.message.includes('ist auch auf'))).toEqual([]);
+  });
+
+  it('legt die Blätter nebeneinander auf die Zeichenfläche', () => {
+    const rects = sheetLayout([
+      { format: 'A4', orientation: 'landscape', frame: true },
+      { format: 'A3', orientation: 'landscape', frame: true },
+      { format: 'A4', orientation: 'portrait', frame: true },
+    ]);
+    expect(rects[0]).toEqual({ x: 0, y: 0, width: 1188, height: 840 });
+    expect(rects[1]).toEqual({ x: 1188 + SHEET_GAP, y: 0, width: 1680, height: 1188 });
+    expect(rects[2]!.x).toBe(1188 + 1680 + 2 * SHEET_GAP);
+    expect(rects[2]!.width).toBe(840);
   });
 });

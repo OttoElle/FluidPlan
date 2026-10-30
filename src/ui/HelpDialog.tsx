@@ -11,8 +11,11 @@ const MOUSE: [string, string][] = [
   ['Mausrad', 'Zoomen'],
   ['Mittlere Taste / Leertaste+Ziehen', 'Ansicht verschieben'],
   ['Linienzug-Werkzeug', 'Punkte anklicken; Doppelklick oder Rechtsklick beendet, Klick auf den ersten Punkt schließt'],
-  ['Leiste unten links', 'Raster und Lineale ein/aus; Fangen an Raster, Anschluss und Endpunkt'],
-  ['Blattreiter unten', 'Blatt wechseln; Doppelklick benennt um, Ziehen verschiebt, Rechtsklick oder ⋮ für Duplizieren und Löschen'],
+  ['Alt beim Zeichnen', 'Text und Grafik frei setzen, ohne Fangen an Raster, Anschluss und Endpunkt'],
+  ['Leiste unten links', 'Raster ein/aus'],
+  ['Anderes Blatt anklicken', 'Blatt bearbeiten; die Lineale messen ab seiner linken oberen Ecke'],
+  ['Blattname über dem Blatt', 'Doppelklick benennt um, Rechtsklick oder ⋮ für Duplizieren, Verschieben und Löschen'],
+  ['+ rechts neben dem letzten Blatt', 'Neues Blatt anfügen'],
 ];
 
 const KEYS: [string, string][] = [
