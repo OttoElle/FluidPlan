@@ -139,6 +139,12 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
               Rückstellfeder
             </label>
           )}
+          {piston && config.spring !== 'none' && (
+            <label className="check">
+              <input type="checkbox" checked={config.springPort} onChange={(e) => set({ springPort: e.target.checked })} />
+              Federraum mit Anschluss
+            </label>
+          )}
         </div>
       </fieldset>
       {piston && (

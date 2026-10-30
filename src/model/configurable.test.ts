@@ -41,7 +41,8 @@ function cylinderVariants(): CylinderConfig[] {
       for (const rod of ['single', 'through'] as const)
         for (const spring of ['none', 'rod', 'piston'] as const)
           for (const stroke of [0, 35, 50, 100])
-            out.push(normalizeCylinder({ ...defaultCylinderConfig(action, design), rod, spring, stroke }));
+            for (const springPort of [false, true])
+              out.push(normalizeCylinder({ ...defaultCylinderConfig(action, design), rod, spring, stroke, springPort }));
   for (const rodActuator of ROD_ACTUATORS)
     for (const stroke of [0, 50])
       out.push(normalizeCylinder({ ...defaultCylinderConfig('single'), rodActuator, stroke }));
@@ -292,5 +293,20 @@ describe('Elektrohydraulische Vorsteuerung', () => {
     expect(y.offset).toEqual({ x: def.size.width - 40, y: 80 });
     const pneumatic = normalizeValve({ ...config, medium: 'pneumatic' });
     expect(definitionOf({ type: 'valve.directional', config: pneumatic })!.ports.some((p) => p.id === 'X')).toBe(false);
+  });
+});
+
+describe('Federraum mit Anschluss (6.3.1)', () => {
+  const ports = (c: Partial<CylinderConfig>) =>
+    definitionOf({ type: 'actuator.cylinder', config: normalizeCylinder({ ...defaultCylinderConfig('single'), ...c }) })!.ports.map((p) => p.id);
+  it('gibt dem einfachwirkenden Zylinder einen Anschluss am Federraum', () => {
+    expect(ports({})).toEqual(['A']);
+    expect(ports({ springPort: true })).toEqual(['A', 'B']);
+    expect(ports({ spring: 'piston', springPort: true })).toEqual(['A', 'B']);
+    expect(ports({ spring: 'piston' })).toEqual(['B']);
+  });
+  it('gilt nur mit Feder', () => {
+    expect(normalizeCylinder({ ...defaultCylinderConfig('single'), spring: 'none', springPort: true }).springPort).toBe(false);
+    expect(normalizeCylinder({ ...defaultCylinderConfig('double'), springPort: true }).springPort).toBe(false);
   });
 });

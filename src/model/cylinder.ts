@@ -14,7 +14,8 @@ import { ACTUATOR_NAMES, ACTUATOR_WIDTH, upgradeActuator, type Actuator } from '
  * dick und 9M lang, Teleskopstufen 3M und 1M dick.
  *
  * Anschlüsse liegen 0,5M innerhalb der Rahmenenden, Leitungen 2M lang nach
- * unten; A = kolbenseitig, B = stangenseitig, C = an der ersten
+ * unten; A = kolbenseitig, B = stangenseitig (beim einfachwirkenden
+ * Zylinder nur als Anschluss des Federraums, Beispiel 6.3.1), C = an der ersten
  * Teleskopstufe (doppeltwirkender Teleskopzylinder). Der Rahmen ist so
  * verschoben, dass die Anschlüsse auf dem 2M-Raster liegen.
  */
@@ -43,6 +44,8 @@ export interface CylinderConfig {
   stroke: number;
   /** Betätigung am Stangenende, nur bei Kolbenzylindern; fehlt in älteren Dateien (dann keine). */
   rodActuator: RodActuator;
+  /** Federraum mit Anschluss (Beispiel 6.3.1), nur einfachwirkend mit Feder; fehlt in älteren Dateien. */
+  springPort: boolean;
 }
 
 export const DESIGN_NAMES: Record<CylinderDesign, string> = {
@@ -91,6 +94,7 @@ export function defaultCylinderConfig(action: CylinderAction = 'double', design:
     cushion: { piston: 'none', rod: 'none' },
     stroke: 0,
     rodActuator: 'none',
+    springPort: false,
   });
 }
 
@@ -98,9 +102,10 @@ export function defaultCylinderConfig(action: CylinderAction = 'double', design:
 export function normalizeCylinder(config: CylinderConfig): CylinderConfig {
   const stroke = Math.round(Math.min(100, Math.max(0, config.stroke)));
   if (config.design === 'piston') {
-    return { ...config, stroke, spring: config.action === 'double' ? 'none' : config.spring };
+    const spring = config.action === 'double' ? 'none' : config.spring;
+    return { ...config, stroke, spring, springPort: spring !== 'none' && config.springPort === true };
   }
-  const none = { rod: 'single', spring: 'none', cushion: { piston: 'none', rod: 'none' }, rodActuator: 'none' } as const;
+  const none = { rod: 'single', spring: 'none', cushion: { piston: 'none', rod: 'none' }, rodActuator: 'none', springPort: false } as const;
   if (config.design === 'plunger') return { ...config, ...none, action: 'single', stroke };
   // Doppeltwirkender Teleskopzylinder: Anschluss C sitzt an der ersten Stufe, daher immer eingefahren.
   return { ...config, ...none, stroke: config.action === 'double' ? 0 : stroke };
@@ -113,7 +118,8 @@ export function cylinderTitle(config: CylinderConfig): string {
   if (config.design === 'plunger') return 'Plungerzylinder';
   if (config.design === 'telescopic') return `Teleskopzylinder, ${ACTION_NAMES[config.action].toLowerCase()}`;
   const base = config.action === 'double' ? 'Doppeltwirkender Zylinder' : 'Einfachwirkender Zylinder';
-  const name = config.rod === 'through' ? `${base}, durchgehende Stange` : base;
+  const rod = config.rod === 'through' ? `${base}, durchgehende Stange` : base;
+  const name = config.springPort ? `${rod}, Federraum mit Anschluss` : rod;
   return config.rodActuator && config.rodActuator !== 'none' ? `${name}, ${ROD_ACTUATOR_NAMES[config.rodActuator]}` : name;
 }
 
@@ -164,8 +170,8 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
     const pistonX = bodyX + offset;
     const rodEnd = pistonX + PISTON + (through ? THROUGH_ROD : ROD) + rodActuatorExtra(config.rodActuator ?? 'none');
     const height = BODY_HEIGHT + PORT_LINE;
-    const hasA = config.action === 'double' || config.spring !== 'piston';
-    const hasB = config.action === 'double' || config.spring === 'piston';
+    const hasA = config.action === 'double' || config.spring !== 'piston' || config.springPort;
+    const hasB = config.action === 'double' || config.spring === 'piston' || config.springPort;
     return {
       bodyX,
       bodyHeight: BODY_HEIGHT,
@@ -240,6 +246,7 @@ export function readCylinderConfig(v: unknown, path: string, errors: string[]): 
   const rodCushion = cushion?.oneOf('rod', CUSHION_NAMES);
   const stroke = r.number('stroke', 0, 100, 0);
   const rodActuator = r.oneOf('rodActuator', ROD_ACTUATOR_NAMES, 'none');
+  const springPort = r.bool('springPort', false);
   if (!r.ok || !piston || !rodCushion) return undefined;
-  return normalizeCylinder({ kind: 'cylinder', design, action, rod, spring, cushion: { piston, rod: rodCushion }, stroke, rodActuator });
+  return normalizeCylinder({ kind: 'cylinder', design, action, rod, spring, cushion: { piston, rod: rodCushion }, stroke, rodActuator, springPort });
 }
