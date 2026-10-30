@@ -26,7 +26,7 @@ export interface Issue {
 }
 
 /** Name eines Bauteils in Meldungen: Kennzeichen, sonst Bauteilname. */
-export function describe(c: ComponentInstance): string {
+function describe(c: ComponentInstance): string {
   const name = definitionOf(c)?.name ?? c.type;
   return c.label ? `${c.label} ${name}` : name;
 }

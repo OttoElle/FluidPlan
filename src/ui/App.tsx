@@ -1,41 +1,21 @@
 import {
-  AlignCenterHorizontal,
-  AlignCenterVertical,
-  AlignEndHorizontal,
-  AlignEndVertical,
-  AlignStartHorizontal,
-  AlignStartVertical,
-  Circle,
   CircleQuestionMark,
   ClipboardPaste,
   Copy,
-  Ellipse,
   FileCog,
   FilePlus2,
   FileDown,
-  TrianglesCenterlineDashedHorizontal,
-  TrianglesCenterlineDashedVertical,
   FolderOpen,
   Group,
   ListChecks,
   Redo2,
-  RotateCw,
-  Route,
   Save,
   Scissors,
-  Slash,
-  SlidersHorizontal,
-  Square,
   Sun,
-  Layers,
   Moon,
   Tag,
-  Trash2,
-  Type,
   Undo2,
   Ungroup,
-  Waypoints,
-  type LucideIcon,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
@@ -69,20 +49,18 @@ import {
 import { checkSheets, sheetName, type Issue } from '../model/check.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
 import { autoLabelSheets } from '../model/labels.ts';
-import { MODULE, PALETTE_GROUPS, definitionOf, paletteFor, type PaletteEntry } from '../model/library.ts';
+import { MODULE, definitionOf, paletteFor, type PaletteEntry } from '../model/library.ts';
 import { drawingArea, type TitleField } from '../model/sheet.ts';
-import type { Annotation, Diagram, DiagramMeta, Drawing, LineKind, Point, StrokeStyle } from '../model/types.ts';
+import type { Diagram, DiagramMeta, Drawing, Point } from '../model/types.ts';
 import { downloadDrawing, readDrawingFile } from '../io/browser.ts';
 import { exportSheets, type ExportFormat, type ExportOptions } from '../io/export.ts';
 import { CheckPanel } from './CheckPanel.tsx';
-import { DiagramView, SYMBOL_DRAG_TYPE, type AnnotationTool } from './DiagramView.tsx';
+import { DiagramView, type AnnotationTool } from './DiagramView.tsx';
 import { HelpDialog } from './HelpDialog.tsx';
 import { usePaletteWidth, useTheme } from './layout.ts';
-import { LINE_KIND_OPTIONS, STROKE_STYLE_OPTIONS } from './properties/options.tsx';
 import { PropertiesDialog, type PropertiesTarget } from './properties/PropertiesDialog.tsx';
-import { Segmented } from './properties/Segmented.tsx';
 import { SheetDialog } from './SheetDialog.tsx';
-import { alignComponents, mirrorComponents, moveComponents, rotateComponents, type Alignment } from '../model/arrange.ts';
+import { moveComponents, rotateComponents } from '../model/arrange.ts';
 import { keepRoutes } from '../model/routing.ts';
 import {
   EMPTY_SELECTION,
@@ -100,48 +78,16 @@ import {
 import { ExportDialog } from './ExportDialog.tsx';
 import { IconButton } from './IconButton.tsx';
 import { renderSheetSvgs } from './renderSheets.tsx';
-import { SymbolPreview } from './SymbolPreview.tsx';
 import { Tooltip } from './Tooltip.tsx';
 import { useHistory } from './useHistory.ts';
 import { StructurePanel } from './StructurePanel.tsx';
+import { ContextBar } from './ContextBar.tsx';
+import { Palette } from './Palette.tsx';
+import { useClipboard } from './useClipboard.ts';
 import { DEFAULT_LAYER_ID, assignLayer, layerOf, layerState, layersOf, without } from '../model/layers.ts';
-import { copySelection, pasteFragment } from '../model/clipboard.ts';
 import { group, groupsIn, ungroup } from '../model/groups.ts';
-import { parseDiagram, serializeDiagram } from '../io/json.ts';
 
 import { DOMAIN_NAMES, NewDocumentDialog, type NewDocument } from './SheetSettings.tsx';
-
-const TOOLS: [AnnotationTool, LucideIcon, string][] = [
-  ['text', Type, 'Text: Klick auf das Blatt setzt einen Text'],
-  ['line', Slash, 'Linie auf dem Blatt aufziehen'],
-  ['rect', Square, 'Rechteck aufziehen, z. B. als Baugruppen-Umrandung'],
-  ['circle', Circle, 'Kreis vom Mittelpunkt aus aufziehen'],
-  ['ellipse', Ellipse, 'Ellipse aufziehen'],
-  ['polyline', Waypoints, 'Linienzug: Punkte anklicken; Doppelklick, Enter oder Rechtsklick beendet, Klick auf den ersten Punkt schließt ihn'],
-];
-
-/** Versatz beim wiederholten Einfügen (2 Rasterschritte). */
-const PASTE_STEP = 20;
-
-const ALIGNMENTS: [Alignment, LucideIcon, string][] = [
-  ['left', AlignStartVertical, 'Linke Kanten bündig'],
-  ['center', AlignCenterVertical, 'Waagerecht mittig (senkrechte Achse)'],
-  ['right', AlignEndVertical, 'Rechte Kanten bündig'],
-  ['top', AlignStartHorizontal, 'Obere Kanten bündig'],
-  ['middle', AlignCenterHorizontal, 'Senkrecht mittig (waagerechte Achse)'],
-  ['bottom', AlignEndHorizontal, 'Untere Kanten bündig'],
-];
-
-/** z. B. „3 Bauteile, 1 Leitung“. */
-function describe(s: Selection): string {
-  const parts: string[] = [];
-  const n = (count: number, one: string, many: string) => count > 0 && parts.push(`${count} ${count === 1 ? one : many}`);
-  n(s.components.length, 'Bauteil', 'Bauteile');
-  n(s.connections.length, 'Leitung', 'Leitungen');
-  n(s.junctions.length, 'Abzweig', 'Abzweige');
-  n(s.annotations.length, 'Grafik', 'Grafiken');
-  return parts.join(', ');
-}
 
 export function App() {
   const history = useHistory<Drawing>(() => drawingOf(exampleHydraulicDiagram()));
@@ -179,7 +125,6 @@ export function App() {
   const issues = useMemo(() => (checking ? checkSheets(allSheetViews(drawing), active) : []), [checking, drawing, active]);
   const fileInput = useRef<HTMLInputElement>(null);
   const palette = paletteFor(diagram.domain);
-
   const startNew = ({ domain, title, sheet }: NewDocument) => {
     setNewDialogOpen(false);
     history.reset(createDrawing(domain, title, new Date(), sheet));
@@ -188,7 +133,6 @@ export function App() {
     setSelection(EMPTY_SELECTION);
     setMessage(null);
   };
-
   const open = async (file: File) => {
     const result = await readDrawingFile(file);
     if (result.ok) {
@@ -201,7 +145,6 @@ export function App() {
       setMessage(`„${file.name}“ konnte nicht geladen werden:\n` + result.errors.join('\n'));
     }
   };
-
   const save = () => {
     const saved: Drawing = { ...drawing, meta: { ...drawing.meta, modified: new Date().toISOString() } };
     history.replace(saved);
@@ -209,7 +152,6 @@ export function App() {
   };
 
   // --- Blätter ---------------------------------------------------------------
-
   const showSheet = (id: string) => {
     if (id === drawing.sheets[active]!.id) return;
     setActiveId(id);
@@ -230,7 +172,6 @@ export function App() {
     history.edit(r.drawing);
     showSheet(r.sheet.id);
   };
-
   const sheetAction = (index: number, action: 'duplicate' | 'left' | 'right' | 'delete') => {
     if (action === 'duplicate') {
       const r = duplicateSheet(drawing, index);
@@ -269,7 +210,6 @@ export function App() {
     followUndo.current = true;
     history.redo();
   };
-
   const runExport = async (format: ExportFormat, options: ExportOptions) => {
     setExportOpen(false);
     const diagrams = options.sheets === 'all' ? allSheetViews(drawing) : [diagram];
@@ -279,7 +219,6 @@ export function App() {
       setMessage(`Export fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
-
   const label = () => {
     const before = allSheetViews(drawing);
     const after = autoLabelSheets(before);
@@ -330,14 +269,8 @@ export function App() {
   useEffect(() => {
     if (current !== selection) setSelection(current);
   }, [current, selection]);
-
   const single = selectionCount(current) === 1;
-  const selectedLine = single ? diagram.connections.find((l) => l.id === current.connections[0]) : undefined;
   const selectedIds = current.components;
-  const selectedLines = diagram.connections.filter((l) => current.connections.includes(l.id));
-  const styledAnnotations = diagram.annotations.filter(
-    (a): a is Extract<Annotation, { style: StrokeStyle }> => 'style' in a && current.annotations.includes(a.id),
-  );
   /** Was ein Doppelklick bzw. Enter bei der jetzigen Auswahl öffnen würde. */
   const propertiesTarget: PropertiesTarget | null = !single
     ? null
@@ -348,7 +281,6 @@ export function App() {
         : current.annotations[0]
           ? { kind: 'annotation', id: current.annotations[0] }
           : null;
-
   const createAnnotation = (a: NewAnnotation) => {
     const r = addAnnotation(diagram, a);
     edit(onActiveLayer(r.diagram, { annotations: [r.annotation.id] }));
@@ -357,65 +289,14 @@ export function App() {
     // Neuen Text gleich im Eigenschaften-Fenster eintippen.
     if (a.kind === 'text') setProperties({ kind: 'annotation', id: r.annotation.id });
   };
-
   const setMeta = (field: keyof DiagramMeta, value: string) =>
     edit((d) => ({ ...d, meta: { ...d.meta, [field]: value } }), `meta:${field}`);
-
   const deleteSelection = () => {
     edit((d) => deleteSelected(d, current));
     setSelection(EMPTY_SELECTION);
   };
-
-  /**
-   * Zuletzt kopierter Ausschnitt als Datei-Text (siehe model/clipboard.ts) und
-   * wie oft er schon eingefügt wurde; jedes Einfügen rückt zwei Raster weiter.
-   * Strg+C/X/V gehen zusätzlich über die Zwischenablage des Systems, so lässt
-   * sich auch zwischen zwei Fenstern kopieren.
-   */
-  const clipboard = useRef<{ text: string; pasted: number } | null>(null);
   const canCopy = current.components.length > 0 || current.annotations.length > 0;
-
-  const copy = (): string | null => {
-    const fragment = copySelection(diagram, current);
-    if (!fragment) return null;
-    const text = serializeDiagram(fragment);
-    clipboard.current = { text, pasted: 1 };
-    return text;
-  };
-
-  const cut = (): string | null => {
-    const text = copy();
-    if (text === null) return null;
-    // Ausgeschnittenes kommt beim ersten Einfügen an dieselbe Stelle.
-    clipboard.current = { text, pasted: 0 };
-    deleteSelection();
-    return text;
-  };
-
-  /** Fügt `text` (aus der System-Zwischenablage) oder den zuletzt kopierten Ausschnitt ein. */
-  const paste = (text?: string) => {
-    const known = clipboard.current;
-    const source = text === undefined || text === known?.text ? known : { text, pasted: 1 };
-    if (!source) return;
-    const parsed = parseDiagram(source.text);
-    // Fremder Text in der Zwischenablage: nichts einfügen.
-    if (!parsed.ok) return;
-    if (parsed.diagram.domain !== diagram.domain && parsed.diagram.components.length > 0) {
-      setMessage(`Bauteile aus einem ${DOMAIN_NAMES[parsed.diagram.domain]}-Plan lassen sich hier nicht einfügen.`);
-      return;
-    }
-    const step = source.pasted * PASTE_STEP;
-    const r = pasteFragment(diagram, parsed.diagram, { x: step, y: step });
-    edit(r.diagram);
-    setSelection(r.selection);
-    clipboard.current = { ...source, pasted: source.pasted + 1 };
-  };
-
-  /** Schaltflächen: zusätzlich in die System-Zwischenablage schreiben, wenn der Browser es erlaubt. */
-  const toSystemClipboard = (text: string | null) => {
-    if (text !== null) navigator.clipboard?.writeText(text).catch(() => {});
-  };
-
+  const { copy, cut, paste, toSystemClipboard } = useClipboard({ diagram, current, edit, setSelection, setMessage, deleteSelection });
   const canGroup = selectionCount(current) >= 2;
   const canUngroup = groupsIn(diagram, current).length > 0;
   const groupSelection = () => {
@@ -425,47 +306,7 @@ export function App() {
   const ungroupSelection = () => {
     if (canUngroup) edit(ungroup(diagram, current));
   };
-
-  // Strg+C/X/V außerhalb von Eingabefeldern: Ausschnitt statt Text kopieren.
-  useEffect(() => {
-    const outsideFields = (e: ClipboardEvent) =>
-      !(e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]');
-    const onCopy = (e: ClipboardEvent) => {
-      if (!outsideFields(e)) return;
-      const text = e.type === 'cut' ? cut() : copy();
-      if (text === null) return;
-      e.preventDefault();
-      e.clipboardData?.setData('text/plain', text);
-    };
-    const onPaste = (e: ClipboardEvent) => {
-      if (!outsideFields(e)) return;
-      e.preventDefault();
-      paste(e.clipboardData?.getData('text/plain') || undefined);
-    };
-    window.addEventListener('copy', onCopy);
-    window.addEventListener('cut', onCopy);
-    window.addEventListener('paste', onPaste);
-    return () => {
-      window.removeEventListener('copy', onCopy);
-      window.removeEventListener('cut', onCopy);
-      window.removeEventListener('paste', onPaste);
-    };
-  });
   const rotate = () => edit((d) => rotateComponents(d, selectedIds));
-  const mirror = (axis: 'horizontal' | 'vertical') => edit((d) => mirrorComponents(d, selectedIds, axis));
-  const align = (alignment: Alignment) => edit((d) => alignComponents(d, selectedIds, alignment));
-  const setLineKind = (kind: LineKind) =>
-    edit((d) => selectedLines.reduce((acc, l) => updateConnection(acc, l.id, { kind }), d));
-  const setStrokeStyle = (style: StrokeStyle) =>
-    edit((d) => styledAnnotations.reduce((acc, a) => updateAnnotation(acc, a.id, { style }), d));
-  const layerList = layersOf(drawing);
-  const selectedLayers = [
-    ...diagram.components.filter((c) => current.components.includes(c.id)),
-    ...selectedLines,
-    ...diagram.annotations.filter((a) => current.annotations.includes(a.id)),
-  ].map((x) => layerOf(layerList, x).id);
-  const common = <T,>(values: T[]) => (values.length > 0 && values.every((v) => v === values[0]) ? values[0] : undefined);
-
   // Tastatur: Strg+Z / Strg+Y (bzw. Strg+Umschalt+Z) und Entf.
   // In Eingabefeldern bleiben die Tasten beim Feld (dort wirkt das Rückgängig des Browsers).
   useEffect(() => {
@@ -524,84 +365,6 @@ export function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
-
-  const contextBar = !isEmpty(current) && (
-    <div className="context-bar" role="toolbar" aria-label="Auswahl bearbeiten">
-      <span className="count">{describe(current)}</span>
-      {selectedIds.length > 0 && (
-        <div className="tool-group">
-          <IconButton icon={RotateCw} label="90° im Uhrzeigersinn drehen" shortcut="R" onClick={rotate} />
-          <IconButton icon={TrianglesCenterlineDashedVertical} label="Spiegeln: links und rechts vertauschen" onClick={() => mirror('horizontal')} />
-          <IconButton icon={TrianglesCenterlineDashedHorizontal} label="Spiegeln: oben und unten vertauschen" onClick={() => mirror('vertical')} />
-        </div>
-      )}
-      {selectedIds.length >= 2 && (
-        <div className="tool-group">
-          {ALIGNMENTS.map(([alignment, icon, title]) => (
-            <IconButton key={alignment} icon={icon} label={title} onClick={() => align(alignment)} />
-          ))}
-        </div>
-      )}
-      {selectedLines.length > 0 && (
-        <div className="tool-group">
-          <Segmented
-            label="Linienart"
-            options={LINE_KIND_OPTIONS}
-            value={common(selectedLines.map((l) => l.kind))}
-            onChange={setLineKind}
-          />
-          {selectedLine && (
-            <IconButton
-              icon={Route}
-              label="Automatisch führen (eigene Knicke verwerfen)"
-              disabled={selectedLine.waypoints.length === 0}
-              onClick={() => edit(updateConnection(diagram, selectedLine.id, { waypoints: [] }))}
-            />
-          )}
-        </div>
-      )}
-      {styledAnnotations.length > 0 && (
-        <div className="tool-group">
-          <Segmented
-            label="Linienart"
-            options={STROKE_STYLE_OPTIONS}
-            value={common(styledAnnotations.map((a) => a.style))}
-            onChange={setStrokeStyle}
-          />
-        </div>
-      )}
-      {layerList.length > 1 && selectionCount({ ...current, junctions: [] }) > 0 && (
-        <div className="tool-group">
-          <Layers size={16} aria-hidden className="context-icon" />
-          <select
-            aria-label="Ebene"
-            data-tooltip="Ebene der Auswahl"
-            value={common(selectedLayers) ?? ''}
-            onChange={(e) => edit((d) => assignLayer(d, current, e.target.value))}
-          >
-            {common(selectedLayers) === undefined && <option value="">Verschiedene Ebenen</option>}
-            {layerList.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      <div className="tool-group">
-        {propertiesTarget && (
-          <IconButton
-            icon={SlidersHorizontal}
-            label="Eigenschaften (Doppelklick)"
-            shortcut="Enter"
-            onClick={() => setProperties(propertiesTarget)}
-          />
-        )}
-        <IconButton icon={Trash2} label="Löschen" shortcut="Entf" onClick={deleteSelection} />
-      </div>
-    </div>
-  );
-
   return (
     <div className="app" style={{ '--palette-width': `${paletteWidth}px` } as CSSProperties}>
       <header className="toolbar">
@@ -702,49 +465,7 @@ export function App() {
       )}
 
       <div className="sidebar">
-      <aside className="palette">
-        <h2>Zeichnen</h2>
-        <div className="palette-tools">
-          {TOOLS.map(([t, icon, title]) => (
-            <IconButton key={t} icon={icon} label={title} aria-pressed={tool === t} onClick={() => setTool(tool === t ? null : t)} />
-          ))}
-        </div>
-        <h2>Bauteile</h2>
-        {PALETTE_GROUPS.map((group) => {
-          const entries = palette.filter((e) => e.group === group);
-          if (entries.length === 0) return null;
-          return (
-            <details key={group} open className="palette-group">
-              <summary>{group}</summary>
-              <div className="palette-grid">
-                {entries.map((entry) => (
-                  <button
-                    key={entry.key}
-                    className={entry.configurable ? 'palette-item is-configurable' : 'palette-item'}
-                    title={
-                      entry.configurable
-                        ? `${entry.name} (konfigurierbar): klicken oder aufs Blatt ziehen, Betätigung und Einzelheiten per Doppelklick im Konfigurator einstellen`
-                        : `${entry.name}: klicken oder aufs Blatt ziehen`
-                    }
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData(SYMBOL_DRAG_TYPE, entry.key);
-                      e.dataTransfer.effectAllowed = 'copy';
-                      const preview = e.currentTarget.querySelector('svg');
-                      if (preview) e.dataTransfer.setDragImage(preview, preview.clientWidth / 2, preview.clientHeight / 2);
-                    }}
-                    onClick={() => add(entry)}
-                  >
-                    <SymbolPreview component={entry} />
-                    <span>{entry.name}</span>
-                    {entry.configurable && <SlidersHorizontal className="palette-config-badge" size={12} aria-label="konfigurierbar" />}
-                  </button>
-                ))}
-              </div>
-            </details>
-          );
-        })}
-      </aside>
+      <Palette palette={palette} tool={tool} setTool={setTool} add={(entry) => add(entry)} />
       <StructurePanel
         drawing={drawing}
         active={active}
@@ -834,7 +555,16 @@ export function App() {
             onMoveJunction={(id, position) => edit((d) => keepRoutes(d, moveJunction(d, id, position)), `junction:${id}`)}
             onGestureEnd={history.seal}
           />
-          {contextBar}
+          <ContextBar
+            diagram={diagram}
+            layers={layersOf(drawing)}
+            current={current}
+            propertiesTarget={propertiesTarget}
+            edit={edit}
+            onRotate={rotate}
+            onOpenProperties={setProperties}
+            onDelete={deleteSelection}
+          />
           {checking && (
             <CheckPanel
               issues={issues}
