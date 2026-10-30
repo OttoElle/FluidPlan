@@ -73,6 +73,8 @@ und eine Übersicht der Bedienung stehen rechts in der Werkzeugleiste.
 
 ## Schnellstart
 
+**Online:** https://ottoelle.github.io/FluidPlan/ (wird bei jedem Push auf `main` automatisch neu veröffentlicht).
+
 Voraussetzung: Node.js 22 oder neuer.
 
 **Windows:** `start.bat` doppelklicken. Beim ersten Start werden die Abhängigkeiten
