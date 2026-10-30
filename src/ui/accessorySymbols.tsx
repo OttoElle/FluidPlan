@@ -23,17 +23,10 @@ export function BallValveSymbol({ config }: { config: BallValveConfig }) {
   return (
     <>
       <circle cx={c[0]} cy={c[1]} r={BALL_R} />
-      {SIDES[config.ways].map(({ side }) => {
-        const [dx, dy] = SIDE_DIR[side];
-        const base = at(side, BALL_R + 2);
-        // Absperrdreieck (8.7.23): 2M lang, 1,5M breit, Spitze an der Kugel
-        return (
-          <g key={side}>
-            <polygon points={pts(at(side, BALL_R), [base[0] - dy * 0.75, base[1] + dx * 0.75], [base[0] + dy * 0.75, base[1] - dx * 0.75])} />
-            <line x1={base[0]} y1={base[1]} x2={at(side, PORT_DISTANCE)[0]} y2={at(side, PORT_DISTANCE)[1]} />
-          </g>
-        );
-      })}
+      {/* Anschlussleitungen direkt an der Kugel (8.2.12), ohne Absperrdreiecke */}
+      {SIDES[config.ways].map(({ side }) => (
+        <line key={side} x1={at(side, BALL_R)[0]} y1={at(side, BALL_R)[1]} x2={at(side, PORT_DISTANCE)[0]} y2={at(side, PORT_DISTANCE)[1]} />
+      ))}
       {bore.paths.map((path, i) => {
         if (separate && path.length === 2) {
           // Zwei getrennte Wege: Viertelbogen um die gemeinsame Ecke, damit sie sich nicht berühren.
@@ -98,10 +91,18 @@ export function TankSymbol({ config }: { config: TankConfig }) {
   const bottom = line + depth;
   return (
     <>
-      {config.closed ? (
-        <rect x={0} y={line} width={w} height={depth} />
-      ) : (
+      {config.size === 'small' ? (
+        // Behälterrückführung (8.7.33): offenes U
         <polyline points={pts([0, line], [0, bottom], [w, bottom], [w, line])} />
+      ) : config.closed ? (
+        // Druckbeaufschlagter Behälter (8.7.34): Kapsel
+        <rect x={0} y={line} width={w} height={depth} rx={depth / 2} />
+      ) : (
+        // Behälter (8.7.32): Rechteck, Seitenwände 1M über den Deckel hinaus
+        <>
+          <polyline points={pts([0, line - 1], [0, bottom], [w, bottom], [w, line - 1])} />
+          <line x1={0} y1={line} x2={w} y2={line} />
+        </>
       )}
       {Array.from({ length: config.lines }, (_, i) => (
         <line key={i} x1={margin + 2 * i} y1={0} x2={margin + 2 * i} y2={end} />
@@ -173,7 +174,7 @@ function Converter({ x, y, letter, output }: { x: number; y: number; letter: str
     <>
       <rect x={x} y={y} width={4} height={4} />
       <line x1={x} y1={y} x2={x + 4} y2={y + 4} />
-      <text x={x + 1.1} y={y + 2.9} className="fill" stroke="none" fontSize={1.8} textAnchor="middle" dominantBaseline="central">
+      <text x={x + 1.1} y={y + 2.9} className="fill" stroke="none" fontSize={1.8} fontFamily="Arial, Helvetica, sans-serif" textAnchor="middle" dominantBaseline="central">
         {letter}
       </text>
       {output === 'switching' ? (
@@ -186,31 +187,6 @@ function Converter({ x, y, letter, output }: { x: number; y: number; letter: str
         // analog (8.7.8)
         <path d={`M${x + 2.5} ${y + 1.6} v-0.5 a0.5 0.5 0 0 1 1 0 v0.5`} />
       )}
-    </>
-  );
-}
-
-/** Messgerät-Kreis 4M (6.4.3.13) mit Volumenstromanzeige: zwei Bögen r = 1,5M (8.7.16). */
-function FlowMeter({ cx, cy }: { cx: number; cy: number }) {
-  // Schnittpunkte der Bögen (Mitte 2M neben der Kreismitte) mit dem Kreis r = 2M
-  const a = 1.4375;
-  const h = Math.sqrt(4 - a * a);
-  return (
-    <>
-      <circle cx={cx} cy={cy} r={2} />
-      <path d={`M${cx - a} ${cy - h} A1.5 1.5 0 0 1 ${cx - a} ${cy + h}`} />
-      <path d={`M${cx + a} ${cy - h} A1.5 1.5 0 0 0 ${cx + a} ${cy + h}`} />
-    </>
-  );
-}
-
-/** Thermometer (6.4.3.7): Kreis 4M mit Temperaturanzeige (8.7.17). */
-function Thermometer({ cx, cy }: { cx: number; cy: number }) {
-  return (
-    <>
-      <circle cx={cx} cy={cy} r={2} />
-      <line x1={cx} y1={cy - 1.5} x2={cx} y2={cy + 1.25} />
-      <circle cx={cx} cy={cy + 1.25} r={0.3} className="fill" />
     </>
   );
 }
@@ -236,18 +212,14 @@ export function SensorSymbol({ config }: { config: SensorConfig }) {
     <>
       {config.quantity === 'pressure' && <line x1={0} y1={by + 2} x2={bx} y2={by + 2} />}
       {config.quantity === 'flow' && (
+        // Durchgehende Leitung, Wandler über eine Abzweigung angeschlossen (8.2.1)
         <>
-          <line x1={2} y1={0} x2={2} y2={by} />
-          <FlowMeter cx={2} cy={by + 2} />
-          <line x1={2} y1={by + 4} x2={2} y2={l.height} />
+          <line x1={2} y1={0} x2={2} y2={l.height} />
+          <line x1={2} y1={by + 2} x2={bx} y2={by + 2} />
+          <circle cx={2} cy={by + 2} r={0.25} className="fill" />
         </>
       )}
-      {config.quantity === 'temperature' && (
-        <>
-          <Thermometer cx={2} cy={by + 2} />
-          <line x1={2} y1={by + 4} x2={2} y2={l.height} />
-        </>
-      )}
+      {config.quantity === 'temperature' && <polyline points={pts([2, l.height], [2, by + 2], [bx, by + 2])} />}
       <Converter x={bx} y={by} letter={QUANTITY_LETTER[config.quantity]} output={output} />
       {config.adjustable && (
         // Einstellbar (6.4.2.2): Strich über der linken oberen Ecke, schräg vom Pfeil gekreuzt

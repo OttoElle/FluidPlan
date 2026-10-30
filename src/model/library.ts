@@ -115,7 +115,7 @@ export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
     ['Y', 'work', 12, 4, '1'],
     ['A', 'work', 6, 0, '2'],
   ]),
-  fixed('valve.two-pressure', 'Zweidruckventil (UND)', HP, [12, 6], [
+  fixed('valve.two-pressure', 'Zweidruckventil (UND)', P, [12, 6], [
     ['X', 'work', 0, 4, '1'],
     ['Y', 'work', 12, 4, '1'],
     ['A', 'work', 6, 0, '2'],

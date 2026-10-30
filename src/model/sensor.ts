@@ -7,10 +7,11 @@ import type { PortDefinition } from './types.ts';
  * Elektronisch (6.4.2.2/6.4.2.3, 8.7.2–8.7.9): Signalwandler als Quadrat 4M
  * mit Diagonale, unten links die Messgröße (P, F, T, G nach 8.7.4), oben
  * rechts das Ausgangssignal (schaltend oder analog). Druck wird über eine
- * 2M lange Leitung von links zugeführt, Durchfluss misst ein Messgerät-Kreis
- * 4M in der Leitung (6.4.3.13), Temperatur ein Thermometer (6.4.3.7); der
- * Wandler sitzt jeweils rechts daneben. Der Näherungsschalter (9.6.2.2) hat
- * keinen Fluidanschluss.
+ * 2M lange Leitung von links zugeführt. Beim Durchfluss läuft die Leitung
+ * durch, der Wandler hängt an einer Abzweigung; bei der Temperatur führt die
+ * Leitung von unten an den Wandler. Der Näherungsschalter (9.6.2.2) hat
+ * keinen Fluidanschluss. Messgerät und Wandler werden nicht kombiniert, das
+ * zeigt die Norm nicht.
  *
  * Elektromechanisch (Druckschalter 6.4.2.1): Kasten 4M mit Schließer und
  * einstellbarer Feder rechts.

@@ -228,12 +228,12 @@ function HandPump() {
   );
 }
 
-/** Verschlossener Anschluss, Stopfen (8.2.9, 2M × 2M): Leitung 1M, Querstrich 2M. */
+/** Verschlossener Anschluss, Stopfen (8.2.9, 2M × 2M): Leitung 1M, Querstrich 1M. */
 function Plug() {
   return (
     <>
       <line x1={1} y1={0} x2={1} y2={1} />
-      <line x1={0} y1={1} x2={2} y2={1} />
+      <line x1={0.5} y1={1} x2={1.5} y2={1} />
     </>
   );
 }

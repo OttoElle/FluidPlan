@@ -162,7 +162,7 @@ describe('Konfigurierbare Bauteile', () => {
   });
 
   it('ordnet Betätigungen nach der Norm und begrenzt sie', () => {
-    const c = normalizeValve({ ...defaultValveConfig('hydraulic'), right: ['manual', 'spring', 'solenoid', 'pilot', 'roller'] });
+    const c = normalizeValve({ ...defaultValveConfig('hydraulic'), right: ['push', 'spring', 'solenoid', 'pilot', 'roller'] });
     expect(c.right).toEqual(['pilot', 'solenoid', 'spring']);
   });
 
@@ -264,5 +264,33 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
       expect(r.diagram.components.map((c) => c.type)).toContain('valve.directional');
       expect(r.diagram.components.find((c) => c.type === 'actuator.cylinder')?.config?.kind).toBe('cylinder');
     }
+  });
+
+  it('ersetzen Betätigungen, die es in der Norm 2019 nicht mehr gibt, durch „Drücken“', () => {
+    const file = JSON.parse(serializeDiagram(exampleHydraulicDiagram()));
+    const comps = file.drawing.sheets[0].components;
+    const valve = comps.find((c: { type: string }) => c.type === 'valve.directional');
+    valve.config.left = ['manual'];
+    valve.config.right = ['pushbutton', 'spring'];
+    comps.find((c: { type: string }) => c.type === 'actuator.cylinder').config.rodActuator = 'pushbutton';
+    const r = parseDiagram(JSON.stringify(file));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const v = r.diagram.components.find((c) => c.type === 'valve.directional')!.config as DirectionalValveConfig;
+    expect([v.left, v.right]).toEqual([['push'], ['spring', 'push']]);
+    expect(r.diagram.components.find((c) => c.type === 'actuator.cylinder')?.config).toMatchObject({ rodActuator: 'push' });
+  });
+});
+
+describe('Elektrohydraulische Vorsteuerung', () => {
+  it('hat einen Anschluss für externes Steueröl unter dem Steuerdreieck', () => {
+    const config = normalizeValve({ ...defaultValveConfig('hydraulic', 4, 3), left: ['solenoid-pilot', 'spring'], right: ['solenoid-pilot', 'spring'] });
+    const def = definitionOf({ type: 'valve.directional', config })!;
+    const x = def.ports.find((p) => p.id === 'X')!;
+    const y = def.ports.find((p) => p.id === 'Y')!;
+    expect(x.offset).toEqual({ x: 40, y: 80 });
+    expect(y.offset).toEqual({ x: def.size.width - 40, y: 80 });
+    const pneumatic = normalizeValve({ ...config, medium: 'pneumatic' });
+    expect(definitionOf({ type: 'valve.directional', config: pneumatic })!.ports.some((p) => p.id === 'X')).toBe(false);
   });
 });

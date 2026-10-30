@@ -97,11 +97,17 @@ export function tankTitle(config: TankConfig): string {
   return config.closed ? 'Behälter, geschlossen' : 'Tank';
 }
 
-/** Maße in M: Wandabstand der ersten Leitung, Behälterhöhe, Leitungslänge über dem Behälter. */
+/**
+ * Maße in M: Wandabstand der ersten Leitung, Behälterhöhe, Leitungslänge über dem Behälter.
+ *
+ * Behälter (8.7.32): Rechteck 6M + nM breit und 2M hoch, die Seitenwände stehen 1M über
+ * den Deckel hinaus. Behälterrückführung (8.7.33): offenes U 2M × 1M. Geschlossener
+ * (druckbeaufschlagter) Behälter (8.7.34): Kapsel 4M hoch, liegend, mindestens 8M lang.
+ */
 export function tankLayout(config: TankConfig) {
   const small = config.size === 'small';
-  const margin = small ? 1 : 2;
-  const depth = small ? 1 : 2;
+  const margin = small ? 1 : config.closed ? 4 : 3;
+  const depth = small ? 1 : config.closed ? 4 : 2;
   const line = small ? 1 : 2;
   return {
     margin,

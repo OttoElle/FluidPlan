@@ -30,8 +30,8 @@ import { SymbolPicker, type PickerOption } from './SymbolPicker.tsx';
  * Wer Wege einzeln festlegen will, findet das unter „Wege einzeln bearbeiten“.
  */
 
-const MANUAL: Actuator[] = ['manual', 'pushbutton', 'lever', 'pedal'];
-const MECHANICAL: Actuator[] = ['plunger', 'roller', 'detent'];
+const MANUAL: Actuator[] = ['push', 'pull', 'push-pull', 'lever', 'pedal', 'treadle', 'override'];
+const MECHANICAL: Actuator[] = ['plunger', 'roller', 'roller-lever', 'detent'];
 const POWERED: Actuator[] = ['solenoid', 'pilot'];
 
 interface SideState {

@@ -3,9 +3,8 @@ import type { PortDefinition } from './types.ts';
 
 /**
  * Konfigurierbarer Kugelhahn nach DIN ISO 1219-1: Kugel als Kreis 3M (8.2.12,
- * Drei-Wege-Kugelhahn) mit der Bohrung als Linie, an jedem Anschluss ein
- * Absperrdreieck 2M lang und 1,5M breit (8.7.23, Absperrventil) mit der
- * Spitze an der Kugel. Anschlüsse 4M von der Kugelmitte, auf ganzen M.
+ * Drei-Wege-Kugelhahn) mit der Bohrung als Linie, die Anschlussleitungen
+ * laufen direkt an die Kugel. Anschlüsse 4M von der Kugelmitte, auf ganzen M.
  */
 
 export type BallValveWays = 2 | 3 | 4;

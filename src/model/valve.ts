@@ -32,12 +32,16 @@ export type ValveRole = 'P' | 'T' | 'A' | 'B' | 'R' | 'S';
 export type PilotRole = 'X' | 'Y';
 
 export type Actuator =
-  | 'manual'
-  | 'pushbutton'
+  | 'push'
+  | 'pull'
+  | 'push-pull'
+  | 'override'
   | 'lever'
   | 'pedal'
+  | 'treadle'
   | 'plunger'
   | 'roller'
+  | 'roller-lever'
   | 'detent'
   | 'spring'
   | 'solenoid'
@@ -45,12 +49,16 @@ export type Actuator =
   | 'pilot';
 
 export const ACTUATOR_NAMES: Record<Actuator, string> = {
-  manual: 'Muskelkraft (allgemein)',
-  pushbutton: 'Druckknopf',
+  push: 'Drücken',
+  pull: 'Ziehen',
+  'push-pull': 'Drücken und Ziehen',
+  override: 'Handhilfsbetätigung',
   lever: 'Hebel',
   pedal: 'Pedal',
+  treadle: 'Wippe',
   plunger: 'Stößel',
   roller: 'Rolle',
+  'roller-lever': 'Rollenhebel',
   detent: 'Raste',
   spring: 'Feder',
   solenoid: 'Elektromagnet',
@@ -60,12 +68,16 @@ export const ACTUATOR_NAMES: Record<Actuator, string> = {
 
 /** Breite der Betätigungselemente in M, gemessen ab dem Schaltfeld. */
 export const ACTUATOR_WIDTH: Record<Actuator, number> = {
-  manual: 3,
-  pushbutton: 3.75,
+  push: 3,
+  pull: 3.75,
+  'push-pull': 3.75,
+  override: 3,
   lever: 3.9,
-  pedal: 4.3,
+  pedal: 3.8,
+  treadle: 3.8,
   plunger: 3.5,
   roller: 3.75,
+  'roller-lever': 6.75,
   detent: 3,
   spring: 2.5,
   solenoid: 3,
@@ -79,14 +91,26 @@ const ACTUATOR_ORDER: Record<Actuator, number> = {
   solenoid: 1,
   'solenoid-pilot': 1,
   spring: 2,
-  manual: 3,
-  pushbutton: 3,
+  push: 3,
+  pull: 3,
+  'push-pull': 3,
+  override: 3,
   lever: 3,
   pedal: 3,
+  treadle: 3,
   plunger: 3,
   roller: 3,
+  'roller-lever': 3,
   detent: 3,
 };
+
+/**
+ * Betätigungen früherer Stände, die es in DIN ISO 1219-1:2019 nicht mehr gibt
+ * („Muskelkraft allgemein“, „Druckknopf“); beim Laden wird daraus „Drücken“ (8.5.10).
+ */
+export const LEGACY_ACTUATORS: Record<string, Actuator> = { manual: 'push', pushbutton: 'push' };
+
+export const upgradeActuator = (a: unknown): unknown => (typeof a === 'string' && a in LEGACY_ACTUATORS ? LEGACY_ACTUATORS[a] : a);
 
 /** Höchstens so viele Betätigungen je Seite (darüber wird das Symbol unübersichtlich). */
 export const MAX_ACTUATORS = 3;
@@ -243,6 +267,13 @@ export function valveGeometry(config: DirectionalValveConfig, unit: number) {
   // Der Steuerdruck ist nach der Reihenfolge immer das unterste Element.
   if (config.left.includes('pilot')) ports.push(port(config, 'X', { x: 0, y: actuatorRowY(0) * unit }));
   if (config.right.includes('pilot')) ports.push(port(config, 'Y', { x: layout.width * unit, y: actuatorRowY(0) * unit }));
+  // Elektrohydraulische Vorsteuerung mit externer Steuerölversorgung (6.1.1.14): Anschluss
+  // unter der Grundseite des Steuerdreiecks, 3M vom Feld, an der Symbol-Unterkante.
+  if (config.medium === 'hydraulic') {
+    const rightEdge = layout.fieldsX + config.positions.length * layout.fieldWidth;
+    if (config.left[0] === 'solenoid-pilot') ports.push(port(config, 'X', { x: (layout.fieldsX - 3) * unit, y: HEIGHT * unit }));
+    if (config.right[0] === 'solenoid-pilot') ports.push(port(config, 'Y', { x: (rightEdge + 3) * unit, y: HEIGHT * unit }));
+  }
   return { size: { width: layout.width * unit, height: layout.height * unit }, ports };
 }
 
@@ -382,6 +413,8 @@ const DOMAINS: readonly Domain[] = ['hydraulic', 'pneumatic'];
 export function readValveConfig(v: unknown, path: string, errors: string[]): DirectionalValveConfig | undefined {
   const before = errors.length;
   const fail = (msg: string) => errors.push(`${path}${msg}`);
+  const upgrade = (list: unknown) => (Array.isArray(list) ? list.map(upgradeActuator) : list);
+  if (isObject(v)) v = { ...v, left: upgrade(v.left), right: upgrade(v.right) };
   if (!isObject(v)) {
     fail(': Objekt erwartet');
     return undefined;

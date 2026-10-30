@@ -1,6 +1,6 @@
-import { configReader } from './configRead.ts';
+import { configReader, isObject } from './configRead.ts';
 import type { PortDefinition } from './types.ts';
-import { ACTUATOR_NAMES, ACTUATOR_WIDTH, type Actuator } from './valve.ts';
+import { ACTUATOR_NAMES, ACTUATOR_WIDTH, upgradeActuator, type Actuator } from './valve.ts';
 
 /**
  * Konfigurierbarer Zylinder nach DIN ISO 1219-1.
@@ -26,7 +26,7 @@ export type CylinderRod = 'single' | 'through';
 export type CylinderSpring = 'none' | 'rod' | 'piston';
 export type Cushion = 'none' | 'fixed' | 'adjustable';
 /** Betätigung am Ende der Kolbenstange (z. B. Pedal am Geberzylinder). */
-export type RodActuator = 'none' | Extract<Actuator, 'manual' | 'pushbutton' | 'lever' | 'pedal' | 'roller' | 'plunger'>;
+export type RodActuator = 'none' | Extract<Actuator, 'push' | 'pull' | 'lever' | 'pedal' | 'roller' | 'plunger'>;
 
 export interface CylinderConfig {
   kind: 'cylinder';
@@ -69,7 +69,7 @@ const CUSHION_NAMES: Record<Cushion, string> = {
   adjustable: 'Einstellbar',
 };
 
-export const ROD_ACTUATORS: readonly Exclude<RodActuator, 'none'>[] = ['manual', 'pushbutton', 'lever', 'pedal', 'roller', 'plunger'];
+export const ROD_ACTUATORS: readonly Exclude<RodActuator, 'none'>[] = ['push', 'pull', 'lever', 'pedal', 'roller', 'plunger'];
 export const ROD_ACTUATOR_NAMES: Record<RodActuator, string> = {
   none: 'Keine',
   ...(Object.fromEntries(ROD_ACTUATORS.map((a) => [a, ACTUATOR_NAMES[a]])) as Record<Exclude<RodActuator, 'none'>, string>),
@@ -228,6 +228,7 @@ export function cylinderGeometry(config: CylinderConfig, unit: number) {
 // --- Einlesen aus Dateien -----------------------------------------------------
 
 export function readCylinderConfig(v: unknown, path: string, errors: string[]): CylinderConfig | undefined {
+  if (isObject(v) && v.rodActuator !== undefined) v = { ...v, rodActuator: upgradeActuator(v.rodActuator) };
   const r = configReader(v, path, errors);
   if (!r) return undefined;
   const design = r.oneOf('design', DESIGN_NAMES, 'piston');
