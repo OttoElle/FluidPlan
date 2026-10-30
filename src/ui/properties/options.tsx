@@ -1,6 +1,6 @@
 import { STROKE_DASH, TEXT_SIZES } from '../../model/annotations.ts';
 import type { LineKind, StrokeStyle } from '../../model/types.ts';
-import { LINE_DASH } from '../DiagramView.tsx';
+import { LINE_DASH } from '../canvas/lineStyle.ts';
 import { StrokeIcon, type SegmentOption } from './Segmented.tsx';
 
 /** Leitungsarten nach ISO 1219-1 mit Strichmuster als Symbol. */
