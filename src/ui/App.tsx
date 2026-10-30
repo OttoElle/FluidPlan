@@ -605,7 +605,10 @@ export function App() {
   return (
     <div className="app" style={{ '--palette-width': `${paletteWidth}px` } as CSSProperties}>
       <header className="toolbar">
-        <strong className="brand">FluidPlan</strong>
+        <strong className="brand">
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={20} height={20} />
+          FluidPlan
+        </strong>
         <div className="tool-group">
           <IconButton icon={FilePlus2} label="Neuer Schaltplan" onClick={() => setNewDialogOpen(true)} />
           <IconButton icon={FolderOpen} label="Öffnen" shortcut="Strg+O" onClick={() => fileInput.current?.click()} />
