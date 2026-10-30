@@ -27,6 +27,7 @@ import {
   SlidersHorizontal,
   Square,
   Sun,
+  Layers,
   Moon,
   Tag,
   Trash2,
@@ -660,8 +661,12 @@ export function App() {
                 {entries.map((entry) => (
                   <button
                     key={entry.key}
-                    className="palette-item"
-                    title={`${entry.name}: klicken oder aufs Blatt ziehen`}
+                    className={entry.isGroup ? 'palette-item is-group' : 'palette-item'}
+                    title={
+                      entry.isGroup
+                        ? `${entry.name} (Symbolgruppe): klicken oder aufs Blatt ziehen, Ausführung per Doppelklick im Konfigurator wählen`
+                        : `${entry.name}: klicken oder aufs Blatt ziehen`
+                    }
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData(SYMBOL_DRAG_TYPE, entry.key);
@@ -673,6 +678,7 @@ export function App() {
                   >
                     <SymbolPreview component={entry} />
                     <span>{entry.name}</span>
+                    {entry.isGroup && <Layers className="palette-group-badge" size={12} aria-label="Symbolgruppe" />}
                   </button>
                 ))}
               </div>
