@@ -143,7 +143,7 @@ export function SheetLabels({
           tooltip="above"
           style={{
             left: last.left + last.width + 24,
-            top: last.top + Math.min(last.height / 2, 160) - ADD_BUTTON / 2,
+            top: last.top + last.height / 2 - ADD_BUTTON / 2,
           }}
           onClick={onAdd}
         />

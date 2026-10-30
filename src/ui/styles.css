@@ -452,20 +452,8 @@ dialog.sheet-dialog legend { font-size: 12px; color: var(--muted); text-transfor
 .help-table dd { margin: 0; }
 dialog.help { width: min(560px, calc(100vw - 32px)); }
 /* Zeichenwerkzeuge: Fangen, Gruppen, Lineale */
-.canvas-controls {
-  position: absolute;
-  /* Rechts vom Lineal (20 px). */
-  left: 32px;
-  bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-.canvas-controls .separator { width: 1px; align-self: stretch; margin: 2px 2px; background: var(--border); }
+.zoom-controls .separator { width: 1px; align-self: stretch; margin: 2px 2px; background: var(--border); }
+.ruler .cursor { stroke: var(--accent); stroke-width: 1.5; }
 .annotation.creating { pointer-events: none; }
 .annotation.creating .note-line { stroke: var(--accent); stroke-dasharray: 4 3; }
 .handle.point { cursor: move; }

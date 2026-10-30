@@ -32,7 +32,7 @@ import { ComponentSymbol, hasSymbol } from './symbols.tsx';
 import { IconButton } from './IconButton.tsx';
 import type { PropertiesTarget } from './properties/PropertiesDialog.tsx';
 import { GalleryHorizontal, Grid3x3, Maximize, ZoomIn, ZoomOut } from 'lucide-react';
-import { RULER_SIZE, Rulers } from './Rulers.tsx';
+import { RULER_SIZE, Rulers, type RulersHandle } from './Rulers.tsx';
 import { LABEL_HEIGHT, SheetLabels, type ScreenRect, type SheetAction } from './SheetLabels.tsx';
 
 export type { Selection };
@@ -209,6 +209,8 @@ export function DiagramView({
   onEditTitleField,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
+  /** Markiert die Mausposition auf den Linealen, ohne die Zeichnung neu zu zeichnen. */
+  const rulersRef = useRef<RulersHandle>(null);
   const drag = useRef<Drag | null>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [view, setView] = useState<View | null>(null);
@@ -543,7 +545,7 @@ export function DiagramView({
   return (
     <div className="diagram-wrap">
       {/* Die Lineale messen ab der linken oberen Ecke des bearbeitbaren Blatts. */}
-      {view && size && <Rulers view={{ ...view, x: view.x - origin.x, y: view.y - origin.y }} size={size} />}
+      {view && size && <Rulers ref={rulersRef} view={{ ...view, x: view.x - origin.x, y: view.y - origin.y }} size={size} />}
       <svg
         ref={svgRef}
         className={panning ? 'diagram panning' : spaceDown ? 'diagram pan-ready' : tool ? 'diagram placing' : 'diagram'}
@@ -599,8 +601,13 @@ export function DiagramView({
           }
         }}
         onDoubleClick={() => poly && finishPoly(poly.points, false)}
-        onPointerLeave={() => setSnapMark(null)}
+        onPointerLeave={() => {
+          setSnapMark(null);
+          rulersRef.current?.setCursor(null);
+        }}
         onPointerMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          rulersRef.current?.setCursor({ x: e.clientX - r.left, y: e.clientY - r.top });
           if (draft) setDraft({ ...draft, cursor: toDiagram(e) });
           const d = drag.current;
           if (tool && (!d || d.kind === 'create')) {
@@ -943,7 +950,7 @@ export function DiagramView({
         />
       )}
 
-      <div className="canvas-controls">
+      <div className="zoom-controls">
         <IconButton
           icon={Grid3x3}
           label="Raster anzeigen"
@@ -951,9 +958,7 @@ export function DiagramView({
           aria-pressed={settings.grid}
           onClick={() => changeSettings({ ...settings, grid: !settings.grid })}
         />
-      </div>
-
-      <div className="zoom-controls">
+        <span className="separator" />
         <IconButton icon={ZoomOut} label="Verkleinern" tooltip="above" onClick={() => zoomCenter(1 / 1.25)} />
         <button
           className="zoom-level"

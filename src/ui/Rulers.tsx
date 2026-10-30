@@ -1,4 +1,10 @@
+import { useImperativeHandle, useState, type Ref } from 'react';
 import { MM_PER_UNIT } from '../model/sheet.ts';
+
+/** Mausposition auf den Linealen markieren (Pixel relativ zur Zeichenfläche, `null` = keine). */
+export interface RulersHandle {
+  setCursor: (cursor: { x: number; y: number } | null) => void;
+}
 
 /** Breite der Lineale in Bildschirmpixeln. */
 export const RULER_SIZE = 20;
@@ -35,10 +41,14 @@ function ticks(origin: number, scale: number, length: number): Tick[] {
 export function Rulers({
   view,
   size,
+  ref,
 }: {
   view: { x: number; y: number; scale: number };
   size: { width: number; height: number };
+  ref?: Ref<RulersHandle>;
 }) {
+  const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
+  useImperativeHandle(ref, () => ({ setCursor }), []);
   const horizontal = ticks(view.x, view.scale, size.width);
   const vertical = ticks(view.y, view.scale, size.height);
   return (
@@ -54,6 +64,7 @@ export function Rulers({
             )}
           </g>
         ))}
+        {cursor && <line className="cursor" x1={cursor.x} x2={cursor.x} y1={0} y2={RULER_SIZE} />}
       </svg>
       <svg className="ruler vertical" width={RULER_SIZE} height={size.height} aria-hidden>
         {vertical.map((t) => (
@@ -66,6 +77,7 @@ export function Rulers({
             )}
           </g>
         ))}
+        {cursor && <line className="cursor" y1={cursor.y} y2={cursor.y} x1={0} x2={RULER_SIZE} />}
       </svg>
       <div className="ruler corner" />
     </>
