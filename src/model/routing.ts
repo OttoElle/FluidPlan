@@ -157,6 +157,39 @@ class MinHeap<T> {
   }
 }
 
+/** Belegte Rasterpunkte; ein Set genügt, routeAll nutzt eine schnellere Variante. */
+export interface Occupied {
+  has(key: string): boolean;
+}
+
+/**
+ * Arbeitsspeicher der Wegsuche, wird zwischen den Aufrufen wiederverwendet.
+ * Ein Eintrag gilt nur, wenn sein Stempel zur aktuellen Suche passt; so muss
+ * vor jeder Suche nichts gelöscht werden.
+ */
+const scratch = {
+  stamp: 0,
+  cost: new Float64Array(0),
+  prev: new Int32Array(0),
+  seen: new Uint32Array(0),
+  blocked: new Uint32Array(0),
+};
+
+function prepareScratch(states: number, cells: number) {
+  if (scratch.cost.length < states) {
+    scratch.cost = new Float64Array(states);
+    scratch.prev = new Int32Array(states);
+    scratch.seen = new Uint32Array(states);
+  }
+  if (scratch.blocked.length < cells) scratch.blocked = new Uint32Array(cells);
+  if (++scratch.stamp === 0xffffffff) {
+    scratch.seen.fill(0);
+    scratch.blocked.fill(0);
+    scratch.stamp = 1;
+  }
+  return scratch.stamp;
+}
+
 export interface RouteRequest {
   start: Point;
   /** Richtung, in die der Startanschluss zeigt; fehlt sie (Abzweig), ist jede erlaubt. */
@@ -167,7 +200,7 @@ export interface RouteRequest {
   /** Bauteile, die die Leitung nicht durchqueren soll. */
   obstacles: Box[];
   /** Rasterpunkte (`"x,y"`) fremder Leitungen; darüber zu laufen kostet extra. */
-  occupied?: ReadonlySet<string>;
+  occupied?: Occupied;
 }
 
 /**
@@ -199,23 +232,30 @@ export function route({ start, startDir, end, endDir, obstacles, occupied }: Rou
   const w = maxX - minX + 1;
   const h = maxY - minY + 1;
 
+  const stamp = prepareScratch(w * h * 4, w * h);
+  const { cost, prev, seen } = scratch;
   // Gesperrt sind alle Rasterpunkte innerhalb oder auf dem Rand eines Bauteils.
-  const blocked = new Uint8Array(w * h);
+  const blockedStamp = scratch.blocked;
   for (const b of obstacles) {
     for (let y = Math.ceil(b.minY / GRID); y <= Math.floor(b.maxY / GRID); y++) {
       for (let x = Math.ceil(b.minX / GRID); x <= Math.floor(b.maxX / GRID); x++) {
-        blocked[(y - minY) * w + (x - minX)] = 1;
+        blockedStamp[(y - minY) * w + (x - minX)] = stamp;
       }
     }
   }
   const cell = (x: number, y: number) => (y - minY) * w + (x - minX);
-  blocked[cell(s.x, s.y)] = 0;
-  blocked[cell(e.x, e.y)] = 0;
+  blockedStamp[cell(s.x, s.y)] = 0;
+  blockedStamp[cell(e.x, e.y)] = 0;
+  const isBlocked = (x: number, y: number) => blockedStamp[cell(x, y)] === stamp;
 
   // Zustand = Rasterpunkt × Richtung, aus der man gekommen ist.
   const state = (x: number, y: number, d: number) => cell(x, y) * 4 + d;
-  const cost = new Float64Array(w * h * 4).fill(Infinity);
-  const prev = new Int32Array(w * h * 4).fill(-1);
+  const costOf = (st: number) => (seen[st] === stamp ? cost[st]! : Infinity);
+  const setState = (st: number, c: number, from: number) => {
+    seen[st] = stamp;
+    cost[st] = c;
+    prev[st] = from;
+  };
   const heap = new MinHeap<number>();
   const heuristic = (x: number, y: number) => Math.abs(x - e.x) + Math.abs(y - e.y);
 
@@ -230,11 +270,10 @@ export function route({ start, startDir, end, endDir, obstacles, occupied }: Rou
   for (const d0 of firstDirs) {
     if (d0 < 0) continue;
     const first = { x: s.x + DIRECTIONS[d0]!.x, y: s.y + DIRECTIONS[d0]!.y };
-    if (!inside(first.x, first.y) || blocked[cell(first.x, first.y)]) continue;
+    if (!inside(first.x, first.y) || isBlocked(first.x, first.y)) continue;
     const firstState = state(first.x, first.y, d0);
     const c = 1 + (occupied?.has(`${first.x * GRID},${first.y * GRID}`) ? OCCUPIED_COST : 0);
-    cost[firstState] = c;
-    prev[firstState] = -2; // markiert den Anfang
+    setState(firstState, c, -2); // -2 markiert den Anfang
     heap.push(c + heuristic(first.x, first.y), firstState);
     if (samePoint(first, e) && (endArrival < 0 || endArrival === d0)) found = firstState;
   }
@@ -256,13 +295,12 @@ export function route({ start, startDir, end, endDir, obstacles, occupied }: Rou
       if (nd === (d + 2) % 4) continue; // nicht umkehren
       const nx = x + DIRECTIONS[nd]!.x;
       const ny = y + DIRECTIONS[nd]!.y;
-      if (!inside(nx, ny) || blocked[cell(nx, ny)]) continue;
+      if (!inside(nx, ny) || isBlocked(nx, ny)) continue;
       const ns = state(nx, ny, nd);
       const busy = occupied?.has(`${nx * GRID},${ny * GRID}`) ? OCCUPIED_COST : 0;
       const nc = cost[cur]! + 1 + (nd === d ? 0 : BEND_COST) + busy;
-      if (nc < cost[ns]!) {
-        cost[ns] = nc;
-        prev[ns] = cur;
+      if (nc < costOf(ns)) {
+        setState(ns, nc, cur);
         heap.push(nc + heuristic(nx, ny), ns);
       }
     }
@@ -301,7 +339,7 @@ export function connectionPath(
   diagram: Diagram,
   connection: Connection,
   obstacles = obstaclesOf(diagram),
-  occupied?: ReadonlySet<string>,
+  occupied?: Occupied,
 ): Point[] {
   const start = endpointPosition(diagram, connection.from);
   const end = endpointPosition(diagram, connection.to);
@@ -320,27 +358,41 @@ const portKey = (r: Endpoint) => (isJunctionRef(r) ? undefined : endpointKey(r))
  * sich fremde Leitungen nicht überdecken und verbunden aussehen.
  */
 export function routeAll(diagram: Diagram): Map<string, Point[]> {
+  // Der Verlauf hängt nur von Bauteilen, Leitungen und Abzweigen ab. Beim Ziehen
+  // fragen Zeichenfläche und keepRoutes denselben Stand mehrmals ab.
+  const cached = routeCache.get(diagram.connections);
+  if (cached && cached.components === diagram.components && cached.junctions === diagram.junctions) {
+    return new Map(cached.paths);
+  }
   const obstacles = obstaclesOf(diagram);
   const paths = new Map<string, Point[]>();
   const ordered = [...diagram.connections].sort((a, b) => b.waypoints.length - a.waypoints.length);
+  // Rasterpunkt -> Anschlüsse der Leitungen, die darüber laufen (je Leitung ein Eintrag).
+  const owners = new Map<string, (string | undefined)[][]>();
   for (const l of ordered) {
     // Leitungen am selben Anschluss dürfen ein Stück gemeinsam laufen (Verbindungspunkt),
     // an einem Abzweigpunkt dagegen muss jede Leitung in eine eigene Richtung gehen.
-    const mine = new Set([portKey(l.from), portKey(l.to)].filter((k) => k !== undefined));
-    const occupied = new Set<string>();
-    for (const other of ordered) {
-      const path = paths.get(other.id);
-      const shares = [other.from, other.to].some((e) => {
-        const k = portKey(e);
-        return k !== undefined && mine.has(k);
-      });
-      if (!path || shares) continue;
-      for (const p of gridSteps(path)) occupied.add(`${p.x},${p.y}`);
+    const ports = [portKey(l.from), portKey(l.to)];
+    const mine = ports.filter((k) => k !== undefined);
+    const occupied: Occupied = {
+      has: (key) => owners.get(key)?.some((o) => !o.some((k) => k !== undefined && mine.includes(k))) ?? false,
+    };
+    const path = connectionPath(diagram, l, obstacles, occupied);
+    paths.set(l.id, path);
+    for (const key of new Set(gridSteps(path).map((p) => `${p.x},${p.y}`))) {
+      const list = owners.get(key);
+      if (list) list.push(ports);
+      else owners.set(key, [ports]);
     }
-    paths.set(l.id, connectionPath(diagram, l, obstacles, occupied));
   }
-  return paths;
+  routeCache.set(diagram.connections, { components: diagram.components, junctions: diagram.junctions, paths });
+  return new Map(paths);
 }
+
+const routeCache = new WeakMap<
+  readonly Connection[],
+  { components: readonly ComponentInstance[]; junctions: Diagram['junctions']; paths: ReadonlyMap<string, Point[]> }
+>();
 
 /**
  * Verschiebt das Teilstück `index` (zwischen path[index] und path[index+1])
