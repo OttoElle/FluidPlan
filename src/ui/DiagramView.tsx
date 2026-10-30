@@ -24,6 +24,7 @@ import {
 } from '../model/routing.ts';
 import { EMPTY_SELECTION, toggle, union, type Selection } from '../model/selection.ts';
 import { expandGroups } from '../model/groups.ts';
+import { layerState, without } from '../model/layers.ts';
 import { DEFAULT_SNAP, FINE, snapPoint as snapToTargets, snapTargets, type SnapKind, type SnapOptions, type SnapTargets } from '../model/snap.ts';
 import { sheetLayout, type SheetRect } from '../model/drawing.ts';
 import type { Annotation, ComponentInstance, Diagram, Endpoint, LineKind, Point } from '../model/types.ts';
@@ -426,8 +427,19 @@ export function DiagramView({
     window.addEventListener('keydown', onKey, { capture: true });
     return () => window.removeEventListener('keydown', onKey, { capture: true });
   });
-  const dots = branchDots(diagram.connections, paths);
-  const jumps = sheet.lineJumps ? crossings(paths) : new Map<string, Point[]>();
+  // Ausgeblendete Ebenen: nicht zeichnen; gesperrte: zeichnen, aber nicht anklickbar (siehe model/layers.ts).
+  // Leitungen werden trotzdem mit allen Bauteilen geführt, damit sie beim Ein- und Ausblenden nicht springen.
+  const layers = useMemo(() => layerState(diagram), [diagram]);
+  const { hidden, locked } = layers;
+  const shownPaths = useMemo(
+    () => (hidden.connections.size === 0 ? paths : new Map([...paths].filter(([id]) => !hidden.connections.has(id)))),
+    [paths, hidden],
+  );
+  const dots = branchDots(
+    diagram.connections.filter((l) => !hidden.connections.has(l.id)),
+    shownPaths,
+  );
+  const jumps = sheet.lineJumps ? crossings(shownPaths) : new Map<string, Point[]>();
 
   /** Alles, was ganz im Rahmen zwischen a und b liegt. */
   const inBand = (a: Point, b: Point): Selection => {
@@ -457,8 +469,8 @@ export function DiagramView({
 
   const samePort = sameEndpoint;
 
-  /** Ein Teil einer Gruppe wählt die ganze Gruppe. */
-  const pick = (s: Selection) => expandGroups(diagram, s);
+  /** Ein Teil einer Gruppe wählt die ganze Gruppe; Ausgeblendetes und Gesperrtes bleibt außen vor. */
+  const pick = (s: Selection) => without(expandGroups(diagram, s), hidden, locked);
 
   /** Knickpunkte der fertigen Leitung aus den beim Zeichnen geklickten Punkten. */
   const draftWaypoints = (d: Draft, end: Point, endDir?: Point): Point[] => {
@@ -708,12 +720,14 @@ export function DiagramView({
         {sheet.frame && <SheetFrame diagram={diagram} onPick={draft || tool ? undefined : onEditTitleField} />}
 
         {diagram.annotations.map((a) => {
+          if (hidden.annotations.has(a.id)) return null;
           const selected = selection.annotations.includes(a.id);
           return (
             <AnnotationShape
               key={a.id}
               annotation={a}
               selected={selected}
+              className={locked.annotations.has(a.id) ? 'layer-locked' : undefined}
               handles={selected && selection.annotations.length === 1}
               onPointerDown={(e) => {
                 if (e.button !== 0 || draft || tool) return;
@@ -752,10 +766,14 @@ export function DiagramView({
         })}
 
         {diagram.connections.map((l) => {
+          if (hidden.connections.has(l.id)) return null;
           const path = paths.get(l.id)!;
           const selected = selection.connections.includes(l.id);
           return (
-            <g key={l.id} className={selected ? 'connection selected' : 'connection'}>
+            <g
+              key={l.id}
+              className={`connection${selected ? ' selected' : ''}${locked.connections.has(l.id) ? ' layer-locked' : ''}`}
+            >
               <path className="line" d={linePathData(path, jumps.get(l.id))} strokeDasharray={LINE_DASH[l.kind]} />
               {path.slice(1).map((b, i) => {
                   const a = path[i]!;
@@ -804,12 +822,13 @@ export function DiagramView({
           <circle key={`${p.x},${p.y}`} className="junction" cx={p.x} cy={p.y} r={2} />
         ))}
         {diagram.junctions.map((j) => {
+          if (hidden.junctions.has(j.id)) return null;
           const ref = { junctionId: j.id };
           const selected = selection.junctions.includes(j.id);
           return (
             <g
               key={j.id}
-              className={selected ? 'junction-node selected' : 'junction-node'}
+              className={`junction-node${selected ? ' selected' : ''}${locked.junctions.has(j.id) ? ' layer-locked' : ''}`}
               onPointerDown={(e) => {
                 if (e.button !== 0 || tool) return;
                 e.stopPropagation();
@@ -837,11 +856,12 @@ export function DiagramView({
           );
         })}
 
-        {diagram.components.map((c) => (
+        {diagram.components.filter((c) => !hidden.components.has(c.id)).map((c) => (
           <ComponentShape
             key={c.id}
             component={c}
             selected={selection.components.includes(c.id)}
+            locked={locked.components.has(c.id)}
             drawing={draft !== null}
             onPointerDown={(e) => {
               if (e.button !== 0 || draft || tool) return; // mittlere Taste: Ansicht verschieben
@@ -1059,7 +1079,7 @@ function GridDots({ id, sheet, look }: { id: string; sheet: Diagram['sheet']; lo
   );
 }
 
-const SHEET_KEYS = ['sheet', 'components', 'connections', 'junctions', 'annotations', 'groups', 'meta', 'domain'] as const;
+const SHEET_KEYS = ['sheet', 'components', 'connections', 'junctions', 'annotations', 'groups', 'meta', 'domain', 'layers'] as const;
 
 /**
  * Ein nicht bearbeitbares Blatt neben dem aktuellen: gleiche Darstellung, aber
@@ -1068,15 +1088,18 @@ const SHEET_KEYS = ['sheet', 'components', 'connections', 'junctions', 'annotati
 const StaticSheet = memo(
   function StaticSheet({ diagram }: { diagram: Diagram }) {
     const paths = useMemo(() => routeAll(diagram), [diagram]);
-    const dots = branchDots(diagram.connections, paths);
-    const jumps = diagram.sheet.lineJumps ? crossings(paths) : new Map<string, Point[]>();
+    const { hidden } = useMemo(() => layerState(diagram), [diagram]);
+    const connections = diagram.connections.filter((l) => !hidden.connections.has(l.id));
+    const shownPaths = new Map(connections.map((l) => [l.id, paths.get(l.id)!]));
+    const dots = branchDots(connections, shownPaths);
+    const jumps = diagram.sheet.lineJumps ? crossings(shownPaths) : new Map<string, Point[]>();
     return (
       <>
         {diagram.sheet.frame && <SheetFrame diagram={diagram} />}
-        {diagram.annotations.map((a) => (
+        {diagram.annotations.filter((a) => !hidden.annotations.has(a.id)).map((a) => (
           <AnnotationShape key={a.id} annotation={a} />
         ))}
-        {diagram.connections.map((l) => (
+        {connections.map((l) => (
           <g key={l.id} className="connection">
             <path className="line" d={linePathData(paths.get(l.id)!, jumps.get(l.id))} strokeDasharray={LINE_DASH[l.kind]} />
           </g>
@@ -1084,10 +1107,10 @@ const StaticSheet = memo(
         {dots.map((p) => (
           <circle key={`${p.x},${p.y}`} className="junction" cx={p.x} cy={p.y} r={2} />
         ))}
-        {diagram.junctions.map((j) => (
+        {diagram.junctions.filter((j) => !hidden.junctions.has(j.id)).map((j) => (
           <circle key={j.id} className="junction" cx={j.position.x} cy={j.position.y} r={2} />
         ))}
-        {diagram.components.map((c) => (
+        {diagram.components.filter((c) => !hidden.components.has(c.id)).map((c) => (
           <ComponentShape
             key={c.id}
             component={c}
@@ -1332,6 +1355,7 @@ const toPoints = (path: Point[]) => path.map((p) => `${p.x},${p.y}`).join(' ');
 function ComponentShape({
   component,
   selected,
+  locked = false,
   drawing,
   onPointerDown,
   onPortPointerDown,
@@ -1340,6 +1364,8 @@ function ComponentShape({
 }: {
   component: ComponentInstance;
   selected: boolean;
+  /** Auf einer gesperrten Ebene: nicht anklickbar, nur die Anschlüsse nehmen Leitungen an. */
+  locked?: boolean;
   drawing: boolean;
   onPointerDown: (e: React.PointerEvent<SVGGElement>) => void;
   onPortPointerDown: (portId: string, e: React.PointerEvent) => void;
@@ -1365,7 +1391,10 @@ function ComponentShape({
     `scale(${component.mirrored ? -1 : 1} 1) translate(${-cx} ${-cy})`;
 
   return (
-    <g className={`component${selected ? ' selected' : ''}${drawing ? ' drawing' : ''}`} onPointerDown={onPointerDown}>
+    <g
+      className={`component${selected ? ' selected' : ''}${drawing ? ' drawing' : ''}${locked ? ' layer-locked' : ''}`}
+      onPointerDown={onPointerDown}
+    >
       {hasSymbol(def.type) ? (
         <>
           <rect x={x} y={y} width={w} height={h} className="hit" />

@@ -11,6 +11,7 @@ import type {
   Endpoint,
   Group,
   Junction,
+  Layer,
   LineKind,
   Orientation,
   Point,
@@ -29,12 +30,14 @@ import { contentOf, drawingOf, sheetView } from '../model/drawing.ts';
  *   { "format": "fluidplan", "version": 6, "drawing": { "domain", "meta", "sheets": [ ... ] } }
  *
  * Bis Version 5 stand dort ein einzelner Schaltplan unter "diagram".
+ * Seit Version 7 kann "drawing" Zeichnungsebenen ("layers") haben, und
+ * Bauteile, Leitungen und Grafik können ihre Ebene in "layer" nennen.
  *
  * `version` wird erhöht, sobald sich das Format inkompatibel ändert.
  * Ältere Versionen werden dann beim Laden in `migrate` hochgezogen.
  */
 export const FILE_FORMAT = 'fluidplan';
-export const FILE_VERSION = 6;
+export const FILE_VERSION = 7;
 export const FILE_EXTENSION = '.fluidplan.json';
 
 interface FileEnvelope {
@@ -61,8 +64,8 @@ export type ParseResult = { ok: true; drawing: Drawing } | { ok: false; errors: 
 export function parseDiagram(text: string): { ok: true; diagram: Diagram } | { ok: false; errors: string[] } {
   const r = parseDrawing(text);
   if (!r.ok) return r;
-  const { page: _page, ...diagram } = sheetView(r.drawing, 0);
-  return { ok: true, diagram };
+  const { page: _page, layers: _layers, ...diagram } = sheetView(r.drawing, 0);
+  return { ok: true, diagram: r.drawing.layers ? { ...diagram, layers: r.drawing.layers } : diagram };
 }
 
 export function parseDrawing(text: string): ParseResult {
@@ -200,8 +203,42 @@ function readDrawing(v: unknown, errors: string[]): Drawing | undefined {
   const meta = readMeta(v.meta, errors);
   const sheets = readArray(v.sheets, 'drawing.sheets', errors, readDrawingSheet);
   if (sheets && sheets.length === 0) errors.push('drawing.sheets: mindestens ein Blatt erwartet');
-  if (!domain || !meta || !sheets || sheets.length === 0) return undefined;
-  return { domain, meta, sheets };
+  const layers = v.layers === undefined ? undefined : readArray(v.layers, 'drawing.layers', errors, readLayer);
+  if (layers) {
+    const ids = new Set<string>();
+    for (const l of layers) {
+      if (ids.has(l.id)) errors.push(`Ebenen-ID "${l.id}" ist doppelt vergeben`);
+      ids.add(l.id);
+    }
+  }
+  if (!domain || !meta || !sheets || sheets.length === 0 || (v.layers !== undefined && !layers)) return undefined;
+  return layers ? { domain, meta, sheets, layers } : { domain, meta, sheets };
+}
+
+function readLayer(v: unknown, path: string, errors: string[]): Layer | undefined {
+  if (!isObject(v)) {
+    errors.push(`${path}: Objekt erwartet`);
+    return undefined;
+  }
+  const id = nonEmpty(v.id, `${path}.id`, errors);
+  const name = str(v.name, `${path}.name`, errors);
+  const visible = bool(v.visible, `${path}.visible`, errors);
+  const locked = bool(v.locked, `${path}.locked`, errors);
+  if (id === undefined || name === undefined || visible === undefined || locked === undefined) return undefined;
+  return { id, name, visible, locked };
+}
+
+/**
+ * Liest zusätzlich die optionale Ebene eines Teils. Eine unbekannte Ebene ist
+ * kein Fehler: das Teil liegt dann auf der Standardebene.
+ */
+function onLayer<T extends { layer?: string }>(read: (v: unknown, path: string, errors: string[]) => T | undefined) {
+  return (v: unknown, path: string, errors: string[]): T | undefined => {
+    const item = read(v, path, errors);
+    if (!item || !isObject(v) || v.layer === undefined) return item;
+    const layer = nonEmpty(v.layer, `${path}.layer`, errors);
+    return layer === undefined ? undefined : { ...item, layer };
+  };
 }
 
 function readDrawingSheet(v: unknown, path: string, errors: string[]): DrawingSheet | undefined {
@@ -212,10 +249,10 @@ function readDrawingSheet(v: unknown, path: string, errors: string[]): DrawingSh
   const id = nonEmpty(v.id, `${path}.id`, errors);
   const name = str(v.name, `${path}.name`, errors);
   const sheet = readSheet(v.sheet, `${path}.sheet`, errors);
-  const components = readArray(v.components, `${path}.components`, errors, readComponent);
-  const connections = readArray(v.connections, `${path}.connections`, errors, readConnection);
+  const components = readArray(v.components, `${path}.components`, errors, onLayer(readComponent));
+  const connections = readArray(v.connections, `${path}.connections`, errors, onLayer(readConnection));
   const junctions = readArray(v.junctions, `${path}.junctions`, errors, readJunction);
-  const annotations = readArray(v.annotations, `${path}.annotations`, errors, readAnnotation);
+  const annotations = readArray(v.annotations, `${path}.annotations`, errors, onLayer(readAnnotation));
   const groups = readArray(v.groups, `${path}.groups`, errors, readGroup);
   if (
     id === undefined || name === undefined || !sheet || !components || !connections || !junctions ||

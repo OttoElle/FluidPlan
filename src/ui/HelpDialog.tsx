@@ -16,6 +16,8 @@ const MOUSE: [string, string][] = [
   ['Anderes Blatt anklicken', 'Blatt bearbeiten; die Lineale messen ab seiner linken oberen Ecke'],
   ['Blattname über dem Blatt', 'Doppelklick benennt um, Rechtsklick oder ⋮ für Duplizieren, Verschieben und Löschen'],
   ['+ rechts neben dem letzten Blatt', 'Neues Blatt anfügen'],
+  ['Struktur (unten links)', 'Klick wählt das Teil aus, Doppelklick öffnet Eigenschaften; Strg+Klick ergänzt die Auswahl'],
+  ['Ebenen (unten links)', 'Klick macht eine Ebene aktiv (neue Teile kommen dorthin), Auge blendet aus, Schloss sperrt'],
 ];
 
 const KEYS: [string, string][] = [

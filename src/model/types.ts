@@ -105,6 +105,8 @@ export interface ComponentInstance {
   showDescription?: boolean;
   /** Nur bei konfigurierbaren Bauteiltypen. */
   config?: ComponentConfig;
+  /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
+  layer?: string;
 }
 
 /** Ende einer Leitung: ein bestimmter Anschluss eines bestimmten Bauteils. */
@@ -146,6 +148,8 @@ export interface Connection {
   kind: LineKind;
   /** Optionale Knickpunkte zwischen den beiden Anschlüssen. */
   waypoints: Point[];
+  /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
+  layer?: string;
 }
 
 /**
@@ -193,6 +197,8 @@ export type StrokeStyle = 'solid' | 'dashed' | 'dashdot';
 export interface TextAnnotation {
   id: string;
   kind: 'text';
+  /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
+  layer?: string;
   position: Point;
   /** Mehrzeilig mit "\n". */
   text: string;
@@ -203,6 +209,8 @@ export interface TextAnnotation {
 export interface LineAnnotation {
   id: string;
   kind: 'line';
+  /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
+  layer?: string;
   from: Point;
   to: Point;
   style: StrokeStyle;
@@ -211,6 +219,8 @@ export interface LineAnnotation {
 export interface RectAnnotation {
   id: string;
   kind: 'rect';
+  /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
+  layer?: string;
   /** Linke obere Ecke. */
   position: Point;
   width: number;
@@ -221,6 +231,8 @@ export interface RectAnnotation {
 export interface CircleAnnotation {
   id: string;
   kind: 'circle';
+  /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
+  layer?: string;
   center: Point;
   radius: number;
   style: StrokeStyle;
@@ -229,6 +241,8 @@ export interface CircleAnnotation {
 export interface EllipseAnnotation {
   id: string;
   kind: 'ellipse';
+  /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
+  layer?: string;
   center: Point;
   /** Halbachsen waagerecht und senkrecht. */
   rx: number;
@@ -240,6 +254,8 @@ export interface EllipseAnnotation {
 export interface PolylineAnnotation {
   id: string;
   kind: 'polyline';
+  /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
+  layer?: string;
   points: Point[];
   closed: boolean;
   style: StrokeStyle;
@@ -285,6 +301,22 @@ export interface Diagram {
   groups: Group[];
   /** Nur in der Sicht auf ein Blatt einer Zeichnung: Name und Nummer fürs Schriftfeld. */
   page?: PageInfo;
+  /** Nur in der Sicht auf ein Blatt: die Ebenen der Zeichnung (für Sichtbarkeit und Sperre). */
+  layers?: Layer[];
+}
+
+/**
+ * Zeichnungsebene wie in CAD-Programmen; gilt für alle Blätter der Zeichnung.
+ * Siehe layers.ts.
+ */
+export interface Layer {
+  /** Eindeutig in der Zeichnung; "0" ist die Standardebene. */
+  id: string;
+  name: string;
+  /** Ausgeblendet: nicht gezeichnet und nicht exportiert. */
+  visible: boolean;
+  /** Gesperrt: auf dem Blatt nicht anklickbar. */
+  locked: boolean;
 }
 
 /** Lage eines Blatts in der Zeichnung, z. B. „Blatt 2 von 3“. */
@@ -315,4 +347,6 @@ export interface Drawing {
   domain: Domain;
   meta: DiagramMeta;
   sheets: DrawingSheet[];
+  /** Zeichnungsebenen; fehlt in älteren Dateien (dann nur die Standardebene). */
+  layers?: Layer[];
 }

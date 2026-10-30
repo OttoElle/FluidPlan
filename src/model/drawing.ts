@@ -1,4 +1,5 @@
 import { createDiagram, nextId } from './diagram.ts';
+import { layersOf } from './layers.ts';
 import { sheetSize } from './sheet.ts';
 import type { Diagram, Domain, Drawing, DrawingSheet, Sheet, SheetContent } from './types.ts';
 
@@ -20,7 +21,8 @@ export function contentOf(diagram: SheetContent): SheetContent {
 
 /** Zeichnung mit einem einzigen Blatt, z. B. für „Neu“ oder ältere Dateien. */
 export function drawingOf(diagram: Diagram, name = 'Blatt 1'): Drawing {
-  return { domain: diagram.domain, meta: diagram.meta, sheets: [{ id: 's1', name, ...contentOf(diagram) }] };
+  const drawing: Drawing = { domain: diagram.domain, meta: diagram.meta, sheets: [{ id: 's1', name, ...contentOf(diagram) }] };
+  return diagram.layers ? { ...drawing, layers: diagram.layers } : drawing;
 }
 
 export function createDrawing(domain: Domain, title?: string, now?: Date, sheet?: Sheet): Drawing {
@@ -43,6 +45,7 @@ export function sheetView(drawing: Drawing, index: number): Diagram {
     meta: drawing.meta,
     ...contentOf(s),
     page: { name: s.name, number: index + 1, count: drawing.sheets.length },
+    layers: layersOf(drawing),
   };
 }
 
@@ -54,7 +57,7 @@ export function withSheet(drawing: Drawing, index: number, diagram: Diagram): Dr
   const sheets = sheetChanged
     ? drawing.sheets.map((x, i) => (i === index ? { ...x, ...contentOf(diagram) } : x))
     : drawing.sheets;
-  return { domain: diagram.domain, meta: diagram.meta, sheets };
+  return { ...drawing, domain: diagram.domain, meta: diagram.meta, sheets };
 }
 
 /** Alle Blätter als Schaltpläne, z. B. für Export und Prüfung. */

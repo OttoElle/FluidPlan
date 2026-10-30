@@ -17,6 +17,7 @@ import {
   TrianglesCenterlineDashedVertical,
   FolderOpen,
   Group,
+  Layers,
   ListChecks,
   Redo2,
   RotateCw,
@@ -27,7 +28,6 @@ import {
   SlidersHorizontal,
   Square,
   Sun,
-  Layers,
   Moon,
   Tag,
   Trash2,
@@ -94,6 +94,7 @@ import {
   selectComponent,
   selectConnection,
   selectionCount,
+  toggle,
   type Selection,
 } from '../model/selection.ts';
 import { ExportDialog } from './ExportDialog.tsx';
@@ -102,6 +103,8 @@ import { renderSheetSvgs } from './renderSheets.tsx';
 import { SymbolPreview } from './SymbolPreview.tsx';
 import { Tooltip } from './Tooltip.tsx';
 import { useHistory } from './useHistory.ts';
+import { StructurePanel } from './StructurePanel.tsx';
+import { DEFAULT_LAYER_ID, assignLayer, layerOf, layerState, layersOf, without } from '../model/layers.ts';
 import { copySelection, pasteFragment } from '../model/clipboard.ts';
 import { group, groupsIn, ungroup } from '../model/groups.ts';
 import { parseDiagram, serializeDiagram } from '../io/json.ts';
@@ -156,6 +159,13 @@ export function App() {
     [historyEdit, active],
   );
   const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
+  /** Ebene, auf die neue Teile kommen; gibt es sie nicht mehr, gilt die Standardebene. */
+  const [activeLayerId, setActiveLayer] = useState(DEFAULT_LAYER_ID);
+  const activeLayer = layerOf(layersOf(drawing), { layer: activeLayerId }).id;
+  /** Legt neu angelegte Teile auf die aktive Ebene. */
+  const onActiveLayer = (d: Diagram, s: Partial<Selection>) =>
+    assignLayer(d, { ...EMPTY_SELECTION, ...s }, activeLayer);
+  const layers = useMemo(() => layerState(diagram), [diagram]);
   const [message, setMessage] = useState<string | null>(null);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -174,6 +184,7 @@ export function App() {
     setNewDialogOpen(false);
     history.reset(createDrawing(domain, title, new Date(), sheet));
     setActiveId(null);
+    setActiveLayer(DEFAULT_LAYER_ID);
     setSelection(EMPTY_SELECTION);
     setMessage(null);
   };
@@ -183,6 +194,7 @@ export function App() {
     if (result.ok) {
       history.reset(result.drawing);
       setActiveId(null);
+      setActiveLayer(DEFAULT_LAYER_ID);
       setSelection(EMPTY_SELECTION);
       setMessage(null);
     } else {
@@ -299,7 +311,8 @@ export function App() {
       const area = drawingArea(base.sheet);
       position = { x: area.x + 40 + offset, y: area.y + 40 + offset };
     }
-    const { diagram: next, component } = addComponent(base, entry.type, position, { config: entry.config });
+    const { diagram: placed, component } = addComponent(base, entry.type, position, { config: entry.config });
+    const next = onActiveLayer(placed, { components: [component.id] });
     if (sheet === active) edit(keepRoutes(base, next));
     else {
       history.edit((dr) => withSheet(dr, sheet, keepRoutes(base, next)));
@@ -308,8 +321,12 @@ export function App() {
     setSelection(selectComponent(component.id));
   };
 
-  // Nach Rückgängig/Wiederholen kann Ausgewähltes verschwunden sein.
-  const current = prune(diagram, selection);
+  // Nach Rückgängig/Wiederholen kann Ausgewähltes verschwunden sein, ausgeblendete Ebenen sind nicht auswählbar.
+  const current = useMemo(() => {
+    const pruned = prune(diagram, selection);
+    const visible = without(pruned, layers.hidden);
+    return visible === pruned ? pruned : visible;
+  }, [diagram, selection, layers]);
   useEffect(() => {
     if (current !== selection) setSelection(current);
   }, [current, selection]);
@@ -334,7 +351,7 @@ export function App() {
 
   const createAnnotation = (a: NewAnnotation) => {
     const r = addAnnotation(diagram, a);
-    edit(r.diagram);
+    edit(onActiveLayer(r.diagram, { annotations: [r.annotation.id] }));
     setSelection(selectAnnotation(r.annotation.id));
     setTool(null);
     // Neuen Text gleich im Eigenschaften-Fenster eintippen.
@@ -441,6 +458,12 @@ export function App() {
     edit((d) => selectedLines.reduce((acc, l) => updateConnection(acc, l.id, { kind }), d));
   const setStrokeStyle = (style: StrokeStyle) =>
     edit((d) => styledAnnotations.reduce((acc, a) => updateAnnotation(acc, a.id, { style }), d));
+  const layerList = layersOf(drawing);
+  const selectedLayers = [
+    ...diagram.components.filter((c) => current.components.includes(c.id)),
+    ...selectedLines,
+    ...diagram.annotations.filter((a) => current.annotations.includes(a.id)),
+  ].map((x) => layerOf(layerList, x).id);
   const common = <T,>(values: T[]) => (values.length > 0 && values.every((v) => v === values[0]) ? values[0] : undefined);
 
   // Tastatur: Strg+Z / Strg+Y (bzw. Strg+Umschalt+Z) und Entf.
@@ -473,7 +496,7 @@ export function App() {
       }
       if ((e.ctrlKey || e.metaKey) && key === 'a') {
         e.preventDefault();
-        setSelection(selectAll(diagram));
+        setSelection(without(selectAll(diagram), layers.hidden, layers.locked));
         return;
       }
       if ((e.ctrlKey || e.metaKey) && !e.altKey && key === 'g') {
@@ -545,6 +568,24 @@ export function App() {
             value={common(styledAnnotations.map((a) => a.style))}
             onChange={setStrokeStyle}
           />
+        </div>
+      )}
+      {layerList.length > 1 && selectionCount({ ...current, junctions: [] }) > 0 && (
+        <div className="tool-group">
+          <Layers size={16} aria-hidden className="context-icon" />
+          <select
+            aria-label="Ebene"
+            data-tooltip="Ebene der Auswahl"
+            value={common(selectedLayers) ?? ''}
+            onChange={(e) => edit((d) => assignLayer(d, current, e.target.value))}
+          >
+            {common(selectedLayers) === undefined && <option value="">Verschiedene Ebenen</option>}
+            {layerList.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
         </div>
       )}
       <div className="tool-group">
@@ -657,6 +698,7 @@ export function App() {
         </pre>
       )}
 
+      <div className="sidebar">
       <aside className="palette">
         <h2>Zeichnen</h2>
         <div className="palette-tools">
@@ -700,6 +742,30 @@ export function App() {
           );
         })}
       </aside>
+      <StructurePanel
+        drawing={drawing}
+        active={active}
+        selection={current}
+        activeLayer={activeLayer}
+        onShowSheet={(i) => showSheet(drawing.sheets[i]!.id)}
+        onSelect={(i, s, additive) => {
+          showSheet(drawing.sheets[i]!.id);
+          const shown = without(s, (i === active ? layers : layerState(sheetView(drawing, i))).hidden);
+          setSelection(additive && i === active ? toggle(current, shown) : shown);
+        }}
+        onOpenProperties={(i, target) => {
+          showSheet(drawing.sheets[i]!.id);
+          setProperties(target);
+        }}
+        onEditSheet={(i) => {
+          showSheet(drawing.sheets[i]!.id);
+          setSheetDialog({});
+        }}
+        onEdit={(next) => history.edit(next)}
+        onActiveLayer={setActiveLayer}
+        onAssignLayer={(id) => edit((d) => assignLayer(d, current, id))}
+      />
+      </div>
 
       <main className="canvas">
         <div className="canvas-area">
@@ -740,7 +806,7 @@ export function App() {
             onConnect={(from, to, waypoints) => {
               try {
                 const r = connect(diagram, from, to, lineKindFor(diagram, from, to), waypoints);
-                edit(r.diagram);
+                edit(onActiveLayer(r.diagram, { connections: [r.connection.id] }));
                 setSelection(selectConnection(r.connection.id));
                 setMessage(null);
               } catch (err) {
@@ -753,7 +819,7 @@ export function App() {
                 const split = splitConnection(diagram, lineId, path, point);
                 const to = { junctionId: split.junction.id };
                 const r = connect(split.diagram, from, to, lineKindFor(split.diagram, from, to), waypoints);
-                edit(r.diagram);
+                edit(onActiveLayer(r.diagram, { connections: [r.connection.id] }));
                 setSelection(selectConnection(r.connection.id));
                 setMessage(null);
               } catch (err) {

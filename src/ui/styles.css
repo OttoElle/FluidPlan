@@ -101,7 +101,17 @@ body { margin: 0; }
   flex-direction: column;
   gap: 6px;
 }
-.palette { grid-area: palette; border-right: 1px solid var(--border); }
+/* Linke Seitenleiste: Bauteilliste oben, Strukturbaum und Ebenen unten */
+.sidebar {
+  grid-area: palette;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+.palette { flex: 1; min-height: 0; }
 .inspector { grid-area: inspector; border-left: 1px solid var(--border); }
 h2 { font-size: 13px; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
@@ -565,3 +575,88 @@ dialog.help { width: min(560px, calc(100vw - 32px)); }
 .sheet-menu button:hover:not(:disabled) { background: var(--bg); border-color: var(--border); }
 .sheet-menu button:disabled { opacity: 0.4; }
 .check-panel .sheet-ref { color: var(--muted); }
+
+/* Strukturbaum und Ebenen (StructurePanel.tsx) */
+.structure {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.structure-resizer { position: absolute; z-index: 2; left: 0; right: 0; top: -4px; height: 7px; cursor: row-resize; touch-action: none; }
+.structure-resizer:hover, .structure-resizer:active { background: linear-gradient(transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px); }
+.structure-header { display: flex; align-items: center; gap: 4px; padding: 4px 6px 4px 8px; }
+.structure-header .icon-button { width: 26px; height: 26px; margin-left: auto; }
+.structure-tabs { display: flex; gap: 2px; }
+.structure-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.structure-tabs button:hover { color: var(--text); }
+.structure-tabs button[aria-selected='true'] { color: var(--text); border-color: var(--border); background: var(--bg); }
+.structure-body { flex: 1; min-height: 0; overflow: auto; padding: 0 4px 6px; font-size: 12.5px; }
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding-right: 4px;
+  border-radius: 4px;
+  cursor: default;
+  white-space: nowrap;
+  user-select: none;
+}
+.tree-row:hover { background: var(--bg); }
+.tree-row[aria-selected='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.tree-row.current > .tree-label { font-weight: 600; }
+.tree-row.dim > .tree-label, .tree-row.dim > .tree-icon { opacity: 0.45; }
+.tree-twisty {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+}
+.tree-icon { flex: none; display: inline-grid; place-items: center; width: 22px; color: var(--muted); }
+.tree-icon .symbol-preview { display: block; }
+.tree-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tree-detail { flex: none; color: var(--muted); font-size: 11px; }
+.tree-lock { flex: none; color: var(--muted); }
+.row-toggle {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+.row-toggle:hover { color: var(--text); border-color: var(--border); }
+.row-toggle.off { color: var(--accent); }
+.layer-row .tree-icon { color: var(--accent); width: 18px; }
+.tree-rename { flex: 1; min-width: 0; padding: 1px 4px; font-size: 12.5px; }
+.structure-footer { display: flex; gap: 2px; padding: 4px 6px; border-top: 1px solid var(--border); }
+.structure-footer .icon-button { width: 28px; height: 28px; }
+
+/* Gesperrte Ebene: sichtbar, aber nicht anklickbar; Anschlüsse nehmen weiter Leitungen an. */
+.layer-locked { pointer-events: none; cursor: default; }
+.layer-locked .port { pointer-events: auto; }
+.context-bar .context-icon { color: var(--muted); margin: 0 2px 0 4px; }
+.context-bar select { font-size: 12px; max-width: 140px; }
