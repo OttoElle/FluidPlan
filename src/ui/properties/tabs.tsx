@@ -1,3 +1,4 @@
+import { TrianglesCenterlineDashedHorizontal, TrianglesCenterlineDashedVertical } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { mediumOf } from '../../model/library.ts';
 import { DEFAULT_LAYER_ID } from '../../model/layers.ts';
@@ -80,14 +81,30 @@ function PlacementTab({ component, onChange, layers }: ComponentTabProps) {
           options={ROTATIONS.map((r) => ({ value: r, label: `${r}°` }))}
         />
       </div>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={component.mirrored ?? false}
-          onChange={(e) => onChange({ ...component, mirrored: e.target.checked })}
-        />
-        Gespiegelt
-      </label>
+      <div className="field">
+        <span>Spiegeln</span>
+        <div className="field-row">
+          {/* Wie mirrorComponents (arrange.ts): oben/unten = spiegeln und um 180° drehen. */}
+          <button
+            type="button"
+            className="with-icon"
+            onClick={() =>
+              onChange({ ...component, mirrored: !component.mirrored, rotation: ((360 - component.rotation) % 360) as Rotation })
+            }
+          >
+            <TrianglesCenterlineDashedVertical size={16} strokeWidth={1.75} aria-hidden /> Links und rechts
+          </button>
+          <button
+            type="button"
+            className="with-icon"
+            onClick={() =>
+              onChange({ ...component, mirrored: !component.mirrored, rotation: ((540 - component.rotation) % 360) as Rotation })
+            }
+          >
+            <TrianglesCenterlineDashedHorizontal size={16} strokeWidth={1.75} aria-hidden /> Oben und unten
+          </button>
+        </div>
+      </div>
       <label>
         Ebene
         <select
