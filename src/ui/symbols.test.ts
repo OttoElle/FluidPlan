@@ -18,6 +18,14 @@ describe('Schaltzeichen', () => {
       'valve.ball',
       'line.coupling',
       'measure.sensor',
+      'valve.check',
+      'valve.pressure',
+      'valve.throttle',
+      'valve.flow-divider',
+      'supply.filter',
+      'supply.cooler',
+      'measure.gauge',
+      'measure.indicator',
     ]) {
       expect(getDefinition(type), type).toBeDefined();
       expect(hasSymbol(type), type).toBe(true);

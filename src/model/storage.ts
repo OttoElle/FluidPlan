@@ -17,7 +17,7 @@ import type { Domain, PortDefinition } from './types.ts';
  * verschiedenen Stellen stehen) ist 1M hoch mit Leitungen 1M von der Wand.
  */
 
-export type AccumulatorType = 'bladder' | 'diaphragm' | 'piston' | 'gas-bottle' | 'air-reservoir';
+export type AccumulatorType = 'general' | 'bladder' | 'diaphragm' | 'piston' | 'piston-bottle' | 'gas-bottle' | 'air-reservoir';
 
 export interface AccumulatorConfig {
   kind: 'accumulator';
@@ -25,21 +25,23 @@ export interface AccumulatorConfig {
 }
 
 export const ACCUMULATOR_NAMES: Record<AccumulatorType, string> = {
+  general: 'Speicher',
   bladder: 'Blasenspeicher',
   diaphragm: 'Membranspeicher',
   piston: 'Kolbenspeicher',
+  'piston-bottle': 'Kolbenspeicher mit nachgeschalteter Gasflasche',
   'gas-bottle': 'Gasflasche',
   'air-reservoir': 'Luftbehälter',
 };
 
 /** Welche Speicherarten es je Medium gibt. */
 export const ACCUMULATOR_TYPES: Record<Domain, readonly AccumulatorType[]> = {
-  hydraulic: ['bladder', 'diaphragm', 'piston', 'gas-bottle'],
+  hydraulic: ['general', 'diaphragm', 'bladder', 'piston', 'piston-bottle', 'gas-bottle'],
   pneumatic: ['air-reservoir', 'gas-bottle'],
 };
 
 export function defaultAccumulatorConfig(domain: Domain): AccumulatorConfig {
-  return { kind: 'accumulator', type: ACCUMULATOR_TYPES[domain][0]! };
+  return { kind: 'accumulator', type: domain === 'hydraulic' ? 'bladder' : 'air-reservoir' };
 }
 
 export const accumulatorTitle = (config: AccumulatorConfig) => ACCUMULATOR_NAMES[config.type];
@@ -51,6 +53,11 @@ export function accumulatorGeometry(config: AccumulatorConfig, unit: number) {
       { id: '2', kind: 'work', offset: { x: 12 * unit, y: 2 * unit } },
     ];
     return { size: { width: 12 * unit, height: 4 * unit }, ports };
+  }
+  if (config.type === 'piston-bottle') {
+    // Beispiel 6.4.6.5: Gasflasche 8M rechts daneben, Verbindung 2M über beiden Kapseln
+    const ports: PortDefinition[] = [{ id: 'P', kind: 'work', offset: { x: 2 * unit, y: 12 * unit } }];
+    return { size: { width: 12 * unit, height: 12 * unit }, ports };
   }
   const ports: PortDefinition[] = [{ id: 'P', kind: 'work', offset: { x: 2 * unit, y: 10 * unit } }];
   return { size: { width: 4 * unit, height: 10 * unit }, ports };
@@ -94,7 +101,7 @@ export function defaultTankConfig(): TankConfig {
 }
 
 export function tankTitle(config: TankConfig): string {
-  return config.closed ? 'Behälter, geschlossen' : 'Tank';
+  return config.closed ? 'Behälter, geschlossen' : config.size === 'small' ? 'Behälterrückführung' : 'Behälter';
 }
 
 /**

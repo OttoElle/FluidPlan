@@ -1,6 +1,17 @@
 import type { ReactNode } from 'react';
 import { BORES, normalizeBallValve, WAYS, type BallValveConfig, type BallValveWays } from '../../model/ballValve.ts';
-import { CHECK_COUNTS, CHECK_NAMES, type CouplingConfig } from '../../model/coupling.ts';
+import { CHECK_COUNTS, CHECK_NAMES, CHECK_SIDE_NAMES, type CouplingConfig } from '../../model/coupling.ts';
+import { COOLANT_NAMES, FILTER_DESIGN_NAMES, FILTER_INDICATOR_NAMES, type CoolerConfig, type FilterConfig } from '../../model/conditioning.ts';
+import {
+  FLOW_DIVIDER_NAMES,
+  PRESSURE_FUNCTION_NAMES,
+  THROTTLE_ELEMENT_NAMES,
+  type CheckValveConfig,
+  type FlowDividerConfig,
+  type PressureValveConfig,
+  type ThrottleConfig,
+} from '../../model/fluidValves.ts';
+import { INDICATOR_NAMES, INSTRUMENT_NAMES, type IndicatorConfig, type InstrumentConfig } from '../../model/instruments.ts';
 import {
   DESIGN_NAMES,
   hasStroke,
@@ -260,7 +271,7 @@ export function RotaryEditor<C extends RotaryConfig>({ config, onChange }: Confi
           options={symbolOptions(rotationChoices(config), (v) => ROTATION_NAMES[v], (rotation) => variant({ rotation }))}
         />
       </Field>
-      {hydraulic && <Check title="Leckanschluss" checked={config.drain} onChange={(drain) => set({ drain })} />}
+      {hydraulic && <Check title="Leckölanschluss" checked={config.drain} onChange={(drain) => set({ drain })} />}
       {pump && (
         <Check title="Mit Elektromotor (Motor-Pumpe-Einheit)" checked={config.electricMotor} onChange={(electricMotor) => set({ electricMotor })} />
       )}
@@ -365,6 +376,16 @@ export function CouplingEditor({ config, onChange }: ConfigEditorProps<CouplingC
           options={symbolOptions(CHECK_COUNTS, (n) => CHECK_NAMES[n], (checks) => ({ ...config, checks }))}
         />
       </Field>
+      {config.checks === 1 && (
+        <Field title="Rückschlagventil">
+          <Segmented
+            label="Rückschlagventil"
+            value={config.checkSide}
+            onChange={(checkSide) => onChange({ ...config, checkSide })}
+            options={symbolOptions(keys(CHECK_SIDE_NAMES), (v) => CHECK_SIDE_NAMES[v], (checkSide) => ({ ...config, checkSide }))}
+          />
+        </Field>
+      )}
       <Field title="Zustand">
         <Segmented
           label="Zustand"
@@ -407,6 +428,183 @@ export function SensorEditor({ config, onChange }: ConfigEditorProps<SensorConfi
       {config.output !== 'mechanical' && (
         <Check title="Schaltpunkt einstellbar" checked={config.adjustable} onChange={(adjustable) => set({ adjustable })} />
       )}
+    </div>
+  );
+}
+
+// --- Sperr-, Strom- und Druckventile ------------------------------------------------
+
+const YES_NO = ['no', 'yes'] as const;
+type YesNo = (typeof YES_NO)[number];
+const yn = (v: boolean): YesNo => (v ? 'yes' : 'no');
+
+/** Ja/Nein-Auswahl mit Symbolvorschau beider Varianten. */
+function Toggle<C extends ComponentConfig>({
+  title,
+  names,
+  value,
+  variant,
+  onChange,
+}: {
+  title: string;
+  names: [string, string];
+  value: boolean;
+  variant: (v: boolean) => C;
+  onChange: (config: C) => void;
+}) {
+  return (
+    <Field title={title}>
+      <Segmented
+        label={title}
+        value={yn(value)}
+        onChange={(v) => onChange(variant(v === 'yes'))}
+        options={symbolOptions(YES_NO, (v) => names[v === 'yes' ? 1 : 0], (v) => variant(v === 'yes'))}
+      />
+    </Field>
+  );
+}
+
+export function CheckValveEditor({ config, onChange }: ConfigEditorProps<CheckValveConfig>) {
+  const v = (c: Partial<CheckValveConfig>): CheckValveConfig => ({ ...config, ...c });
+  return (
+    <div className="configurator config-grid">
+      <Toggle title="Bauart" names={['Einfach', 'Doppelt, entsperrbar']} value={config.double} variant={(double) => v({ double })} onChange={onChange} />
+      {!config.double && (
+        <>
+          <Toggle title="Feder" names={['Ohne Feder', 'Mit Feder']} value={config.spring} variant={(spring) => v({ spring })} onChange={onChange} />
+          <Toggle title="Entsperrbar" names={['Nein', 'Ja (Steueranschluss X)']} value={config.piloted} variant={(piloted) => v({ piloted })} onChange={onChange} />
+        </>
+      )}
+    </div>
+  );
+}
+
+export function PressureValveEditor({ config, onChange }: ConfigEditorProps<PressureValveConfig>) {
+  const v = (c: Partial<PressureValveConfig>): PressureValveConfig => ({ ...config, ...c });
+  return (
+    <div className="configurator config-grid">
+      <Field title="Funktion" wide>
+        <Segmented
+          label="Funktion"
+          value={config.function}
+          onChange={(fn) => onChange(v({ function: fn }))}
+          options={symbolOptions(keys(PRESSURE_FUNCTION_NAMES), (f) => PRESSURE_FUNCTION_NAMES[f], (fn) => v({ function: fn }))}
+        />
+      </Field>
+      <Toggle title="Einstellung" names={['Fest', 'Einstellbar']} value={config.adjustable} variant={(adjustable) => v({ adjustable })} onChange={onChange} />
+      <Toggle title="Steuerung" names={['Direktgesteuert', 'Vorgesteuert']} value={config.piloted} variant={(piloted) => v({ piloted })} onChange={onChange} />
+    </div>
+  );
+}
+
+export function ThrottleEditor({ config, onChange }: ConfigEditorProps<ThrottleConfig>) {
+  const v = (c: Partial<ThrottleConfig>): ThrottleConfig => ({ ...config, ...c });
+  return (
+    <div className="configurator config-grid">
+      <Field title="Engstelle">
+        <Segmented
+          label="Engstelle"
+          value={config.element}
+          onChange={(element) => onChange(v({ element }))}
+          options={symbolOptions(keys(THROTTLE_ELEMENT_NAMES), (e) => THROTTLE_ELEMENT_NAMES[e], (element) => v({ element }))}
+        />
+      </Field>
+      <Toggle title="Einstellung" names={['Fest', 'Einstellbar']} value={config.adjustable} variant={(adjustable) => v({ adjustable })} onChange={onChange} />
+      <Toggle title="Rückschlagventil" names={['Ohne', 'Mit Rückschlagventil']} value={config.check} variant={(check) => v({ check })} onChange={onChange} />
+    </div>
+  );
+}
+
+export function FlowDividerEditor({ config, onChange }: ConfigEditorProps<FlowDividerConfig>) {
+  return (
+    <div className="configurator config-grid">
+      <Field title="Funktion" wide>
+        <Segmented
+          label="Funktion"
+          value={config.mode}
+          onChange={(mode) => onChange({ ...config, mode })}
+          options={symbolOptions(keys(FLOW_DIVIDER_NAMES), (m) => FLOW_DIVIDER_NAMES[m], (mode) => ({ ...config, mode }))}
+        />
+      </Field>
+    </div>
+  );
+}
+
+// --- Aufbereitung ------------------------------------------------------------------
+
+export function FilterEditor({ config, onChange }: ConfigEditorProps<FilterConfig>) {
+  const v = (c: Partial<FilterConfig>): FilterConfig => ({ ...config, ...c });
+  return (
+    <div className="configurator config-grid">
+      <Field title="Bauart" wide>
+        <Segmented
+          label="Bauart"
+          value={config.design}
+          onChange={(design) => onChange(v({ design }))}
+          options={symbolOptions(keys(FILTER_DESIGN_NAMES), (d) => FILTER_DESIGN_NAMES[d], (design) => v({ design }))}
+        />
+      </Field>
+      {config.design === 'filter' && (
+        <>
+          <Field title="Anzeige" wide>
+            <Segmented
+              label="Anzeige"
+              value={config.indicator}
+              onChange={(indicator) => onChange(v({ indicator }))}
+              options={symbolOptions(keys(FILTER_INDICATOR_NAMES), (i) => FILTER_INDICATOR_NAMES[i], (indicator) => v({ indicator }))}
+            />
+          </Field>
+          <Toggle title="Magnetelement" names={['Ohne', 'Mit Magnetelement']} value={config.magnet} variant={(magnet) => v({ magnet })} onChange={onChange} />
+          <Toggle title="Umgehungsventil" names={['Ohne', 'Mit Umgehungsventil']} value={config.bypass} variant={(bypass) => v({ bypass })} onChange={onChange} />
+        </>
+      )}
+    </div>
+  );
+}
+
+export function CoolerEditor({ config, onChange }: ConfigEditorProps<CoolerConfig>) {
+  return (
+    <div className="configurator config-grid">
+      <Field title="Kühlung" wide>
+        <Segmented
+          label="Kühlung"
+          value={config.coolant}
+          onChange={(coolant) => onChange({ ...config, coolant })}
+          options={symbolOptions(keys(COOLANT_NAMES), (c) => COOLANT_NAMES[c], (coolant) => ({ ...config, coolant }))}
+        />
+      </Field>
+    </div>
+  );
+}
+
+// --- Messen ---------------------------------------------------------------------
+
+export function InstrumentEditor({ config, onChange }: ConfigEditorProps<InstrumentConfig>) {
+  return (
+    <div className="configurator config-grid">
+      <Field title="Messgröße" wide>
+        <Segmented
+          label="Messgröße"
+          value={config.quantity}
+          onChange={(quantity) => onChange({ ...config, quantity })}
+          options={symbolOptions(keys(INSTRUMENT_NAMES), (q) => INSTRUMENT_NAMES[q], (quantity) => ({ ...config, quantity }))}
+        />
+      </Field>
+    </div>
+  );
+}
+
+export function IndicatorEditor({ config, onChange }: ConfigEditorProps<IndicatorConfig>) {
+  return (
+    <div className="configurator config-grid">
+      <Field title="Art" wide>
+        <Segmented
+          label="Art"
+          value={config.type}
+          onChange={(type) => onChange({ ...config, type })}
+          options={symbolOptions(keys(INDICATOR_NAMES), (t) => INDICATOR_NAMES[t], (type) => ({ ...config, type }))}
+        />
+      </Field>
     </div>
   );
 }

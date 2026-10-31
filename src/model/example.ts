@@ -13,7 +13,7 @@ export function exampleHydraulicDiagram(now = new Date()): Diagram {
   const cylinder = add('actuator.cylinder', 140, 40, '1.1');
   const valve = add('valve.directional', 80, 140, '1.2');
   const pump = add('supply.pump', 90, 240, '0.2');
-  const relief = add('valve.pressure-relief', 240, 240, '0.1', true); // senkrecht gespiegelt: P oben, T unten
+  const relief = add('valve.pressure', 240, 240, '0.1', true); // senkrecht gespiegelt: P oben, T unten
   const tank = add('supply.tank', 240, 370, '0.3');
 
   const link = (a: string, ap: string, b: string, bp: string) => {

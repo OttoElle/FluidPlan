@@ -7,7 +7,7 @@ import { drawingArea } from './sheet.ts';
 describe('checkDiagram', () => {
   it('findet im Beispielplan nur den offenen Sauganschluss der Pumpe', () => {
     expect(checkDiagram(exampleHydraulicDiagram()).map((i) => i.message)).toEqual([
-      '0.2 Hydropumpe (konstant): Anschluss S offen.',
+      '0.2 Pumpe (konstant): Anschluss S offen.',
     ]);
   });
 

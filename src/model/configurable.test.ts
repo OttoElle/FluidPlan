@@ -10,6 +10,16 @@ import { defaultMotorConfig, defaultPumpConfig, normalizeRotary, type RotaryConf
 import { defaultSensorConfig, normalizeSensor, type SensorConfig } from './sensor.ts';
 import { ACCUMULATOR_NAMES, TANK_LINES, type AccumulatorConfig, type AccumulatorType, type TankConfig } from './storage.ts';
 import type { ComponentConfig } from './types.ts';
+import type { CoolerConfig, FilterConfig } from './conditioning.ts';
+import {
+  PRESSURE_FUNCTION_NAMES,
+  type CheckValveConfig,
+  type FlowDividerConfig,
+  type PressureFunction,
+  type PressureValveConfig,
+  type ThrottleConfig,
+} from './fluidValves.ts';
+import { INSTRUMENT_NAMES, type IndicatorConfig, type InstrumentConfig, type InstrumentQuantity } from './instruments.ts';
 import {
   ACTUATORS,
   defaultValveConfig,
@@ -70,17 +80,36 @@ function accessoryVariants(): ComponentConfig[] {
     for (const lines of TANK_LINES)
       for (const lineEnd of ['below', 'above'] as const)
         for (const size of ['normal', 'small'] as const) out.push({ kind: 'tank', closed, lines, lineEnd, size } satisfies TankConfig);
-  for (const checks of CHECK_COUNTS) for (const coupled of [false, true]) out.push({ kind: 'coupling', checks, coupled } satisfies CouplingConfig);
+  for (const checks of CHECK_COUNTS) for (const coupled of [false, true]) for (const checkSide of ['top', 'bottom'] as const) out.push({ kind: 'coupling', checks, checkSide, coupled } satisfies CouplingConfig);
   for (const quantity of ['pressure', 'flow', 'temperature', 'position'] as const)
     for (const output of ['switching', 'analog', 'mechanical'] as const)
       for (const adjustable of [false, true]) out.push(normalizeSensor({ ...defaultSensorConfig(quantity, output), adjustable } satisfies SensorConfig));
   return out;
 }
 
+function catalogVariants(): ComponentConfig[] {
+  const out: ComponentConfig[] = [];
+  const bools = [false, true];
+  for (const double of bools)
+    for (const spring of bools) for (const piloted of bools) out.push({ kind: 'check-valve', double, spring, piloted } satisfies CheckValveConfig);
+  for (const fn of Object.keys(PRESSURE_FUNCTION_NAMES) as PressureFunction[])
+    for (const adjustable of bools) for (const piloted of bools) out.push({ kind: 'pressure-valve', function: fn, adjustable, piloted } satisfies PressureValveConfig);
+  for (const element of ['throttle', 'orifice'] as const)
+    for (const adjustable of bools) for (const check of bools) out.push({ kind: 'throttle', element, adjustable, check } satisfies ThrottleConfig);
+  for (const mode of ['divide', 'combine'] as const) out.push({ kind: 'flow-divider', mode } satisfies FlowDividerConfig);
+  for (const design of ['filter', 'breather'] as const)
+    for (const indicator of ['none', 'optical', 'gauge'] as const)
+      for (const magnet of bools) for (const bypass of bools) out.push({ kind: 'filter', design, indicator, magnet, bypass } satisfies FilterConfig);
+  for (const coolant of ['none', 'liquid', 'fan'] as const) out.push({ kind: 'cooler', coolant } satisfies CoolerConfig);
+  for (const quantity of Object.keys(INSTRUMENT_NAMES) as InstrumentQuantity[]) out.push({ kind: 'instrument', quantity } satisfies InstrumentConfig);
+  for (const type of ['optical', 'digital', 'acoustic'] as const) out.push({ kind: 'indicator', type } satisfies IndicatorConfig);
+  return out;
+}
+
 const definition = (config: ComponentConfig) => definitionOf({ type: typeOfConfig(config), config })!;
 
 describe('Konfigurierbare Bauteile', () => {
-  const all: ComponentConfig[] = [...valveVariants(), ...cylinderVariants(), ...rotaryVariants(), ...accessoryVariants()];
+  const all: ComponentConfig[] = [...valveVariants(), ...cylinderVariants(), ...rotaryVariants(), ...accessoryVariants(), ...catalogVariants()];
 
   it('legen alle Anschlüsse auf den Rand und in jeder Lage aufs Raster', () => {
     for (const config of all) {
@@ -229,7 +258,7 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
 
   it('speichern und laden alle neuen Grundsymbole', () => {
     let d = createDiagram();
-    for (const config of [...rotaryVariants().slice(0, 4), ...accessoryVariants(), ...cylinderVariants().slice(-6)]) {
+    for (const config of [...rotaryVariants().slice(0, 4), ...accessoryVariants(), ...cylinderVariants().slice(-6), ...catalogVariants()]) {
       d = addComponent(d, typeOfConfig(config), { x: 0, y: 0 }, { config }).diagram;
     }
     expect(parseDiagram(serializeDiagram(d))).toEqual({ ok: true, diagram: d });
@@ -254,6 +283,40 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
     expect(r.diagram.components[2]!.config).toEqual({ kind: 'accumulator', type: 'air-reservoir' });
     expect(r.diagram.components.every((c) => c.medium === 'pneumatic')).toBe(true);
     expect(r.diagram.connections[0]!.from).toEqual({ componentId: 'c1', portId: 'P' });
+  });
+
+  it('stellen alte feste Sperr-, Strom- und Druckventile, Filter und Manometer auf Konfiguratoren um', () => {
+    const file = JSON.parse(serializeDiagram(createDiagram()));
+    const component = (id: string, type: string) => ({ id, type, position: { x: 0, y: 0 }, rotation: 0, mirrored: false, label: '', properties: {} });
+    file.drawing.sheets[0].components = [
+      component('c1', 'valve.pressure-relief'),
+      component('c2', 'valve.check-piloted'),
+      component('c3', 'valve.throttle-check'),
+      component('c4', 'supply.filter'),
+      component('c5', 'measure.gauge'),
+      component('c6', 'valve.sequence'),
+    ];
+    file.drawing.sheets[0].connections = [{ id: 'l1', from: { componentId: 'c1', portId: 'P' }, to: { componentId: 'c2', portId: 'X' }, kind: 'working', waypoints: [] }];
+    const r = parseDiagram(JSON.stringify(file));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.diagram.components.map((c) => [c.type, c.config])).toEqual([
+      ['valve.pressure', { kind: 'pressure-valve', function: 'relief', adjustable: true, piloted: false }],
+      ['valve.check', { kind: 'check-valve', double: false, spring: true, piloted: true }],
+      ['valve.throttle', { kind: 'throttle', element: 'throttle', adjustable: true, check: true }],
+      ['supply.filter', { kind: 'filter', design: 'filter', magnet: false, indicator: 'none', bypass: false }],
+      ['measure.gauge', { kind: 'instrument', quantity: 'pressure' }],
+      ['valve.pressure', { kind: 'pressure-valve', function: 'sequence', adjustable: true, piloted: false }],
+    ]);
+    expect(r.diagram.connections[0]).toMatchObject({ from: { portId: 'P' }, to: { portId: 'X' } });
+  });
+
+  it('lesen Kupplungen aus älteren Dateien ohne Seite des Rückschlagventils', () => {
+    const d = addComponent(createDiagram(), 'line.coupling', { x: 0, y: 0 }).diagram;
+    const file = JSON.parse(serializeDiagram(d));
+    delete file.drawing.sheets[0].components[0].config.checkSide;
+    const r = parseDiagram(JSON.stringify(file));
+    expect(r.ok && r.diagram.components[0]!.config).toMatchObject({ checkSide: 'top' });
   });
 
   it('lesen Zylinder aus älteren Dateien ohne Bauart und Kolbenstellung', () => {

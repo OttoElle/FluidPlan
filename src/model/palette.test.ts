@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isConfigurable, mediumOf, paletteFor, portName } from './library.ts';
+import { isConfigurable, mediumOf, PALETTE_GROUPS, paletteFor, portName } from './library.ts';
 
 describe('Bauteilliste', () => {
   for (const domain of ['hydraulic', 'pneumatic'] as const) {
@@ -12,7 +12,15 @@ describe('Bauteilliste', () => {
 
   it('führt Wegeventile je Grundform, nicht je Betätigung', () => {
     const names = paletteFor('hydraulic').filter((e) => e.group === 'Wegeventile').map((e) => e.name);
-    expect(names).toEqual(['2/2-Wegeventil', '3/2-Wegeventil', '4/2-Wegeventil', '4/3-Wegeventil']);
+    expect(names).toEqual(['2/x-Wegeventil', '3/x-Wegeventil', '4/x-Wegeventil', '5/x-Wegeventil']);
+  });
+});
+
+describe('Kategorien', () => {
+  it('ordnet jeden Eintrag einer Kategorie zu und hält die Kategorien überschaubar', () => {
+    const palette = paletteFor('hydraulic');
+    for (const e of palette) expect(PALETTE_GROUPS as readonly string[]).toContain(e.group);
+    for (const group of PALETTE_GROUPS) expect(palette.filter((e) => e.group === group).length, group).toBeLessThanOrEqual(6);
   });
 });
 
@@ -25,9 +33,9 @@ describe('Anschlussnamen je Medium', () => {
   });
 
   it('nummeriert Druckventile in der Pneumatik (DIN ISO 11727, 8 und 9)', () => {
-    expect(portName({ type: 'valve.pressure-relief', medium: 'pneumatic' }, { id: 'P' })).toBe('1');
-    expect(portName({ type: 'valve.pressure-relief', medium: 'hydraulic' }, { id: 'T' })).toBe('T');
-    expect(portName({ type: 'valve.pressure-reducing', medium: 'pneumatic' }, { id: 'L' })).toBe('3');
+    expect(portName({ type: 'valve.pressure', medium: 'pneumatic' }, { id: 'P' })).toBe('1');
+    expect(portName({ type: 'valve.pressure', medium: 'hydraulic' }, { id: 'T' })).toBe('T');
+    expect(portName({ type: 'valve.pressure', medium: 'pneumatic' }, { id: 'L' })).toBe('3');
   });
 });
 

@@ -14,10 +14,15 @@ export type CouplingChecks = 0 | 1 | 2;
 
 export interface CouplingConfig {
   kind: 'coupling';
-  /** Anzahl der Rückschlagventile: 0, 1 (obere Hälfte) oder 2. */
+  /** Anzahl der Rückschlagventile: 0, 1 oder 2. */
   checks: CouplingChecks;
+  /** Bei einem Rückschlagventil: in der oberen (Anschluss 1) oder unteren Hälfte; fehlt in älteren Dateien (dann oben). */
+  checkSide: CheckSide;
   coupled: boolean;
 }
+
+export type CheckSide = 'top' | 'bottom';
+export const CHECK_SIDE_NAMES: Record<CheckSide, string> = { top: 'Oben', bottom: 'Unten' };
 
 export const CHECK_COUNTS: readonly CouplingChecks[] = [0, 1, 2];
 export const CHECK_NAMES: Record<CouplingChecks, string> = {
@@ -27,11 +32,13 @@ export const CHECK_NAMES: Record<CouplingChecks, string> = {
 };
 
 export function defaultCouplingConfig(): CouplingConfig {
-  return { kind: 'coupling', checks: 0, coupled: true };
+  return { kind: 'coupling', checks: 0, checkSide: 'top', coupled: true };
 }
 
 export function couplingTitle(config: CouplingConfig): string {
-  return `Schnelltrennkupplung ${CHECK_NAMES[config.checks].toLowerCase()}, ${config.coupled ? 'gekuppelt' : 'entkuppelt'}`;
+  const checks = CHECK_NAMES[config.checks];
+  const side = config.checks === 1 ? (config.checkSide === 'bottom' ? ' unten' : ' oben') : '';
+  return `Schnelltrennkupplung ${checks[0]!.toLowerCase()}${checks.slice(1)}${side}, ${config.coupled ? 'gekuppelt' : 'entkuppelt'}`;
 }
 
 export function couplingGeometry(_config: CouplingConfig, unit: number) {
@@ -45,6 +52,11 @@ export function couplingGeometry(_config: CouplingConfig, unit: number) {
 export function readCouplingConfig(v: unknown, path: string, errors: string[]): CouplingConfig | undefined {
   const r = configReader(v, path, errors);
   if (!r) return undefined;
-  const config: CouplingConfig = { kind: 'coupling', checks: r.count('checks', CHECK_COUNTS), coupled: r.bool('coupled') };
+  const config: CouplingConfig = {
+    kind: 'coupling',
+    checks: r.count('checks', CHECK_COUNTS),
+    checkSide: r.oneOf('checkSide', CHECK_SIDE_NAMES, 'top'),
+    coupled: r.bool('coupled'),
+  };
   return r.ok ? config : undefined;
 }

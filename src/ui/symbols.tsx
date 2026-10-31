@@ -4,8 +4,11 @@ import type { ComponentConfig, ComponentInstance } from '../model/types.ts';
 import { AccumulatorSymbol, BallValveSymbol, CouplingSymbol, HoseSymbol, SensorSymbol, TankSymbol } from './accessorySymbols.tsx';
 import { CylinderSymbol } from './cylinderSymbol.tsx';
 import { ElectricMotor, RotarySymbol } from './rotarySymbol.tsx';
-import { ArrowHead, CheckElement, DASH, FlowArrow, Junction, pts, seatTip, Spring, Throttle, Triangle, type P } from './symbolParts.tsx';
+import { ArrowHead, CheckElement, DASH, Junction, pts, seatTip, Triangle, type P } from './symbolParts.tsx';
 import { ValveSymbol } from './valveSymbol.tsx';
+import { CoolerSymbol, FilterSymbol, Heater, Separator } from './conditioningSymbols.tsx';
+import { CheckValveSymbol, FlowDividerSymbol, PressureValveSymbol, ThrottleSymbol } from './fluidValveSymbols.tsx';
+import { GaugeFace, IndicatorSymbol, InstrumentSymbol } from './instrumentSymbols.tsx';
 
 /**
  * Schaltzeichen nach DIN ISO 1219-1.
@@ -56,29 +59,6 @@ function Silencer() {
   );
 }
 
-/** Filter (8.7.24, 8M × 10M): auf die Spitze gestelltes Quadrat 4M, Filtereinsatz quer zur Strömung. */
-function Filter() {
-  const d = 2 * Math.SQRT2;
-  return (
-    <>
-      <polygon points={pts([4, 5 - d], [4 + d, 5], [4, 5 + d], [4 - d, 5])} />
-      <line x1={4 - d} y1={5} x2={4 + d} y2={5} strokeDasharray={DASH} />
-      <line x1={4} y1={0} x2={4} y2={5 - d} />
-      <line x1={4} y1={5 + d} x2={4} y2={10} />
-    </>
-  );
-}
-
-/** Messgerät-Zeiger (8.3.20) in einem Kreis 4M um (cx, cy). */
-function GaugeFace({ cx, cy }: { cx: number; cy: number }) {
-  return (
-    <>
-      <circle cx={cx} cy={cy} r={2} />
-      <FlowArrow from={[cx + 0.9, cy + 0.9]} to={[cx - 1.05, cy - 1.05]} />
-    </>
-  );
-}
-
 /** Wartungseinheit, vereinfacht (Beispiel 7.4.4.17, 14M × 6M). */
 function ServiceUnit() {
   return (
@@ -93,61 +73,7 @@ function ServiceUnit() {
   );
 }
 
-/** Manometer (Beispiel 6.4.3.4, 4M × 6M). */
-function Gauge() {
-  return (
-    <>
-      <GaugeFace cx={2} cy={2} />
-      <line x1={2} y1={4} x2={2} y2={6} />
-    </>
-  );
-}
-
 // --- Sperrventile -------------------------------------------------------------
-
-const DOWN: P = [0, 1];
-const UP: P = [0, -1];
-
-/** Rückschlagventil (Beispiel 6.1.5.1, 2M × 6M), frei von 1 (unten) nach 2 (oben). */
-function CheckValve() {
-  const ball: P = [1, 2.8];
-  return (
-    <>
-      <line x1={1} y1={0} x2={1} y2={2.3} />
-      <CheckElement ball={ball} seat={DOWN} />
-      <line x1={1} y1={seatTip(ball, DOWN)[1]} x2={1} y2={6} />
-    </>
-  );
-}
-
-/** Rückschlagventil mit Feder (Beispiel 6.1.5.2, 2M × 8M). */
-function SpringCheckValve() {
-  const ball: P = [1, 5.25];
-  return (
-    <>
-      {/* Leitung läuft durch die Feder bis zur Kugel (Beispiel 6.1.5.2) */}
-      <line x1={1} y1={0} x2={1} y2={4.75} />
-      <Spring from={[1, 2.25]} to={[1, 4.75]} amp={0.9} peaks={6} />
-      <CheckElement ball={ball} seat={DOWN} />
-      <line x1={1} y1={seatTip(ball, DOWN)[1]} x2={1} y2={8} />
-    </>
-  );
-}
-
-/** Entsperrbares Rückschlagventil (Beispiel 6.1.5.3, 6M × 10M), Steueranschluss X unten. */
-function PilotedCheckValve() {
-  const ball: P = [2, 6.25];
-  return (
-    <>
-      <rect x={0} y={2} width={5} height={6} />
-      <line x1={2} y1={0} x2={2} y2={5.75} />
-      <Spring from={[2, 3.25]} to={[2, 5.75]} amp={0.9} peaks={6} />
-      <CheckElement ball={ball} seat={DOWN} />
-      <line x1={2} y1={seatTip(ball, DOWN)[1]} x2={2} y2={10} />
-      <polyline points={pts([2.6, 6.95], [4, 8], [4, 10])} strokeDasharray={DASH} />
-    </>
-  );
-}
 
 /**
  * Gehäuse von Wechsel- und Zweidruckventil (12M × 6M): Rahmen 8M × 4M,
@@ -238,81 +164,9 @@ function Plug() {
   );
 }
 
-// --- Druckventile -------------------------------------------------------------
-
-/**
- * Direktgesteuerte Druckventile (Beispiele 6.1.3, 10M × 8M): Ventilfeld 4M
- * von (2, 2) bis (6, 6), Anschlüsse in der Mitte bei x = 4, Leitungen 2M.
- * Die Steuerleitung läuft 2M links am Feld vorbei und mündet 1M über der
- * Unterkante (8.2.5/8.2.6), die einstellbare Feder sitzt rechts auf
- * derselben Höhe (8.5.23, 8.6.3).
- */
-function PressureValve({ kind }: { kind: 'relief' | 'reducing' | 'sequence' }) {
-  const reducing = kind === 'reducing';
-  return (
-    <>
-      <rect x={2} y={2} width={4} height={4} />
-      <line x1={4} y1={0} x2={4} y2={2} />
-      <line x1={4} y1={6} x2={4} y2={8} />
-      {reducing ? (
-        // offen: Pfeil auf der Leitung, Steuerdruck vom Ausgang (oben)
-        <>
-          <FlowArrow from={[4, 6]} to={[4, 2]} />
-          <polyline points={pts([4, 2], [3, 1], [0, 1], [0, 5], [2, 5])} strokeDasharray={DASH} />
-        </>
-      ) : (
-        // geschlossen: Pfeil 1M neben der Leitung, Steuerdruck vom Eingang (unten)
-        <>
-          <FlowArrow from={[3, 6]} to={[3, 2]} />
-          <polyline points={pts([4, 6], [2, 8], [0, 8], [0, 5], [2, 5])} strokeDasharray={DASH} />
-        </>
-      )}
-      <Spring from={[6, 5]} to={[8.5, 5]} amp={1} peaks={6} />
-      <FlowArrow from={[6.8, 6.8]} to={[7.85, 2.05]} />
-      {kind !== 'relief' && <line x1={8} y1={6.2} x2={8} y2={8} strokeDasharray={DASH} />}
-    </>
-  );
-}
-
 // --- Stromventile -------------------------------------------------------------
 
-/** Verstellbarkeit einer Drossel (8.6.6): Pfeil 3,5M breit, 1,5M steigend. */
-const ThrottleArrow = ({ x, cy }: { x: number; cy: number }) => (
-  <FlowArrow from={[x - 1.4, cy + 0.6]} to={[x + 2.1, cy - 0.9]} />
-);
-
-/** Drosselventil, einstellbar (Beispiel 6.1.4.1, 4M × 8M). */
-function ThrottleValve() {
-  return (
-    <>
-      <line x1={2} y1={0} x2={2} y2={8} />
-      <Throttle x={2} cy={4} />
-      <ThrottleArrow x={2} cy={4} />
-    </>
-  );
-}
-
-/**
- * Drosselrückschlagventil (Beispiel 6.1.4.2, 8M × 12M): Rahmen 8M × 8M,
- * gedrosselt von 1 (unten) nach 2 (oben), Umgehung über das
- * Rückschlagventil frei von 2 nach 1.
- */
-function ThrottleCheckValve() {
-  const ball: P = [6, 6.35];
-  return (
-    <>
-      <rect x={0} y={2} width={8} height={8} />
-      <line x1={2} y1={0} x2={2} y2={12} />
-      <Throttle x={2} cy={6} />
-      <ThrottleArrow x={2} cy={6} />
-      <polyline points={pts([2, 3], [6, 3], seatTip(ball, UP))} />
-      <CheckElement ball={ball} seat={UP} />
-      <polyline points={pts([6, 6.85], [6, 9], [2, 9])} />
-      <Junction at={[2, 3]} />
-      <Junction at={[2, 9]} />
-    </>
-  );
-}
+const UP: P = [0, -1];
 
 /**
  * 2-Wege-Stromregelventil mit Umgehungs-Rückschlagventil (Beispiel 6.1.4.4,
@@ -347,20 +201,12 @@ const SYMBOLS: Record<string, () => ReactNode> = {
   'supply.electric-motor': ElectricMotor,
   'supply.air-source': AirSource,
   'supply.silencer': Silencer,
-  'supply.filter': Filter,
+  'supply.heater': Heater,
+  'supply.separator': Separator,
   'supply.service-unit': ServiceUnit,
-  'valve.check': CheckValve,
-  'valve.check-spring': SpringCheckValve,
-  'valve.check-piloted': PilotedCheckValve,
   'valve.shuttle': ShuttleValve,
   'valve.two-pressure': TwoPressureValve,
-  'valve.pressure-relief': () => <PressureValve kind="relief" />,
-  'valve.pressure-reducing': () => <PressureValve kind="reducing" />,
-  'valve.sequence': () => <PressureValve kind="sequence" />,
-  'valve.throttle': ThrottleValve,
-  'valve.throttle-check': ThrottleCheckValve,
   'valve.flow-control': FlowControlValve,
-  'measure.gauge': Gauge,
   'line.hose': HoseSymbol,
   'line.plug': Plug,
   'supply.hand-pump': HandPump,
@@ -379,6 +225,14 @@ const CONFIG_SYMBOLS: { [K in ComponentConfig['kind']]: (props: { config: Config
   'ball-valve': BallValveSymbol,
   coupling: CouplingSymbol,
   sensor: SensorSymbol,
+  'check-valve': CheckValveSymbol,
+  'pressure-valve': PressureValveSymbol,
+  throttle: ThrottleSymbol,
+  'flow-divider': FlowDividerSymbol,
+  filter: FilterSymbol,
+  cooler: CoolerSymbol,
+  instrument: InstrumentSymbol,
+  indicator: IndicatorSymbol,
 };
 
 export function hasSymbol(type: string): boolean {

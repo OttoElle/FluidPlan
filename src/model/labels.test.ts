@@ -38,9 +38,9 @@ describe('autoLabel', () => {
     const left = add('actuator.cylinder', 100, 100);
     const v1 = add('valve.directional', 100, 200);
     const v2 = add('valve.directional', 500, 200);
-    const throttle = add('valve.throttle-check', 520, 160);
+    const throttle = add('valve.throttle', 520, 160);
     const pump = add('supply.pump', 300, 400);
-    const relief = add('valve.pressure-relief', 400, 400);
+    const relief = add('valve.pressure', 400, 400);
     link(v1, 'A', left, 'A');
     link(v2, 'A', throttle, '1');
     link(throttle, '2', right, 'A');

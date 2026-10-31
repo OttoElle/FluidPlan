@@ -16,6 +16,9 @@ import type { MotorConfig, PumpConfig } from './rotary.ts';
 import type { SensorConfig } from './sensor.ts';
 import type { AccumulatorConfig, TankConfig } from './storage.ts';
 import type { DirectionalValveConfig } from './valve.ts';
+import type { CheckValveConfig, FlowDividerConfig, PressureValveConfig, ThrottleConfig } from './fluidValves.ts';
+import type { CoolerConfig, FilterConfig } from './conditioning.ts';
+import type { IndicatorConfig, InstrumentConfig } from './instruments.ts';
 
 /** Medium eines Bauteils (Hydraulik oder Pneumatik). */
 export type Domain = 'hydraulic' | 'pneumatic';
@@ -80,7 +83,15 @@ export type ComponentConfig =
   | AccumulatorConfig
   | BallValveConfig
   | CouplingConfig
-  | SensorConfig;
+  | SensorConfig
+  | CheckValveConfig
+  | PressureValveConfig
+  | ThrottleConfig
+  | FlowDividerConfig
+  | FilterConfig
+  | CoolerConfig
+  | InstrumentConfig
+  | IndicatorConfig;
 
 /** Ein im Schaltplan platziertes Bauteil. */
 export interface ComponentInstance {

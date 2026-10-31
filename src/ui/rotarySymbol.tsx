@@ -15,7 +15,7 @@ const CHORD = 2 * Math.SQRT2;
 const TRI_H = Math.sqrt(3);
 
 /** Buchstabe M für Motoren (8.4.51): 2,5M breit und hoch, Mittelspitze 1,25M tief. */
-function MotorLetter({ cx, cy }: { cx: number; cy: number }) {
+export function MotorLetter({ cx, cy }: { cx: number; cy: number }) {
   const h = 1.25;
   return <polyline points={pts([cx - h, cy + h], [cx - h, cy - h], [cx, cy], [cx + h, cy - h], [cx + h, cy + h])} />;
 }

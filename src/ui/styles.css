@@ -364,6 +364,8 @@ textarea { font: inherit; font-size: 13px; color: var(--text); background: var(-
 .symbol-preview .symbol { stroke: var(--text); }
 .symbol-preview .symbol .fill { fill: var(--text); }
 .symbol-preview .symbol, .symbol-preview .symbol * { vector-effect: non-scaling-stroke; }
+/* Mit non-scaling-stroke gilt die Strichlänge in Bildschirmpixeln: Steuer- und Leckleitungen sichtbar gestrichelt lassen. */
+.symbol-preview .symbol [stroke-dasharray] { stroke-dasharray: 3 2; }
 .symbol-preview .symbol { stroke-width: 1.1px; }
 .palette-tools + h2 { margin-top: 10px; }
 

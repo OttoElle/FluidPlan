@@ -81,12 +81,12 @@ export function normalizeRotary<C extends RotaryConfig>(config: C): C {
 export function rotaryTitle(config: RotaryConfig): string {
   const pneumatic = config.medium === 'pneumatic';
   let base: string;
-  if (config.kind === 'pump') base = pneumatic ? 'Kompressor' : 'Hydropumpe';
+  if (config.kind === 'pump') base = pneumatic ? 'Kompressor' : 'Pumpe';
   else base = pneumatic ? 'Druckluftmotor' : 'Hydromotor';
   const details = [
     config.displacement === 'variable' ? 'verstellbar' : pneumatic ? '' : 'konstant',
     config.directions === 2 ? (config.kind === 'pump' ? 'zwei Förderrichtungen' : 'zwei Drehrichtungen') : '',
-    config.drain ? 'mit Leckanschluss' : '',
+    config.drain ? 'mit Leckölanschluss' : '',
   ].filter(Boolean);
   const name = details.length ? `${base} (${details.join(', ')})` : base;
   return config.electricMotor ? `Motor-Pumpe-Einheit: ${name}` : name;

@@ -49,6 +49,7 @@ export function BallValveSymbol({ config }: { config: BallValveConfig }) {
 const Gas = ({ x, tipY }: { x: number; tipY: number }) => <Triangle tip={[x, tipY]} dir={[0, 1]} side={1} filled={false} />;
 
 export function AccumulatorSymbol({ config }: { config: AccumulatorConfig }) {
+  if (config.type === 'piston-bottle') return <PistonWithBottle />;
   if (config.type === 'air-reservoir') {
     return (
       <>
@@ -83,6 +84,26 @@ export function AccumulatorSymbol({ config }: { config: AccumulatorConfig }) {
         </>
       )}
       {config.type === 'gas-bottle' && <Gas x={2} tipY={4.4} />}
+    </>
+  );
+}
+
+/**
+ * Kolbenspeicher mit nachgeschalteter Gasflasche (Beispiel 6.4.6.5): Kapseln
+ * 4M × 8M im Abstand 8M, oben 2M darüber verbunden; in der Gasflasche zeigt
+ * das Gasdreieck nach oben.
+ */
+function PistonWithBottle() {
+  return (
+    <>
+      <rect x={0} y={2} width={4} height={8} rx={2} />
+      <rect x={8} y={2} width={4} height={8} rx={2} />
+      <polyline points={pts([2, 2], [2, 0], [10, 0], [10, 2])} />
+      <line x1={2} y1={10} x2={2} y2={12} />
+      <line x1={0} y1={4.5} x2={4} y2={4.5} />
+      <line x1={0} y1={6.5} x2={4} y2={6.5} />
+      <Gas x={2} tipY={4.4} />
+      <Triangle tip={[10, 5.4]} dir={[0, -1]} side={1} filled={false} />
     </>
   );
 }
@@ -135,8 +156,8 @@ export function CouplingSymbol({ config }: { config: CouplingConfig }) {
   };
   return (
     <>
-      {half(upper, -1, config.checks >= 1)}
-      {half(lower, 1, config.checks === 2)}
+      {half(upper, -1, config.checks === 2 || (config.checks === 1 && config.checkSide !== 'bottom'))}
+      {half(lower, 1, config.checks === 2 || (config.checks === 1 && config.checkSide === 'bottom'))}
       {config.coupled ? (
         <line x1={1} y1={upper} x2={1} y2={lower} />
       ) : (

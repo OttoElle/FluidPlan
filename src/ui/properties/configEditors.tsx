@@ -3,11 +3,19 @@ import type { ComponentConfig, Domain } from '../../model/types.ts';
 import {
   AccumulatorEditor,
   BallValveEditor,
+  CheckValveEditor,
+  CoolerEditor,
   CouplingEditor,
   CylinderEditor,
+  FilterEditor,
+  FlowDividerEditor,
+  IndicatorEditor,
+  InstrumentEditor,
+  PressureValveEditor,
   RotaryEditor,
   SensorEditor,
   TankEditor,
+  ThrottleEditor,
 } from './symbolEditors.tsx';
 import { ValveConfigurator } from './valveEditor.tsx';
 
@@ -37,6 +45,14 @@ const CONFIG_EDITORS: { [K in ComponentConfig['kind']]: ComponentType<ConfigEdit
   'ball-valve': BallValveEditor,
   coupling: CouplingEditor,
   sensor: SensorEditor,
+  'check-valve': CheckValveEditor,
+  'pressure-valve': PressureValveEditor,
+  throttle: ThrottleEditor,
+  'flow-divider': FlowDividerEditor,
+  filter: FilterEditor,
+  cooler: CoolerEditor,
+  instrument: InstrumentEditor,
+  indicator: IndicatorEditor,
 };
 
 /** Passenden Konfigurator für eine beliebige Konfiguration anzeigen. */
