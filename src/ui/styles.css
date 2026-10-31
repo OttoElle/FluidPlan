@@ -485,6 +485,9 @@ dialog.help { width: min(560px, calc(100vw - 32px)); }
 .snap-mark { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
 .snap-mark.connector { stroke: #2da44e; }
 .snap-mark.endpoint { stroke: #bf8700; }
+.cursor-mark { pointer-events: none; }
+.cursor-mark line, .cursor-mark circle { fill: none; stroke: var(--accent); stroke-width: 1.25; vector-effect: non-scaling-stroke; }
+.cursor-mark.free line, .cursor-mark.free circle { stroke: var(--muted); }
 .ruler { position: absolute; z-index: 1; background: var(--panel); pointer-events: none; }
 .ruler.horizontal { top: 0; left: 0; border-bottom: 1px solid var(--border); }
 .ruler.vertical { top: 0; left: 0; border-right: 1px solid var(--border); }

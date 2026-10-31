@@ -100,6 +100,7 @@ const EDITOR_ONLY = [
   '.creating',
   '.group-frame',
   '.snap-mark',
+  '.cursor-mark',
 ];
 
 /** Papiermaß in mm. */

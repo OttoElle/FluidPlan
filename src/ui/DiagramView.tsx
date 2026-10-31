@@ -183,6 +183,8 @@ export function DiagramView({
   const [arc, setArc] = useState<{ center: Point; from: Point | null; cursor: Point; turn: number; last: number } | null>(null);
   /** Wo der nächste Punkt einrasten würde (Anzeige beim Zeichnen). */
   const [snapMark, setSnapMark] = useState<{ point: Point; kind: SnapKind | null } | null>(null);
+  /** Letzte Mausposition (ungefangen), damit Alt die Anzeige sofort umschaltet. */
+  const lastCursor = useRef<Point | null>(null);
   const [settings, changeSettings] = useViewSettings();
 
   // Werkzeugwechsel verwirft einen angefangenen Linienzug.
@@ -256,6 +258,20 @@ export function DiagramView({
   /** Fängt einen Punkt beim Zeichnen bzw. Ändern freier Grafik (siehe model/snap.ts). */
   const snapFree = (p: Point, t: SnapTargets | null = targets) =>
     snapToTargets(p, t ?? { connectors: [], endpoints: [] }, altDown ? NO_SNAP : DEFAULT_SNAP, SNAP_RADIUS_PX / (view?.scale ?? 1));
+
+  // Alt gedrückt oder losgelassen: Fangpunkt ohne Mausbewegung neu bestimmen.
+  useEffect(() => {
+    const p = lastCursor.current;
+    const d = drag.current;
+    if (!p || !tool || (d && d.kind !== 'create')) return;
+    setSnapMark(snapFree(p, poly ? polyTargets(poly.points) : targets));
+  }, [altDown]);
+
+  // Leitung fertig oder abgebrochen: Rastermarke weg.
+  const drafting = draft !== null;
+  useEffect(() => {
+    if (!drafting) setSnapMark(null);
+  }, [drafting]);
 
   /** Fangpunkte beim Zeichnen eines Linienzugs: auch seine eigenen Punkte (zum Schließen). */
   const polyTargets = (points: Point[]): SnapTargets | null =>
@@ -527,12 +543,18 @@ export function DiagramView({
         onDoubleClick={() => poly && finishPoly(poly.points, false)}
         onPointerLeave={() => {
           setSnapMark(null);
+          lastCursor.current = null;
           rulersRef.current?.setCursor(null);
         }}
         onPointerMove={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           rulersRef.current?.setCursor({ x: e.clientX - r.left, y: e.clientY - r.top });
-          if (draft) setDraft({ ...draft, cursor: toDiagram(e) });
+          lastCursor.current = toDiagram(e);
+          if (draft) {
+            setDraft({ ...draft, cursor: toDiagram(e) });
+            // Leitungen bleiben immer im Raster: zeigen, wo der nächste Knick landet.
+            setSnapMark({ point: snapPoint(toDiagram(e)), kind: 'grid' });
+          }
           const d = drag.current;
           if (tool && (!d || d.kind === 'create')) {
             const mark = snapFree(toDiagram(e), poly ? polyTargets(poly.points) : targets);
@@ -871,6 +893,9 @@ export function DiagramView({
         )}
         {arc && <ArcPreview arc={arc} shape={arcOf(arc)} />}
         <GroupFrames diagram={diagram} selection={selection} paths={paths} />
+        {snapMark && (snapMark.kind === 'grid' || snapMark.kind === null) && (
+          <CursorMark point={snapMark.point} scale={view?.scale ?? 1} free={snapMark.kind === null} />
+        )}
         {snapMark && snapMark.kind !== 'grid' && snapMark.kind !== null && (
           <circle
             className={`snap-mark ${snapMark.kind}`}
@@ -962,6 +987,22 @@ function ArcPreview({
       {arc.from && <line className="arc-guide" x1={arc.center.x} y1={arc.center.y} x2={arc.cursor.x} y2={arc.cursor.y} />}
       <circle className="arc-center" cx={arc.center.x} cy={arc.center.y} r={2} />
       {shape && <AnnotationShape annotation={{ id: 'creating', kind: 'arc', ...shape, style: 'solid' }} />}
+    </g>
+  );
+}
+
+/**
+ * Kleines Fadenkreuz am Raster- bzw. freien Punkt, an dem beim Klicken
+ * gezeichnet würde. Größe in Bildschirmpixeln, unabhängig vom Zoom.
+ */
+function CursorMark({ point, scale, free }: { point: Point; scale: number; free: boolean }) {
+  const arm = 6 / scale;
+  const { x, y } = point;
+  return (
+    <g className={`cursor-mark${free ? ' free' : ''}`}>
+      <line x1={x - arm} y1={y} x2={x + arm} y2={y} />
+      <line x1={x} y1={y - arm} x2={x} y2={y + arm} />
+      <circle cx={x} cy={y} r={2.5 / scale} />
     </g>
   );
 }
