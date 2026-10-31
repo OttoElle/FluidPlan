@@ -1,5 +1,5 @@
 import { GRID } from '../../model/routing.ts';
-import { drawingArea, titleBlock, titleCells, type TitleCell, type TitleField } from '../../model/sheet.ts';
+import { drawingArea, frameMarks, titleBlock, titleCells, type TitleCell, type TitleField } from '../../model/sheet.ts';
 import type { Diagram } from '../../model/types.ts';
 import { LETTERING, fontSizeFor } from '../../model/lettering.ts';
 
@@ -8,10 +8,11 @@ export const MAJOR_EVERY = 5;
 
 const ORIENTATION_NAMES = { portrait: 'hoch', landscape: 'quer' } as const;
 
-/** Zeichnungsrahmen und vereinfachtes Schriftfeld nach DIN EN ISO 5457 / 7200. */
+/** Zeichnungsrahmen mit Mittenmarken und Feldeinteilung (ISO 5457) und Schriftfeld (DIN EN ISO 7200). */
 export function SheetFrame({ diagram, onPick }: { diagram: Diagram; onPick?: (field: TitleField) => void }) {
   const area = drawingArea(diagram.sheet);
   const block = titleBlock(diagram.sheet);
+  const marks = frameMarks(diagram.sheet);
   const { sheet, meta } = diagram;
   const page = diagram.page ?? { name: '', number: 1, count: 1 };
   const value = (field: TitleField): string =>
@@ -27,6 +28,17 @@ export function SheetFrame({ diagram, onPick }: { diagram: Diagram; onPick?: (fi
   return (
     <g className="sheet-frame" pointerEvents="none">
       <rect x={area.x} y={area.y} width={area.width} height={area.height} className="frame" />
+      {marks.centring.map((s, i) => (
+        <line key={`c${i}`} {...s} className="centring" />
+      ))}
+      {marks.ticks.map((s, i) => (
+        <line key={`t${i}`} {...s} className="zone-tick" />
+      ))}
+      {marks.labels.map((l, i) => (
+        <text key={`l${i}`} x={l.x} y={l.y + LETTERING.large / 2} className="zone" fontSize={fontSizeFor(LETTERING.large)}>
+          {l.text}
+        </text>
+      ))}
       {titleCells(sheet).map((c) => (
         <g key={c.field}>
           <rect x={c.x} y={c.y} width={c.width} height={c.height} className="cell" />

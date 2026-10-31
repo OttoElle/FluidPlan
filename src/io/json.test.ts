@@ -137,6 +137,7 @@ describe('Migration', () => {
     expect(r.ok && r.diagram.annotations).toEqual([]);
     expect(r.ok && r.diagram.meta).toEqual({
       title: 'Alt', author: 'Otto', drawingNumber: '', organization: '', checkedBy: '', revision: '', created: 'x', modified: 'y',
+      approvedBy: '', documentType: 'Schaltplan',
     });
   });
 

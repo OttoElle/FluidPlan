@@ -21,6 +21,7 @@ import type {
   StrokeStyle,
 } from '../model/types.ts';
 import { SHEET_FORMATS, smallestSheetFor } from '../model/sheet.ts';
+import { DEFAULT_DOCUMENT_TYPE } from '../model/diagram.ts';
 import { pruneGroups } from '../model/groups.ts';
 import { isObject, type Obj } from '../model/configRead.ts';
 import { contentOf, drawingOf, sheetView } from '../model/drawing.ts';
@@ -165,6 +166,8 @@ function migrateToSheets(diagram: unknown): unknown {
 }
 
 const META_DEFAULTS = { drawingNumber: '', organization: '', checkedBy: '', revision: '' };
+/** Seit Freigabe und Dokumentart im Schriftfeld; fehlen sie, gelten diese Werte. */
+const OPTIONAL_META = { approvedBy: '', documentType: DEFAULT_DOCUMENT_TYPE } as const;
 
 function sheetForV1(d: Obj): Sheet {
   let right = 0;
@@ -368,6 +371,9 @@ function readMeta(v: unknown, errors: string[]): DiagramMeta | undefined {
   ] as const satisfies readonly (keyof DiagramMeta)[];
   const before = errors.length;
   const meta = Object.fromEntries(keys.map((k) => [k, str(v[k], `drawing.meta.${k}`, errors)]));
+  for (const [k, fallback] of Object.entries(OPTIONAL_META)) {
+    meta[k] = v[k] === undefined ? fallback : str(v[k], `drawing.meta.${k}`, errors);
+  }
   return errors.length === before ? (meta as unknown as DiagramMeta) : undefined;
 }
 

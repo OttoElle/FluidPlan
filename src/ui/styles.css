@@ -144,8 +144,10 @@ button:hover { border-color: var(--accent); }
 .paper { fill: var(--paper); filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.25)); }
 .grid-dot { fill: var(--grid); }
 .grid-dot.major { fill: var(--grid-major); }
-.sheet-frame .frame { fill: none; stroke: var(--frame); stroke-width: 2; }
-.sheet-frame line { stroke: var(--frame); stroke-width: 1; }
+.sheet-frame .frame { fill: none; stroke: var(--frame); stroke-width: 2.8; }
+.sheet-frame line { stroke: var(--frame); stroke-width: 1.4; }
+.sheet-frame .centring { stroke-width: 2.8; }
+.sheet-frame .zone { fill: var(--muted); text-anchor: middle; }
 .sheet-frame text { fill: var(--text); }
 .sheet-frame .caption { fill: var(--muted); }
 svg.diagram text, .symbol-preview text { font-family: var(--drawing-font); }
@@ -282,7 +284,7 @@ fieldset.column { flex-direction: column; gap: 4px; }
 .handle.ne, .handle.sw { cursor: nesw-resize; }
 
 /* Schriftfeld */
-.sheet-frame .cell { fill: none; stroke: var(--frame); stroke-width: 1; }
+.sheet-frame .cell { fill: none; stroke: var(--frame); stroke-width: 1.4; }
 .sheet-frame .title-cell { fill: transparent; stroke: none; cursor: text; }
 .sheet-frame .title-cell:hover { fill: color-mix(in srgb, var(--accent) 10%, transparent); }
 .palette-tools { display: flex; flex-direction: column; gap: 4px; }

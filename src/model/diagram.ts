@@ -24,6 +24,9 @@ import { DEFAULT_SHEET } from './sheet.ts';
  * zu einer Liste von Zuständen.
  */
 
+/** Vorgabe für die Dokumentart im Schriftfeld (DIN EN ISO 7200). */
+export const DEFAULT_DOCUMENT_TYPE = 'Schaltplan';
+
 export class DiagramError extends Error {}
 
 export function createDiagram(
@@ -35,7 +38,7 @@ export function createDiagram(
   const stamp = now.toISOString();
   return {
     domain,
-    meta: { title, author: '', drawingNumber: '', organization: '', checkedBy: '', revision: '', created: stamp, modified: stamp },
+    meta: { title, author: '', drawingNumber: '', organization: '', checkedBy: '', approvedBy: '', documentType: DEFAULT_DOCUMENT_TYPE, revision: '', created: stamp, modified: stamp },
     sheet: { ...sheet },
     components: [],
     connections: [],

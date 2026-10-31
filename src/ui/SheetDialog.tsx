@@ -10,6 +10,8 @@ const TITLE_FIELDS: [Exclude<TitleField, 'date' | 'format' | 'sheet'>, string][]
   ['organization', 'Firma / Abteilung'],
   ['author', 'Erstellt von'],
   ['checkedBy', 'Geprüft von'],
+  ['approvedBy', 'Freigegeben von'],
+  ['documentType', 'Dokumentart'],
   ['revision', 'Änderungsstand'],
 ];
 
