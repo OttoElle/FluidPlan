@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
+import type { Domain } from '../model/types.ts';
 
 export type Theme = 'light' | 'dark';
 
@@ -85,4 +86,34 @@ export function usePaletteWidth(): [number, (e: PointerEvent<HTMLElement>) => vo
   }, []);
 
   return [width, start, reset];
+}
+
+const CATALOGS_KEY = 'fluidplan.catalogs';
+
+/**
+ * Welche Bauteilkataloge (Hydraulik, Pneumatik) in der Seitenleiste
+ * aufgeklappt sind; ohne gespeicherte Wahl nur Hydraulik.
+ */
+export function useOpenCatalogs(): [Record<Domain, boolean>, (medium: Domain, open: boolean) => void] {
+  const [open, setOpen] = useState<Record<Domain, boolean>>(() => {
+    const fallback = { hydraulic: true, pneumatic: false };
+    try {
+      const raw = JSON.parse(load(CATALOGS_KEY) ?? 'null') as Partial<Record<Domain, unknown>> | null;
+      return {
+        hydraulic: typeof raw?.hydraulic === 'boolean' ? raw.hydraulic : fallback.hydraulic,
+        pneumatic: typeof raw?.pneumatic === 'boolean' ? raw.pneumatic : fallback.pneumatic,
+      };
+    } catch {
+      return fallback;
+    }
+  });
+  const toggle = useCallback((medium: Domain, value: boolean) => {
+    setOpen((prev) => {
+      if (prev[medium] === value) return prev;
+      const next = { ...prev, [medium]: value };
+      store(CATALOGS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+  return [open, toggle];
 }

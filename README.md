@@ -63,6 +63,10 @@ Fenster „Blatt und Schriftfeld“ änderbar (Werkzeugleiste oder Klick ins Sch
 Mausrad zoomt um den Mauszeiger, Ziehen auf freier Fläche oder mit der mittleren Maustaste
 verschiebt die Ansicht; 100 % entspricht der Papiergröße.
 
+Es gibt nur eine Art Schaltplan: Die Bauteilliste hat je einen ausklappbaren Katalog für
+Hydraulik und Pneumatik, und ein Plan darf Bauteile aus beiden enthalten. Jedes Bauteil merkt
+sich, aus welchem Katalog es stammt (`medium`), davon hängen z. B. die Anschlussnamen ab.
+
 Bedienung: Bauteile per Klick oder Ziehen aus der Bauteilliste aufs Blatt bringen; die Liste
 ist am rechten Rand in der Breite ziehbar. Was ausgewählt ist, bearbeitet eine kleine Leiste
 über dem Blatt (Drehen, Spiegeln, Ausrichten, Linienart, Löschen). Doppelklick oder Enter
@@ -144,7 +148,9 @@ src/
   (Hydraulik/Pneumatik), Größe und Anschlüsse. Anschlüsse heißen wie im Normsymbol:
   Hydraulik `P`, `T`, `A`, `B`; Pneumatik `1`, `2`, `3`, `4`, `5`, `12`, `14`.
 - **Bauteil** (im Schaltplan): ID, Typ-Verweis, Position, Drehung (0/90/180/270),
-  Spiegelung, Bezeichnungsschlüssel (z. B. `1.2`) und freie Kennwerte.
+  Spiegelung, Bezeichnungsschlüssel (z. B. `1.2`), freie Kennwerte und das Medium
+  (`medium`: Katalog, aus dem es eingefügt wurde; seit Dateiversion 8, vorher galt
+  `domain` der ganzen Zeichnung).
   Konfigurierbare Bauteile (`valve.directional`, `actuator.cylinder`, `supply.pump`,
   `actuator.motor`, `supply.tank`, `supply.accumulator`, `valve.ball`, `line.coupling`,
   `measure.sensor`) tragen zusätzlich

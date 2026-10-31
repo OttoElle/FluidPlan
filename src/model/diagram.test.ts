@@ -66,7 +66,7 @@ describe('Schaltplan bearbeiten', () => {
   });
 
   it('fügt Bauteile hinzu, ohne das Original zu verändern', () => {
-    const empty = createDiagram('pneumatic');
+    const empty = createDiagram();
     const { diagram, component } = addComponent(empty, 'supply.pump', { x: 10, y: 20 }, { label: '1.2' });
     expect(empty.components).toHaveLength(0);
     expect(diagram.components).toEqual([component]);
@@ -74,11 +74,11 @@ describe('Schaltplan bearbeiten', () => {
   });
 
   it('lehnt unbekannte Bauteiltypen ab', () => {
-    expect(() => addComponent(createDiagram('hydraulic'), 'gibt.es.nicht', { x: 0, y: 0 })).toThrow(DiagramError);
+    expect(() => addComponent(createDiagram(), 'gibt.es.nicht', { x: 0, y: 0 })).toThrow(DiagramError);
   });
 
   it('verbindet nur existierende Anschlüsse und keine Duplikate', () => {
-    let d = createDiagram('hydraulic');
+    let d = createDiagram();
     d = addComponent(d, 'supply.pump', { x: 0, y: 0 }).diagram;
     d = addComponent(d, 'supply.tank', { x: 0, y: 100 }).diagram;
     const pumpS = { componentId: 'c1', portId: 'S' };
@@ -111,7 +111,7 @@ describe('Schaltplan bearbeiten', () => {
 describe('Anschlussposition', () => {
   // measure.gauge: 40 x 60, Anschluss 1 bei (20, 60)
   const at = (rotation: 0 | 90 | 180 | 270, mirrored = false) => {
-    let d = addComponent(createDiagram('hydraulic'), 'measure.gauge', { x: 100, y: 100 }).diagram;
+    let d = addComponent(createDiagram(), 'measure.gauge', { x: 100, y: 100 }).diagram;
     d = updateComponent(d, 'c1', { rotation, mirrored });
     return portPosition(d, { componentId: 'c1', portId: '1' });
   };
@@ -126,7 +126,7 @@ describe('Anschlussposition', () => {
 
   it('berücksichtigt die Spiegelung', () => {
     const config = { ...defaultValveConfig('pneumatic', 3, 2), left: ['pilot' as const], right: ['spring' as const] };
-    let d = addComponent(createDiagram('pneumatic'), 'valve.directional', { x: 0, y: 0 }, { config }).diagram;
+    let d = addComponent(createDiagram(), 'valve.directional', { x: 0, y: 0 }, { config }).diagram;
     d = updateComponent(d, 'c1', { mirrored: true });
     // 16M × 8M; Steueranschluss X (14) liegt links 1M über der Feld-Unterkante
     // bei (0, 50) und wandert gespiegelt nach rechts.

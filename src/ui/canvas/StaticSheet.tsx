@@ -7,7 +7,7 @@ import { ComponentShape } from './ComponentShape.tsx';
 import { LINE_DASH } from './lineStyle.ts';
 import { SheetFrame } from './SheetFrame.tsx';
 
-const SHEET_KEYS = ['sheet', 'components', 'connections', 'junctions', 'annotations', 'groups', 'meta', 'domain', 'layers'] as const;
+const SHEET_KEYS = ['sheet', 'components', 'connections', 'junctions', 'annotations', 'groups', 'meta', 'layers'] as const;
 
 /**
  * Ein nicht bearbeitbares Blatt neben dem aktuellen: gleiche Darstellung, aber
@@ -42,7 +42,6 @@ export const StaticSheet = memo(
           <ComponentShape
             key={c.id}
             component={c}
-            domain={diagram.domain}
             selected={false}
             drawing={false}
             onPointerDown={noop}

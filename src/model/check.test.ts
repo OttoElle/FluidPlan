@@ -20,8 +20,8 @@ describe('checkDiagram', () => {
   });
 
   it('meldet offene Anschlüsse und fehlende Kennzeichen', () => {
-    const area = drawingArea(createDiagram('hydraulic').sheet);
-    const { diagram } = addComponent(createDiagram('hydraulic'), 'valve.check', { x: area.x + 50, y: area.y + 50 });
+    const area = drawingArea(createDiagram().sheet);
+    const { diagram } = addComponent(createDiagram(), 'valve.check', { x: area.x + 50, y: area.y + 50 });
     const messages = checkDiagram(diagram).map((i) => i.message);
     expect(messages).toEqual([
       'Rückschlagventil hat kein Kennzeichen.',
@@ -44,9 +44,9 @@ describe('checkDiagram', () => {
   });
 
   it('lässt offene Entlüftungen pneumatischer Ventile zu', () => {
-    let d = createDiagram('pneumatic');
+    let d = createDiagram();
     const area = drawingArea(d.sheet);
-    const r = addComponent(d, 'valve.directional', { x: area.x + 100, y: area.y + 100 }, { label: '1.2' });
+    const r = addComponent(d, 'valve.directional', { x: area.x + 100, y: area.y + 100 }, { label: '1.2', medium: 'pneumatic' });
     d = r.diagram;
     expect(checkDiagram(d).map((i) => i.message)).toEqual(['1.2 5/2-Wegeventil: Anschlüsse 1, 2, 4 offen.']);
   });

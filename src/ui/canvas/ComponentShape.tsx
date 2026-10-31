@@ -1,7 +1,7 @@
 import { transformLocalPoint } from '../../model/diagram.ts';
 import { LETTERING, fontSizeFor, textWidth } from '../../model/lettering.ts';
 import { definitionOf, portName } from '../../model/library.ts';
-import type { ComponentInstance, Domain } from '../../model/types.ts';
+import type { ComponentInstance } from '../../model/types.ts';
 import { ComponentSymbol, hasSymbol } from '../symbols.tsx';
 
 /** Schriftgröße für 2,5 mm Versalhöhe (DIN ISO 1219-1, 5.12). */
@@ -12,7 +12,6 @@ const BOX_HEIGHT = LETTERING.normal + 2 * PAD;
 
 export function ComponentShape({
   component,
-  domain,
   selected,
   locked = false,
   drawing,
@@ -23,8 +22,6 @@ export function ComponentShape({
   onLabelPointerDown,
 }: {
   component: ComponentInstance;
-  /** Medium der Zeichnung; bestimmt die angezeigten Anschlussnamen. */
-  domain: Domain;
   selected: boolean;
   /** Auf einer gesperrten Ebene: nicht anklickbar, nur die Anschlüsse nehmen Leitungen an. */
   locked?: boolean;
@@ -124,7 +121,7 @@ export function ComponentShape({
             <circle cx={p.x} cy={p.y} r={6} className="port-hit" />
             <circle cx={p.x} cy={p.y} r={2.5} />
             <text x={p.x + 3 + po.x} y={p.y - 3 + po.y} fontSize={FONT} className="port-label" onPointerDown={grab(port.id)}>
-              {portName(component, port, domain)}
+              {portName(component, port)}
             </text>
           </g>
         );

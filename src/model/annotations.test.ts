@@ -5,7 +5,7 @@ import { createDiagram } from './diagram.ts';
 import { deleteSelected, selectAll } from './selection.ts';
 
 describe('Text und Grafik', () => {
-  const empty = createDiagram('hydraulic', 'Test', new Date(0));
+  const empty = createDiagram('Test', new Date(0));
 
   it('vergibt IDs und verschiebt Linien wie Rechtecke', () => {
     let d = addAnnotation(empty, { kind: 'line', from: { x: 0, y: 0 }, to: { x: 40, y: 0 }, style: 'solid' }).diagram;

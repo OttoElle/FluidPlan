@@ -15,7 +15,7 @@ import type { Diagram, Point } from './types.ts';
 
 /** Pumpe unten, zwei Verbraucher oben: P → c2 und später ein Abzweig zu c3. */
 function setup() {
-  let d = createDiagram('hydraulic');
+  let d = createDiagram();
   const add = (type: string, x: number, y: number) => {
     const r = addComponent(d, type, { x, y });
     d = r.diagram;

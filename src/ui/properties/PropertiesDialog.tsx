@@ -172,7 +172,7 @@ function ComponentProperties({ component, diagram, ...rest }: BodyProps & { comp
             ))}
           </div>
           <div className="tab-panel" role="tabpanel">
-            <tab.Panel component={draft} domain={diagram.domain} onChange={setDraft} />
+            <tab.Panel component={draft} onChange={setDraft} />
           </div>
         </>
       )}

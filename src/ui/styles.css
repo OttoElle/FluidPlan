@@ -90,7 +90,6 @@ body { margin: 0; }
 }
 .brand { margin-right: 8px; }
 .title { flex: 1; min-width: 0; }
-.domain { color: var(--muted); }
 
 .message {
   grid-area: message;
@@ -220,7 +219,10 @@ select {
 .component.drawing { cursor: crosshair; }
 
 /* Bauteilliste und Konfigurator */
-.palette-group { display: flex; flex-direction: column; gap: 4px; }
+.palette-catalog { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--border); padding-top: 4px; }
+.palette-catalog > summary { font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
+.palette-catalog[open] > summary { margin-bottom: 2px; }
+.palette-group { display: flex; flex-direction: column; gap: 4px; padding-left: 8px; }
 .palette-group summary { font-size: 12px; color: var(--muted); cursor: pointer; margin: 4px 0; }
 .configurator { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
 .configurator .row { flex-wrap: nowrap; }
@@ -363,7 +365,6 @@ textarea { font: inherit; font-size: 13px; color: var(--text); background: var(-
 .symbol-preview .symbol, .symbol-preview .symbol * { vector-effect: non-scaling-stroke; }
 .symbol-preview .symbol { stroke-width: 1.1px; }
 .palette-tools + h2 { margin-top: 10px; }
-.domain { font-size: 12px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; }
 
 /* Bauteilliste: Breite ziehen, Symbole aufs Blatt ziehen */
 .palette { min-width: 0; }

@@ -1,14 +1,14 @@
 import { createDiagram, nextId } from './diagram.ts';
 import { layersOf } from './layers.ts';
 import { sheetSize } from './sheet.ts';
-import type { Diagram, Domain, Drawing, DrawingSheet, Sheet, SheetContent } from './types.ts';
+import type { Diagram, Drawing, DrawingSheet, Sheet, SheetContent } from './types.ts';
 
 /**
  * Zeichnung mit mehreren Blättern.
  *
  * Die Bearbeitungsfunktionen (diagram.ts, arrange.ts, …) kennen nur ein Blatt
  * (`Diagram`). `sheetView` macht aus einem Blatt der Zeichnung ein solches
- * Diagram mit Medium und Schriftfeld der Zeichnung, `withSheet` schreibt ein
+ * Diagram mit dem Schriftfeld der Zeichnung, `withSheet` schreibt ein
  * bearbeitetes Diagram zurück. Änderungen an `meta` gelten so für alle Blätter.
  */
 
@@ -21,12 +21,12 @@ export function contentOf(diagram: SheetContent): SheetContent {
 
 /** Zeichnung mit einem einzigen Blatt, z. B. für „Neu“ oder ältere Dateien. */
 export function drawingOf(diagram: Diagram, name = 'Blatt 1'): Drawing {
-  const drawing: Drawing = { domain: diagram.domain, meta: diagram.meta, sheets: [{ id: 's1', name, ...contentOf(diagram) }] };
+  const drawing: Drawing = { meta: diagram.meta, sheets: [{ id: 's1', name, ...contentOf(diagram) }] };
   return diagram.layers ? { ...drawing, layers: diagram.layers } : drawing;
 }
 
-export function createDrawing(domain: Domain, title?: string, now?: Date, sheet?: Sheet): Drawing {
-  return drawingOf(createDiagram(domain, title, now, sheet));
+export function createDrawing(title?: string, now?: Date, sheet?: Sheet): Drawing {
+  return drawingOf(createDiagram(title, now, sheet));
 }
 
 /** Blatt mit dieser ID, sonst das erste. */
@@ -41,7 +41,6 @@ export function sheetIndex(drawing: Drawing, id: string | null | undefined): num
 export function sheetView(drawing: Drawing, index: number): Diagram {
   const s = drawing.sheets[index]!;
   return {
-    domain: drawing.domain,
     meta: drawing.meta,
     ...contentOf(s),
     page: { name: s.name, number: index + 1, count: drawing.sheets.length },
@@ -53,11 +52,11 @@ export function sheetView(drawing: Drawing, index: number): Diagram {
 export function withSheet(drawing: Drawing, index: number, diagram: Diagram): Drawing {
   const s = drawing.sheets[index]!;
   const sheetChanged = CONTENT_KEYS.some((k) => s[k] !== diagram[k]);
-  if (!sheetChanged && drawing.meta === diagram.meta && drawing.domain === diagram.domain) return drawing;
+  if (!sheetChanged && drawing.meta === diagram.meta) return drawing;
   const sheets = sheetChanged
     ? drawing.sheets.map((x, i) => (i === index ? { ...x, ...contentOf(diagram) } : x))
     : drawing.sheets;
-  return { ...drawing, domain: diagram.domain, meta: diagram.meta, sheets };
+  return { ...drawing, meta: diagram.meta, sheets };
 }
 
 /** Alle Blätter als Schaltpläne, z. B. für Export und Prüfung. */

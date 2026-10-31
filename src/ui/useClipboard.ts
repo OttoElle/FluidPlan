@@ -3,7 +3,6 @@ import { copySelection, pasteFragment } from '../model/clipboard.ts';
 import type { Selection } from '../model/selection.ts';
 import type { Diagram } from '../model/types.ts';
 import { parseDiagram, serializeDiagram } from '../io/json.ts';
-import { DOMAIN_NAMES } from './SheetSettings.tsx';
 
 /** Versatz beim wiederholten Einfügen (2 Rasterschritte). */
 const PASTE_STEP = 20;
@@ -17,14 +16,12 @@ export function useClipboard({
   current,
   edit,
   setSelection,
-  setMessage,
   deleteSelection,
 }: {
   diagram: Diagram;
   current: Selection;
   edit: (next: Diagram) => void;
   setSelection: (s: Selection) => void;
-  setMessage: (message: string) => void;
   deleteSelection: () => void;
 }) {
   /**
@@ -60,10 +57,6 @@ export function useClipboard({
     const parsed = parseDiagram(source.text);
     // Fremder Text in der Zwischenablage: nichts einfügen.
     if (!parsed.ok) return;
-    if (parsed.diagram.domain !== diagram.domain && parsed.diagram.components.length > 0) {
-      setMessage(`Bauteile aus einem ${DOMAIN_NAMES[parsed.diagram.domain]}-Plan lassen sich hier nicht einfügen.`);
-      return;
-    }
     const step = source.pasted * PASTE_STEP;
     const r = pasteFragment(diagram, parsed.diagram, { x: step, y: step });
     edit(r.diagram);

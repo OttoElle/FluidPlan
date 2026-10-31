@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
-import type { ComponentInstance, Domain, Rotation } from '../../model/types.ts';
+import { mediumOf } from '../../model/library.ts';
+import type { ComponentInstance, Rotation } from '../../model/types.ts';
 import { Configurator } from './configEditors.tsx';
 import { Segmented } from './Segmented.tsx';
 
@@ -7,7 +8,6 @@ import { Segmented } from './Segmented.tsx';
 export interface ComponentTabProps {
   /** Entwurf; wird erst mit „OK“ in den Schaltplan übernommen. */
   component: ComponentInstance;
-  domain: Domain;
   onChange: (component: ComponentInstance) => void;
 }
 
@@ -19,8 +19,8 @@ export interface ComponentTab {
   Panel: ComponentType<ComponentTabProps>;
 }
 
-function ConfiguratorTab({ component, domain, onChange }: ComponentTabProps) {
-  return <Configurator config={component.config!} domain={domain} onChange={(config) => onChange({ ...component, config })} />;
+function ConfiguratorTab({ component, onChange }: ComponentTabProps) {
+  return <Configurator config={component.config!} domain={mediumOf(component)} onChange={(config) => onChange({ ...component, config })} />;
 }
 
 const ROTATIONS: Rotation[] = [0, 90, 180, 270];

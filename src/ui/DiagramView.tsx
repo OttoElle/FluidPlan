@@ -710,7 +710,6 @@ export function DiagramView({
           <ComponentShape
             key={c.id}
             component={c}
-            domain={diagram.domain}
             selected={selection.components.includes(c.id)}
             locked={locked.components.has(c.id)}
             drawing={draft !== null}

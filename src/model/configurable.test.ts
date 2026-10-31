@@ -200,7 +200,7 @@ describe('Konfigurierbare Bauteile', () => {
   });
 
   it('entfernt beim Umkonfigurieren Leitungen an weggefallenen Anschlüssen', () => {
-    let d = createDiagram('hydraulic');
+    let d = createDiagram();
     d = addComponent(d, 'valve.directional', { x: 0, y: 0 }).diagram;
     d = addComponent(d, 'supply.tank', { x: 0, y: 200 }).diagram;
     d = connect(d, { componentId: 'c1', portId: 'T' }, { componentId: 'c2', portId: 'T' }).diagram;
@@ -228,7 +228,7 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
   });
 
   it('speichern und laden alle neuen Grundsymbole', () => {
-    let d = createDiagram('hydraulic');
+    let d = createDiagram();
     for (const config of [...rotaryVariants().slice(0, 4), ...accessoryVariants(), ...cylinderVariants().slice(-6)]) {
       d = addComponent(d, typeOfConfig(config), { x: 0, y: 0 }, { config }).diagram;
     }
@@ -236,7 +236,10 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
   });
 
   it('geben früher festen Pumpen, Motoren, Tanks und Speichern eine Konfiguration', () => {
-    const file = JSON.parse(serializeDiagram(createDiagram('pneumatic')));
+    // Pneumatik-Plan aus Version 7, als das Medium noch an der Zeichnung hing.
+    const file = JSON.parse(serializeDiagram(createDiagram()));
+    file.version = 7;
+    file.drawing.domain = 'pneumatic';
     const component = (id: string, type: string) => ({ id, type, position: { x: 0, y: 0 }, rotation: 0, mirrored: false, label: '', properties: {} });
     file.drawing.sheets[0].components = [component('c1', 'supply.compressor'), component('c2', 'actuator.air-motor'), component('c3', 'supply.accumulator')];
     file.drawing.sheets[0].connections = [{ id: 'l1', from: { componentId: 'c1', portId: '1' }, to: { componentId: 'c2', portId: 'A' }, kind: 'working', waypoints: [] }];
@@ -249,6 +252,7 @@ describe('Dateien mit konfigurierbaren Bauteilen', () => {
       ['supply.accumulator', 'accumulator'],
     ]);
     expect(r.diagram.components[2]!.config).toEqual({ kind: 'accumulator', type: 'air-reservoir' });
+    expect(r.diagram.components.every((c) => c.medium === 'pneumatic')).toBe(true);
     expect(r.diagram.connections[0]!.from).toEqual({ componentId: 'c1', portId: 'P' });
   });
 

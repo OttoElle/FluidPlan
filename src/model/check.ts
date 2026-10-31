@@ -1,6 +1,6 @@
 import { connectionsAt } from './diagram.ts';
 import { needsLabel } from './labels.ts';
-import { definitionOf, portName } from './library.ts';
+import { definitionOf, mediumOf, portName } from './library.ts';
 import { componentBox, routeAll, type Box } from './routing.ts';
 import { drawingArea, titleBlock } from './sheet.ts';
 import type { ComponentInstance, Diagram } from './types.ts';
@@ -66,12 +66,12 @@ export function checkDiagram(diagram: Diagram): Issue[] {
     const def = definitionOf(c);
     if (!def) continue;
     const open = def.ports.filter((p) => {
-      if (diagram.domain === 'pneumatic' && p.kind === 'return' && c.type.startsWith('valve.')) return false;
+      if (mediumOf(c) === 'pneumatic' && p.kind === 'return' && c.type.startsWith('valve.')) return false;
       return connectionsAt(diagram, { componentId: c.id, portId: p.id }).length === 0;
     });
     if (open.length) {
       const names = open
-        .map((p) => portName(c, p, diagram.domain))
+        .map((p) => portName(c, p))
         .sort((a, b) => a.localeCompare(b, 'de', { numeric: true }))
         .join(', ');
       issue('warning', `${describe(c)}: ${open.length === 1 ? 'Anschluss' : 'Anschlüsse'} ${names} offen.`, [c.id]);

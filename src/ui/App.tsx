@@ -51,6 +51,9 @@ import { checkSheets, sheetName, type Issue } from '../model/check.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
 import { autoLabelSheets } from '../model/labels.ts';
 import { MODULE, definitionOf, paletteFor, type PaletteEntry } from '../model/library.ts';
+
+/** Alle Bauteilkataloge; in der Seitenleiste je Medium aufklappbar. */
+const PALETTE: PaletteEntry[] = [...paletteFor('hydraulic'), ...paletteFor('pneumatic')];
 import { drawingArea, type TitleField } from '../model/sheet.ts';
 import type { Diagram, DiagramMeta, Drawing, Point } from '../model/types.ts';
 import { downloadDrawing, readDrawingFile } from '../io/browser.ts';
@@ -88,7 +91,7 @@ import { useClipboard } from './useClipboard.ts';
 import { DEFAULT_LAYER_ID, assignLayer, layerOf, layerState, layersOf, without } from '../model/layers.ts';
 import { group, groupsIn, ungroup } from '../model/groups.ts';
 
-import { DOMAIN_NAMES, NewDocumentDialog, type NewDocument } from './SheetSettings.tsx';
+import { NewDocumentDialog, type NewDocument } from './SheetSettings.tsx';
 
 export function App() {
   const history = useHistory<Drawing>(() => drawingOf(exampleHydraulicDiagram()));
@@ -125,10 +128,9 @@ export function App() {
   const [paletteWidth, startPaletteResize, resetPaletteWidth] = usePaletteWidth();
   const issues = useMemo(() => (checking ? checkSheets(allSheetViews(drawing), active) : []), [checking, drawing, active]);
   const fileInput = useRef<HTMLInputElement>(null);
-  const palette = paletteFor(diagram.domain);
-  const startNew = ({ domain, title, sheet }: NewDocument) => {
+  const startNew = ({ title, sheet }: NewDocument) => {
     setNewDialogOpen(false);
-    history.reset(createDrawing(domain, title, new Date(), sheet));
+    history.reset(createDrawing(title, new Date(), sheet));
     setActiveId(null);
     setActiveLayer(DEFAULT_LAYER_ID);
     setSelection(EMPTY_SELECTION);
@@ -251,7 +253,7 @@ export function App() {
       const area = drawingArea(base.sheet);
       position = { x: area.x + 40 + offset, y: area.y + 40 + offset };
     }
-    const { diagram: placed, component } = addComponent(base, entry.type, position, { config: entry.config });
+    const { diagram: placed, component } = addComponent(base, entry.type, position, { config: entry.config, medium: entry.medium });
     const next = onActiveLayer(placed, { components: [component.id] });
     if (sheet === active) edit(keepRoutes(base, next));
     else {
@@ -297,7 +299,7 @@ export function App() {
     setSelection(EMPTY_SELECTION);
   };
   const canCopy = current.components.length > 0 || current.annotations.length > 0;
-  const { copy, cut, paste, toSystemClipboard } = useClipboard({ diagram, current, edit, setSelection, setMessage, deleteSelection });
+  const { copy, cut, paste, toSystemClipboard } = useClipboard({ diagram, current, edit, setSelection, deleteSelection });
   const canGroup = selectionCount(current) >= 2;
   const canUngroup = groupsIn(diagram, current).length > 0;
   const groupSelection = () => {
@@ -426,7 +428,6 @@ export function App() {
             setMeta('title', title);
           }}
         />
-        <span className="domain">{DOMAIN_NAMES[diagram.domain]}</span>
         <div className="tool-group end">
           <IconButton
             icon={theme === 'dark' ? Sun : Moon}
@@ -466,7 +467,7 @@ export function App() {
       )}
 
       <div className="sidebar">
-      <Palette palette={palette} tool={tool} setTool={setTool} add={(entry) => add(entry)} />
+      <Palette palette={PALETTE} tool={tool} setTool={setTool} add={(entry) => add(entry)} />
       <StructurePanel
         drawing={drawing}
         active={active}
@@ -524,7 +525,7 @@ export function App() {
             onReshapeAnnotation={(id, changes) => edit((d) => updateAnnotation(d, id, changes), `shape:${id}`)}
             onOpenProperties={setProperties}
             onDropSymbol={(key, point, sheet) => {
-              const entry = palette.find((e) => e.key === key);
+              const entry = PALETTE.find((e) => e.key === key);
               if (entry) add(entry, point, sheet);
             }}
             onEditTitleField={(field) => setSheetDialog({ focus: field })}

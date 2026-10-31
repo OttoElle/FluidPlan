@@ -29,17 +29,20 @@ import { contentOf, drawingOf, sheetView } from '../model/drawing.ts';
 /**
  * Dateiformat (.fluidplan.json):
  *
- *   { "format": "fluidplan", "version": 6, "drawing": { "domain", "meta", "sheets": [ ... ] } }
+ *   { "format": "fluidplan", "version": 8, "drawing": { "meta", "sheets": [ ... ] } }
  *
  * Bis Version 5 stand dort ein einzelner Schaltplan unter "diagram".
  * Seit Version 7 kann "drawing" Zeichnungsebenen ("layers") haben, und
  * Bauteile, Leitungen und Grafik können ihre Ebene in "layer" nennen.
+ * Seit Version 8 gibt es keine Hydraulik- und Pneumatik-Zeichnungen mehr:
+ * Statt "drawing.domain" trägt jedes Bauteil sein Medium in "medium"
+ * (siehe migrateMedium).
  *
  * `version` wird erhöht, sobald sich das Format inkompatibel ändert.
  * Ältere Versionen werden dann beim Laden in `migrate` hochgezogen.
  */
 const FILE_FORMAT = 'fluidplan';
-export const FILE_VERSION = 7;
+export const FILE_VERSION = 8;
 export const FILE_EXTENSION = '.fluidplan.json';
 
 interface FileEnvelope {
@@ -92,7 +95,9 @@ export function parseDrawing(text: string): ParseResult {
     };
   }
 
-  const body = raw.version < 6 ? migrateToSheets(migrate(raw.version, raw.diagram)) : raw.drawing;
+  const sheeted = raw.version < 6 ? migrateToSheets(migrate(raw.version, raw.diagram)) : raw.drawing;
+  const body = raw.version < 8 ? migrateMedium(sheeted, errors) : sheeted;
+  if (errors.length > 0) return { ok: false, errors };
   const drawing = readDrawing(body, errors);
   if (errors.length > 0 || !drawing) return { ok: false, errors };
   const sheetIds = new Set<string>();
@@ -117,7 +122,7 @@ function upgradeLegacyTypes(diagram: Diagram): Diagram {
   const renamed = new Map<string, Record<string, string>>();
   const components = diagram.components.map((c) => {
     // Früher feste, heute konfigurierbare Typen (z. B. Pumpe, Tank) bekommen ihre Startkonfiguration.
-    if (!c.config && isConfigurable(c.type)) return { ...c, config: defaultConfigFor(c.type, diagram.domain)! };
+    if (!c.config && isConfigurable(c.type)) return { ...c, config: defaultConfigFor(c.type, c.medium ?? 'hydraulic')! };
     const legacy = LEGACY_TYPES[c.type];
     if (!legacy) return c;
     renamed.set(c.id, legacy.ports);
@@ -165,6 +170,24 @@ function migrateToSheets(diagram: unknown): unknown {
   return { domain, meta, sheets: [{ id: 's1', name: 'Blatt 1', ...content }] };
 }
 
+/**
+ * 7 → 8: Das Medium der Zeichnung ("drawing.domain") geht an jedes Bauteil
+ * über ("medium"), damit z. B. Anschlussnamen pneumatischer Pläne erhalten bleiben.
+ */
+function migrateMedium(drawing: unknown, errors: string[]): unknown {
+  if (!isObject(drawing)) return drawing;
+  const { domain, ...rest } = drawing;
+  if (domain === undefined) return rest;
+  const medium = oneOf(domain, DOMAINS, 'drawing.domain', errors);
+  if (!medium || !Array.isArray(rest.sheets)) return rest;
+  const sheets = rest.sheets.map((s) =>
+    isObject(s) && Array.isArray(s.components)
+      ? { ...s, components: s.components.map((c) => (isObject(c) && c.medium === undefined ? { ...c, medium } : c)) }
+      : s,
+  );
+  return { ...rest, sheets };
+}
+
 const META_DEFAULTS = { drawingNumber: '', organization: '', checkedBy: '', revision: '' };
 /** Seit Freigabe und Dokumentart im Schriftfeld; fehlen sie, gelten diese Werte. */
 const OPTIONAL_META = { approvedBy: '', documentType: DEFAULT_DOCUMENT_TYPE } as const;
@@ -198,7 +221,6 @@ function readDrawing(v: unknown, errors: string[]): Drawing | undefined {
     errors.push('drawing: Objekt erwartet');
     return undefined;
   }
-  const domain = oneOf(v.domain, DOMAINS, 'drawing.domain', errors);
   const meta = readMeta(v.meta, errors);
   const sheets = readArray(v.sheets, 'drawing.sheets', errors, readDrawingSheet);
   if (sheets && sheets.length === 0) errors.push('drawing.sheets: mindestens ein Blatt erwartet');
@@ -210,8 +232,8 @@ function readDrawing(v: unknown, errors: string[]): Drawing | undefined {
       ids.add(l.id);
     }
   }
-  if (!domain || !meta || !sheets || sheets.length === 0 || (v.layers !== undefined && !layers)) return undefined;
-  return layers ? { domain, meta, sheets, layers } : { domain, meta, sheets };
+  if (!meta || !sheets || sheets.length === 0 || (v.layers !== undefined && !layers)) return undefined;
+  return layers ? { meta, sheets, layers } : { meta, sheets };
 }
 
 function readLayer(v: unknown, path: string, errors: string[]): Layer | undefined {
@@ -427,6 +449,10 @@ function readComponent(v: unknown, path: string, errors: string[]): ComponentIns
       }
       extra.portLabelOffsets = offsets;
     }
+  }
+  if (v.medium !== undefined) {
+    const medium = oneOf(v.medium, DOMAINS, `${path}.medium`, errors);
+    if (medium) extra.medium = medium;
   }
   return { id, type, position, rotation, mirrored, label, properties, ...extra, ...(config ? { config } : {}) };
 }

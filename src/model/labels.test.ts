@@ -25,7 +25,7 @@ describe('autoLabel', () => {
   });
 
   it('nummeriert Kreise nach Antrieben von links nach rechts', () => {
-    let d = createDiagram('hydraulic');
+    let d = createDiagram();
     const add = (type: string, x: number, y: number) => {
       const r = addComponent(d, type, { x, y });
       d = r.diagram;
@@ -86,12 +86,12 @@ describe('autoLabel', () => {
   });
 
   it('kennzeichnet auch Schlauchleitungen (DIN ISO 1219-2, 5.1.1.1)', () => {
-    const { diagram } = addComponent(createDiagram('hydraulic'), 'line.hose', { x: 0, y: 0 });
+    const { diagram } = addComponent(createDiagram(), 'line.hose', { x: 0, y: 0 });
     expect(autoLabel(diagram).components[0]!.label).toBe('1.1');
   });
 
   it('lässt Schalldämpfer ohne Kennzeichen', () => {
-    const { diagram } = addComponent(createDiagram('pneumatic'), 'supply.silencer', { x: 0, y: 0 });
+    const { diagram } = addComponent(createDiagram(), 'supply.silencer', { x: 0, y: 0 });
     expect(autoLabel(diagram).components[0]!.label).toBe('');
   });
 });

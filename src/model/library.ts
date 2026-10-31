@@ -285,7 +285,7 @@ export function readConfig(type: string, v: unknown, path: string, errors: strin
 }
 
 /**
- * Angezeigte Anschlussnamen, die vom Medium der Zeichnung abhängen.
+ * Angezeigte Anschlussnamen, die vom Medium des Bauteils abhängen.
  * Die Anschluss-IDs bleiben gleich, damit Leitungen gültig bleiben.
  *
  * Hydraulik nach ISO 9461: Ventile mit zwei Hauptanschlüssen heißen P (Eingang)
@@ -309,12 +309,25 @@ const PORT_NAMES: Record<Domain, Record<string, Record<string, string>>> = {
   },
 };
 
-/** Name eines Anschlusses, wie er im Schaltplan steht. */
+/**
+ * Medium eines Bauteils: das der Konfiguration (Wegeventil, Pumpe, Motor), sonst
+ * das beim Einfügen gemerkte, sonst das einzige, für das es das Bauteil gibt,
+ * sonst Hydraulik.
+ */
+export function mediumOf(component: Pick<ComponentInstance, 'type' | 'config' | 'medium'>): Domain {
+  const configured = (component.config as { medium?: Domain } | undefined)?.medium;
+  if (configured) return configured;
+  if (component.medium) return component.medium;
+  const domains = definitionOf(component)?.domains;
+  return domains?.length === 1 ? domains[0]! : 'hydraulic';
+}
+
+/** Name eines Anschlusses, wie er im Schaltplan steht (abhängig vom Medium des Bauteils). */
 export function portName(
-  component: Pick<ComponentInstance, 'type' | 'config'>,
+  component: Pick<ComponentInstance, 'type' | 'config' | 'medium'>,
   port: Pick<PortDefinition, 'id' | 'label'>,
-  domain: Domain,
 ): string {
+  const domain = mediumOf(component);
   const byType = PORT_NAMES[domain][component.type];
   if (byType?.[port.id]) return byType[port.id]!;
   // Zweiwege-Kugelhahn als Absperrventil (ISO 9461, 3.3); Drei- und Vierwege bleiben nummeriert.
@@ -350,6 +363,8 @@ export function definitionsFor(domain: Domain): ComponentDefinition[] {
 
 export interface PaletteEntry {
   key: string;
+  /** Bauteilkatalog, aus dem der Eintrag stammt; wird beim Einfügen am Bauteil gemerkt. */
+  medium: Domain;
   name: string;
   group: string;
   type: string;
@@ -357,6 +372,9 @@ export interface PaletteEntry {
   /** Einzelheiten wie Betätigung oder Wirkungsweise stellt man nach dem Einfügen im Konfigurator ein. */
   configurable?: boolean;
 }
+
+/** Bauteilkataloge in der Seitenleiste, in dieser Reihenfolge. */
+export const MEDIUM_NAMES: Record<Domain, string> = { hydraulic: 'Hydraulik', pneumatic: 'Pneumatik' };
 
 export const PALETTE_GROUPS = [
   'Energieversorgung',
@@ -392,7 +410,8 @@ function groupOfFixed(type: string): PaletteGroup {
 function configurableEntries(domain: Domain): PaletteEntry[] {
   const hydraulic = domain === 'hydraulic';
   const e = (key: string, name: string, group: PaletteGroup, t: ConfigurableType<any>, config: ComponentConfig): PaletteEntry => ({
-    key,
+    key: `${domain}:${key}`,
+    medium: domain,
     name,
     group,
     type: t.type,
@@ -432,10 +451,10 @@ function configurableEntries(domain: Domain): PaletteEntry[] {
   ];
 }
 
-/** Bauteilliste für ein Medium, gruppiert über `group`. */
+/** Bauteilkatalog eines Mediums, gruppiert über `group`. */
 export function paletteFor(domain: Domain): PaletteEntry[] {
   const fixedEntries = definitionsFor(domain).map(
-    (d): PaletteEntry => ({ key: d.type, name: d.name, group: groupOfFixed(d.type), type: d.type }),
+    (d): PaletteEntry => ({ key: `${domain}:${d.type}`, medium: domain, name: d.name, group: groupOfFixed(d.type), type: d.type }),
   );
   return [...configurableEntries(domain), ...fixedEntries];
 }

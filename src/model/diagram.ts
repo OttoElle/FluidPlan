@@ -30,14 +30,12 @@ export const DEFAULT_DOCUMENT_TYPE = 'Schaltplan';
 export class DiagramError extends Error {}
 
 export function createDiagram(
-  domain: Domain,
   title = 'Neuer Schaltplan',
   now = new Date(),
   sheet: Sheet = DEFAULT_SHEET,
 ): Diagram {
   const stamp = now.toISOString();
   return {
-    domain,
     meta: { title, author: '', drawingNumber: '', organization: '', checkedBy: '', approvedBy: '', documentType: DEFAULT_DOCUMENT_TYPE, revision: '', created: stamp, modified: stamp },
     sheet: { ...sheet },
     components: [],
@@ -73,6 +71,8 @@ export interface AddComponentOptions {
   properties?: Record<string, string>;
   /** Nur für konfigurierbare Typen; fehlt sie, gilt die Startkonfiguration. */
   config?: ComponentConfig;
+  /** Bauteilkatalog, aus dem das Bauteil kommt (Standard: Hydraulik). */
+  medium?: Domain;
 }
 
 export function addComponent(
@@ -82,7 +82,7 @@ export function addComponent(
   options: AddComponentOptions = {},
 ): { diagram: Diagram; component: ComponentInstance } {
   if (!isKnownType(type)) throw new DiagramError(`Unbekannter Bauteiltyp "${type}"`);
-  const config = isConfigurable(type) ? structuredClone(options.config ?? defaultConfigFor(type, diagram.domain)) : undefined;
+  const config = isConfigurable(type) ? structuredClone(options.config ?? defaultConfigFor(type, options.medium ?? 'hydraulic')) : undefined;
   const component: ComponentInstance = {
     id: nextId('c', diagram.components),
     type,
@@ -92,6 +92,7 @@ export function addComponent(
     label: options.label ?? '',
     properties: { ...options.properties },
     ...(config ? { config } : {}),
+    ...(options.medium ? { medium: options.medium } : {}),
   };
   return { diagram: { ...diagram, components: [...diagram.components, component] }, component };
 }

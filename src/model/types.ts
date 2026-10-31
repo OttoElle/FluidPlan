@@ -17,7 +17,7 @@ import type { SensorConfig } from './sensor.ts';
 import type { AccumulatorConfig, TankConfig } from './storage.ts';
 import type { DirectionalValveConfig } from './valve.ts';
 
-/** Medium eines Bauteils bzw. Schaltplans. */
+/** Medium eines Bauteils (Hydraulik oder Pneumatik). */
 export type Domain = 'hydraulic' | 'pneumatic';
 
 /**
@@ -111,6 +111,12 @@ export interface ComponentInstance {
   config?: ComponentConfig;
   /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
   layer?: string;
+  /**
+   * Medium, aus dessen Bauteilkatalog das Bauteil stammt; bestimmt z. B. die
+   * Anschlussnamen. Fehlt es, gilt das Medium der Konfiguration bzw. Hydraulik
+   * (siehe mediumOf in library.ts).
+   */
+  medium?: Domain;
 }
 
 /** Ende einer Leitung: ein bestimmter Anschluss eines bestimmten Bauteils. */
@@ -296,10 +302,9 @@ export interface Group {
 /**
  * Ein Schaltplan auf einem Blatt. Alle Bearbeitungsfunktionen arbeiten auf
  * diesem Typ; bei mehreren Blättern ist es die Sicht auf eines davon
- * (siehe drawing.ts), mit Medium und Schriftfeld der ganzen Zeichnung.
+ * (siehe drawing.ts), mit dem Schriftfeld der ganzen Zeichnung.
  */
 export interface Diagram {
-  domain: Domain;
   meta: DiagramMeta;
   sheet: Sheet;
   components: ComponentInstance[];
@@ -335,7 +340,7 @@ export interface PageInfo {
   count: number;
 }
 
-/** Inhalt eines Blatts; Medium und Schriftfeld-Angaben gelten für die ganze Zeichnung. */
+/** Inhalt eines Blatts; Schriftfeld-Angaben gelten für die ganze Zeichnung. */
 export type SheetContent = Pick<Diagram, 'sheet' | 'components' | 'connections' | 'junctions' | 'annotations' | 'groups'>;
 
 /** Ein Blatt der Zeichnung mit eigenem Format und eigenem Inhalt. */
@@ -352,7 +357,6 @@ export interface DrawingSheet extends SheetContent {
  * desselben Blatts.
  */
 export interface Drawing {
-  domain: Domain;
   meta: DiagramMeta;
   sheets: DrawingSheet[];
   /** Zeichnungsebenen; fehlt in älteren Dateien (dann nur die Standardebene). */
