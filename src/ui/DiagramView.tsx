@@ -93,6 +93,8 @@ interface Props {
   onConnectToLine: (from: Endpoint, lineId: string, path: Point[], point: Point, waypoints: Point[]) => void;
   onRouteChange: (id: string, waypoints: Point[]) => void;
   onMoveJunction: (id: string, position: Point) => void;
+  /** Kennzeichen (port = null) oder Anschlussbezeichnung verschieben; offset gegenüber der Standardlage. */
+  onMoveLabel?: (componentId: string, port: string | null, offset: Point) => void;
   /** Ziehen beendet; fasst die Zwischenschritte für Rückgängig zu einem Schritt zusammen. */
   onGestureEnd?: () => void;
 }
@@ -121,7 +123,8 @@ type Drag =
   | { kind: 'band'; start: Point; end: Point; additive: boolean; moved: boolean }
   | { kind: 'pan'; startX: number; startY: number; origin: View; moved: boolean }
   | { kind: 'segment'; id: string; index: number; path: Point[]; start: Point; offset: number }
-  | { kind: 'junction'; id: string; start: Point; origin: Point; last: Point };
+  | { kind: 'junction'; id: string; start: Point; origin: Point; last: Point }
+  | { kind: 'label'; id: string; port: string | null; start: Point; origin: Point; last: Point };
 
 const DOUBLE_CLICK_MS = 400;
 
@@ -142,6 +145,7 @@ export function DiagramView({
   onConnectToLine,
   onRouteChange,
   onMoveJunction,
+  onMoveLabel,
   onGestureEnd,
   tool = null,
   onCreateAnnotation,
@@ -463,6 +467,14 @@ export function DiagramView({
               d.last = to;
               onMoveJunction(d.id, to);
             }
+          } else if (d.kind === 'label') {
+            const p = toDiagram(e);
+            const fine = (v: number) => Math.round(v / FINE) * FINE;
+            const to = { x: fine(d.origin.x + p.x - d.start.x), y: fine(d.origin.y + p.y - d.start.y) };
+            if (to.x !== d.last.x || to.y !== d.last.y) {
+              d.last = to;
+              onMoveLabel?.(d.id, d.port, to);
+            }
           } else if (d.kind === 'move') {
             const p = toDiagram(e);
             // Bauteile bleiben im Raster; reine Grafik mit Alt auch frei.
@@ -515,7 +527,7 @@ export function DiagramView({
           const d = drag.current;
           drag.current = null;
           setPanning(false);
-          if (d?.kind === 'move' || d?.kind === 'segment' || d?.kind === 'junction' || d?.kind === 'handle') {
+          if (d?.kind === 'move' || d?.kind === 'segment' || d?.kind === 'junction' || d?.kind === 'handle' || d?.kind === 'label') {
             onGestureEnd?.();
           }
           setBand(null);
@@ -734,6 +746,21 @@ export function DiagramView({
               }
             }}
             onPortHover={(portId) => setHoverPort(portId === null ? null : { componentId: c.id, portId })}
+            onLabelPointerDown={
+              onMoveLabel
+                ? (port, e) => {
+                    if (e.button !== 0 || draft || tool) return;
+                    if (isDoubleClick(`l:${c.id}:${port ?? ''}`, e)) {
+                      onMoveLabel(c.id, port, { x: 0, y: 0 });
+                      onGestureEnd?.();
+                      return;
+                    }
+                    (e.currentTarget as Element).closest('svg')?.setPointerCapture(e.pointerId);
+                    const origin = (port === null ? c.labelOffset : c.portLabelOffsets?.[port]) ?? { x: 0, y: 0 };
+                    drag.current = { kind: 'label', id: c.id, port, start: toDiagram(e), origin, last: origin };
+                  }
+                : undefined
+            }
           />
         ))}
 

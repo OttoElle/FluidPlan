@@ -413,6 +413,21 @@ function readComponent(v: unknown, path: string, errors: string[]): ComponentIns
     if (typeof v[key] === 'boolean') extra[key] = v[key];
     else errors.push(`${path}.${key}: true oder false erwartet`);
   }
+  if (v.labelOffset !== undefined) {
+    const p = point(v.labelOffset, `${path}.labelOffset`, errors);
+    if (p) extra.labelOffset = p;
+  }
+  if (v.portLabelOffsets !== undefined) {
+    if (!isObject(v.portLabelOffsets)) errors.push(`${path}.portLabelOffsets: Objekt erwartet`);
+    else {
+      const offsets: Record<string, Point> = {};
+      for (const [port, value] of Object.entries(v.portLabelOffsets)) {
+        const p = point(value, `${path}.portLabelOffsets.${port}`, errors);
+        if (p) offsets[port] = p;
+      }
+      extra.portLabelOffsets = offsets;
+    }
+  }
   return { id, type, position, rotation, mirrored, label, properties, ...extra, ...(config ? { config } : {}) };
 }
 

@@ -24,6 +24,7 @@ import {
   connect,
   lineKindFor,
   moveJunction,
+  moveLabel,
   splitConnection,
   updateConnection,
 } from '../model/diagram.ts';
@@ -553,6 +554,7 @@ export function App() {
             }}
             onRouteChange={(id, waypoints) => edit((d) => updateConnection(d, id, { waypoints }), `route:${id}`)}
             onMoveJunction={(id, position) => edit((d) => keepRoutes(d, moveJunction(d, id, position)), `junction:${id}`)}
+            onMoveLabel={(id, port, offset) => edit((d) => moveLabel(d, id, port, offset), `label:${id}:${port ?? ''}`)}
             onGestureEnd={history.seal}
           />
           <ContextBar

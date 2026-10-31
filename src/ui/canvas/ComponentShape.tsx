@@ -20,6 +20,7 @@ export function ComponentShape({
   onPortPointerDown,
   onPortPointerUp,
   onPortHover,
+  onLabelPointerDown,
 }: {
   component: ComponentInstance;
   /** Medium der Zeichnung; bestimmt die angezeigten Anschlussnamen. */
@@ -32,6 +33,8 @@ export function ComponentShape({
   onPortPointerDown: (portId: string, e: React.PointerEvent) => void;
   onPortPointerUp: (portId: string) => void;
   onPortHover: (portId: string | null) => void;
+  /** Kennzeichen (port = null) oder Anschlussbezeichnung angefasst; fehlt = nicht verschiebbar. */
+  onLabelPointerDown?: (port: string | null, e: React.PointerEvent) => void;
 }) {
   const def = definitionOf(component);
   if (!def) return null;
@@ -46,6 +49,16 @@ export function ComponentShape({
 
   const showLabel = Boolean(component.label) && component.showLabel !== false;
   const labelWidth = textWidth(component.label, LETTERING.normal) + 2 * PAD;
+  const off = component.labelOffset ?? { x: 0, y: 0 };
+  const lx = x + off.x;
+  const ly = y + off.y;
+  const grab = (port: string | null) =>
+    onLabelPointerDown && !locked
+      ? (e: React.PointerEvent) => {
+          e.stopPropagation();
+          onLabelPointerDown(port, e);
+        }
+      : undefined;
 
   const cx = def.size.width / 2;
   const cy = def.size.height / 2;
@@ -76,25 +89,28 @@ export function ComponentShape({
       )}
       {showLabel && (
         // Bezeichnungsschlüssel im rechteckigen Kasten (DIN ISO 1219-2, 5.1.1.2).
-        <g>
-          <rect x={x - 4 - labelWidth} y={y} width={labelWidth} height={BOX_HEIGHT} className="label-box" />
-          <text x={x - 4 - labelWidth / 2} y={y + PAD + LETTERING.normal} className="label" fontSize={FONT}>
+        <g className="label-group" onPointerDown={grab(null)}>
+          <title>Kennzeichen: ziehen zum Verschieben, Doppelklick setzt zurück</title>
+          <rect x={lx - 4 - labelWidth} y={ly} width={labelWidth} height={BOX_HEIGHT} className="label-box" />
+          <text x={lx - 4 - labelWidth / 2} y={ly + PAD + LETTERING.normal} className="label" fontSize={FONT}>
             {component.label}
           </text>
         </g>
       )}
       {component.description && component.showDescription && (
         <text
-          x={x - 4}
-          y={y + (showLabel ? BOX_HEIGHT + 4 : 0) + LETTERING.normal}
+          x={lx - 4}
+          y={ly + (showLabel ? BOX_HEIGHT + 4 : 0) + LETTERING.normal}
           className="description"
           fontSize={FONT}
+          onPointerDown={grab(null)}
         >
           {component.description}
         </text>
       )}
       {def.ports.map((port) => {
         const p = transformLocalPoint(component, def, port.offset);
+        const po = component.portLabelOffsets?.[port.id] ?? { x: 0, y: 0 };
         return (
           <g
             key={port.id}
@@ -107,7 +123,7 @@ export function ComponentShape({
             <title>Anschluss {port.id}: Leitung ziehen oder anklicken</title>
             <circle cx={p.x} cy={p.y} r={6} className="port-hit" />
             <circle cx={p.x} cy={p.y} r={2.5} />
-            <text x={p.x + 3} y={p.y - 3} fontSize={FONT}>
+            <text x={p.x + 3 + po.x} y={p.y - 3 + po.y} fontSize={FONT} className="port-label" onPointerDown={grab(port.id)}>
               {portName(component, port, domain)}
             </text>
           </g>

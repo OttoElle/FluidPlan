@@ -96,6 +96,37 @@ export function addComponent(
   return { diagram: { ...diagram, components: [...diagram.components, component] }, component };
 }
 
+/**
+ * Wie weit Beschriftungen von ihrer Standardlage weg dürfen, in Einheiten je Achse.
+ * DIN ISO 1219-2: Kennzeichen „neben dem Symbol“ (5.1.1.1), Anschlussbezeichnungen
+ * „am oder nahe dem Bauteil“ (5.2); beide dürfen Geräte und Leitungen nicht
+ * überdecken (4.3.3) und deshalb verschoben werden.
+ */
+export const LABEL_RANGE = 120;
+export const PORT_LABEL_RANGE = 40;
+
+/** Verschiebt das Kennzeichen (port = null) oder eine Anschlussbezeichnung; (0, 0) setzt zurück. */
+export function moveLabel(diagram: Diagram, id: string, port: string | null, offset: Point): Diagram {
+  const range = port === null ? LABEL_RANGE : PORT_LABEL_RANGE;
+  const clamp = (v: number) => Math.max(-range, Math.min(range, v));
+  const o = { x: clamp(offset.x), y: clamp(offset.y) };
+  const zero = o.x === 0 && o.y === 0;
+  return {
+    ...diagram,
+    components: diagram.components.map((c) => {
+      if (c.id !== id) return c;
+      if (port === null) {
+        const { labelOffset: _, ...rest } = c;
+        return zero ? rest : { ...rest, labelOffset: o };
+      }
+      const { [port]: _, ...others } = c.portLabelOffsets ?? {};
+      const next = zero ? others : { ...others, [port]: o };
+      const { portLabelOffsets: __, ...rest } = c;
+      return Object.keys(next).length ? { ...rest, portLabelOffsets: next } : rest;
+    }),
+  };
+}
+
 export function updateComponent(
   diagram: Diagram,
   id: string,

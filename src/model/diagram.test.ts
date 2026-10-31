@@ -5,6 +5,9 @@ import {
   connectionsAt,
   createDiagram,
   DiagramError,
+  LABEL_RANGE,
+  moveLabel,
+  PORT_LABEL_RANGE,
   nextId,
   portPosition,
   removeComponent,
@@ -128,5 +131,19 @@ describe('Anschlussposition', () => {
     // 16M × 8M; Steueranschluss X (14) liegt links 1M über der Feld-Unterkante
     // bei (0, 50) und wandert gespiegelt nach rechts.
     expect(portPosition(d, { componentId: 'c1', portId: 'X' })).toEqual({ x: 160, y: 50 });
+  });
+});
+
+describe('Beschriftung verschieben', () => {
+  it('verschiebt Kennzeichen und Anschlussbezeichnung, begrenzt und setzt zurück', () => {
+    let d = exampleHydraulicDiagram();
+    const id = d.components[0]!.id;
+    d = moveLabel(d, id, null, { x: 20, y: -500 });
+    expect(d.components[0]!.labelOffset).toEqual({ x: 20, y: -LABEL_RANGE });
+    d = moveLabel(d, id, 'A', { x: 100, y: 5 });
+    expect(d.components[0]!.portLabelOffsets).toEqual({ A: { x: PORT_LABEL_RANGE, y: 5 } });
+    d = moveLabel(moveLabel(d, id, null, { x: 0, y: 0 }), id, 'A', { x: 0, y: 0 });
+    expect(d.components[0]!.labelOffset).toBeUndefined();
+    expect(d.components[0]!.portLabelOffsets).toBeUndefined();
   });
 });

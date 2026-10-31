@@ -103,6 +103,10 @@ export interface ComponentInstance {
   showLabel?: boolean;
   /** Bezeichnung am Symbol anzeigen (Standard: nein). */
   showDescription?: boolean;
+  /** Verschiebung von Kennzeichen und Bezeichnung gegenüber der Standardlage (Blattkoordinaten). */
+  labelOffset?: Point;
+  /** Verschiebung einzelner Anschlussbezeichnungen gegenüber der Standardlage, je Anschluss-ID. */
+  portLabelOffsets?: Record<string, Point>;
   /** Nur bei konfigurierbaren Bauteiltypen. */
   config?: ComponentConfig;
   /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
