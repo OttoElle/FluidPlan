@@ -6,7 +6,8 @@ import { LABEL_HEIGHT } from '../SheetLabels.tsx';
 
 /** Bildschirmpixel pro Millimeter bei 100 % (CSS: 96 dpi). */
 export const PX_PER_MM = 96 / 25.4;
-const MIN_SCALE = 0.1;
+/** Kleinster Zoom: 20 % (Papiergröße = 100 %). */
+const MIN_SCALE = 0.2 * PX_PER_MM * 0.25;
 const MAX_SCALE = 12;
 /**
  * Freiraum um das Blatt beim Einpassen, in Bildschirmpixeln: Platz für Lineale,

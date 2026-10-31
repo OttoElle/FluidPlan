@@ -422,6 +422,7 @@ textarea { font: inherit; font-size: 13px; color: var(--text); background: var(-
 }
 .segment:hover { background: var(--bg); border-color: var(--border); }
 .segment[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+button.toggle[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .stroke-icon line { stroke: currentColor; stroke-width: 1.75; }
 .tab-form .segmented, .tab-panel .segmented { border: 1px solid var(--border); border-radius: 8px; padding: 2px; align-self: flex-start; }
 
@@ -693,3 +694,31 @@ dialog.help { width: min(560px, calc(100vw - 32px)); }
 .color-picker.inline .color-menu { position: static; transform: none; padding: 0; border: 0; box-shadow: none; background: none; display: flex; align-items: center; gap: 12px; }
 .color-picker.inline .color-grid { grid-template-columns: repeat(8, 26px); }
 .color-picker.inline .color-custom { margin-top: 0; }
+
+/* Rechtsklickmenü der Zeichenfläche (CanvasMenu.tsx) */
+.canvas-menu {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.canvas-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-color: transparent;
+  background: none;
+  text-align: left;
+}
+.canvas-menu button .label { flex: 1; }
+.canvas-menu button kbd { font: inherit; font-size: 11px; color: var(--muted); }
+.canvas-menu button:hover:not(:disabled), .canvas-menu button:focus-visible { background: var(--bg); border-color: var(--border); outline: none; }
+.canvas-menu button:disabled { opacity: 0.4; }
+.canvas-menu hr { width: 100%; margin: 3px 0; border: 0; border-top: 1px solid var(--border); }

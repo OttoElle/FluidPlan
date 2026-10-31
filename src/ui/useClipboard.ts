@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { copySelection, pasteFragment } from '../model/clipboard.ts';
+import { copySelection, offsetToPoint, pasteFragment } from '../model/clipboard.ts';
 import type { Selection } from '../model/selection.ts';
-import type { Diagram } from '../model/types.ts';
+import type { Diagram, Point } from '../model/types.ts';
 import { parseDiagram, serializeDiagram } from '../io/json.ts';
 
 /** Versatz beim wiederholten Einfügen (2 Rasterschritte). */
@@ -49,8 +49,11 @@ export function useClipboard({
     return text;
   };
 
-  /** Fügt `text` (aus der System-Zwischenablage) oder den zuletzt kopierten Ausschnitt ein. */
-  const paste = (text?: string) => {
+  /**
+   * Fügt `text` (aus der System-Zwischenablage) oder den zuletzt kopierten
+   * Ausschnitt ein; mit `at` (Rechtsklickmenü) mit der linken oberen Ecke dort.
+   */
+  const paste = (text?: string, at?: Point) => {
     const known = clipboard.current;
     const source = text === undefined || text === known?.text ? known : { text, pasted: 1 };
     if (!source) return;
@@ -58,10 +61,20 @@ export function useClipboard({
     // Fremder Text in der Zwischenablage: nichts einfügen.
     if (!parsed.ok) return;
     const step = source.pasted * PASTE_STEP;
-    const r = pasteFragment(diagram, parsed.diagram, { x: step, y: step });
+    const offset = at ? offsetToPoint(parsed.diagram, at) : { x: step, y: step };
+    const r = pasteFragment(diagram, parsed.diagram, offset);
     edit(r.diagram);
     setSelection(r.selection);
     clipboard.current = { ...source, pasted: source.pasted + 1 };
+  };
+
+  /** Dupliziert die Auswahl zwei Raster versetzt, ohne die Zwischenablage zu ändern. */
+  const duplicate = () => {
+    const fragment = copySelection(diagram, current);
+    if (!fragment) return;
+    const r = pasteFragment(diagram, fragment, { x: PASTE_STEP, y: PASTE_STEP });
+    edit(r.diagram);
+    setSelection(r.selection);
   };
 
   /** Schaltflächen: zusätzlich in die System-Zwischenablage schreiben, wenn der Browser es erlaubt. */
@@ -95,5 +108,5 @@ export function useClipboard({
     };
   });
 
-  return { copy, cut, paste, toSystemClipboard };
+  return { copy, cut, paste, duplicate, hasContent: () => clipboard.current !== null, toSystemClipboard };
 }

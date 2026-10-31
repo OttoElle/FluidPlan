@@ -97,6 +97,11 @@ interface Props {
   onMoveLabel?: (componentId: string, port: string | null, offset: Point) => void;
   /** Ziehen beendet; fasst die Zwischenschritte für Rückgängig zu einem Schritt zusammen. */
   onGestureEnd?: () => void;
+  /**
+   * Rechtsklick auf das aktive Blatt (nicht beim Zeichnen): Menü an der
+   * Bildschirmstelle `client` öffnen; `at` ist die Stelle im Schaltplan.
+   */
+  onContextMenu?: (client: Point, at: Point) => void;
 }
 
 /** Leitung, die gerade gezeichnet wird. */
@@ -155,6 +160,7 @@ export function DiagramView({
   onOpenProperties,
   onDropSymbol,
   onEditTitleField,
+  onContextMenu,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   /** Markiert die Mausposition auf den Linealen, ohne die Zeichnung neu zu zeichnen. */
@@ -227,6 +233,17 @@ export function DiagramView({
   const toDiagram = (e: { clientX: number; clientY: number }): Point => {
     const p = toWorld(e);
     return { x: p.x - origin.x, y: p.y - origin.y };
+  };
+
+  /**
+   * Rechte Maustaste auf einem Teil: nicht ausgewählte Teile werden vor dem
+   * Kontextmenü ausgewählt, eine bestehende Auswahl bleibt. true = erledigt.
+   */
+  const rightPick = (e: { button: number; stopPropagation: () => void }, own: Selection, selected: boolean) => {
+    if (e.button !== 2 || draft || tool || poly || arc) return false;
+    e.stopPropagation();
+    if (!selected) onSelect(own);
+    return true;
   };
 
   const snap = (v: number) => Math.round(v / GRID) * GRID;
@@ -438,6 +455,11 @@ export function DiagramView({
             setDraft(null);
             return;
           }
+          // Rechtsklick auf freie Fläche: Auswahl aufheben, das Menü bietet dann Einfügen usw.
+          if (e.button === 2 && !tool && !poly && !arc) {
+            onSelect(EMPTY_SELECTION);
+            return;
+          }
           if (!view || (e.button !== 0 && e.button !== 1)) return;
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -496,6 +518,11 @@ export function DiagramView({
             e.preventDefault();
             setArc(null);
           }
+          if (draft || poly || arc || tool || !onContextMenu) return;
+          // Nur auf dem aktiven Blatt; Blattnamen und Leisten haben eigene Menüs.
+          if ((e.target as Element).closest('.sheet-inactive')) return;
+          e.preventDefault();
+          onContextMenu({ x: e.clientX, y: e.clientY }, toDiagram(e));
         }}
         onDoubleClick={() => poly && finishPoly(poly.points, false)}
         onPointerLeave={() => {
@@ -645,6 +672,7 @@ export function DiagramView({
               className={locked.annotations.has(a.id) ? 'layer-locked' : undefined}
               handles={selected && selection.annotations.length === 1}
               onPointerDown={(e) => {
+                if (rightPick(e, pick({ ...EMPTY_SELECTION, annotations: [a.id] }), selected)) return;
                 if (e.button !== 0 || draft || tool) return;
                 e.stopPropagation();
                 const own = pick({ ...EMPTY_SELECTION, annotations: [a.id] });
@@ -707,6 +735,7 @@ export function DiagramView({
                         if (draft && !drag.current) lineClicked(l.id, a, b, toDiagram(e));
                       }}
                       onPointerDown={(e) => {
+                        if (rightPick(e, pick({ ...EMPTY_SELECTION, connections: [l.id] }), selected)) return;
                         if (e.button !== 0 || tool) return;
                         e.stopPropagation();
                         if (draft) {
@@ -745,6 +774,7 @@ export function DiagramView({
               key={j.id}
               className={`junction-node${selected ? ' selected' : ''}${locked.junctions.has(j.id) ? ' layer-locked' : ''}`}
               onPointerDown={(e) => {
+                if (rightPick(e, pick({ ...EMPTY_SELECTION, junctions: [j.id] }), selected)) return;
                 if (e.button !== 0 || tool) return;
                 e.stopPropagation();
                 if (draft) {
@@ -779,6 +809,7 @@ export function DiagramView({
             locked={locked.components.has(c.id)}
             drawing={draft !== null}
             onPointerDown={(e) => {
+              if (rightPick(e, pick({ ...EMPTY_SELECTION, components: [c.id] }), selection.components.includes(c.id))) return;
               if (e.button !== 0 || draft || tool) return; // mittlere Taste: Ansicht verschieben
               e.stopPropagation();
               const own = pick({ ...EMPTY_SELECTION, components: [c.id] });

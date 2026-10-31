@@ -1,4 +1,5 @@
-import { shiftAnnotation } from './annotations.ts';
+import { annotationBox, shiftAnnotation } from './annotations.ts';
+import { GRID, componentBox, type Box } from './routing.ts';
 import { isJunctionRef, nextId, normalizeJunctions } from './diagram.ts';
 import { expandGroups } from './groups.ts';
 import { EMPTY_SELECTION, type Selection } from './selection.ts';
@@ -110,4 +111,21 @@ export function pasteFragment(diagram: Diagram, fragment: Fragment, offset: Poin
       annotations: annotations.map((a) => a.id),
     },
   };
+}
+
+/**
+ * Versatz, mit dem die linke obere Ecke des Ausschnitts möglichst bei `at`
+ * landet. Auf ganze Rasterschritte gerundet, damit Bauteile und Leitungen im
+ * Raster bleiben.
+ */
+export function offsetToPoint(fragment: Fragment, at: Point): Point {
+  const boxes: Box[] = [
+    ...fragment.components.map(componentBox).filter((b): b is Box => b !== undefined),
+    ...fragment.annotations.map(annotationBox),
+  ];
+  if (boxes.length === 0) return { x: 0, y: 0 };
+  const minX = Math.min(...boxes.map((b) => b.minX));
+  const minY = Math.min(...boxes.map((b) => b.minY));
+  const step = (v: number) => Math.round(v / GRID) * GRID;
+  return { x: step(at.x - minX), y: step(at.y - minY) };
 }

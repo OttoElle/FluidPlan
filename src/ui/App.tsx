@@ -2,6 +2,13 @@ import {
   CircleQuestionMark,
   ClipboardPaste,
   Copy,
+  CopyPlus,
+  RotateCw,
+  SlidersHorizontal,
+  SquareDashedMousePointer,
+  Trash2,
+  TrianglesCenterlineDashedHorizontal,
+  TrianglesCenterlineDashedVertical,
   FileCog,
   FilePlus2,
   FileDown,
@@ -64,7 +71,8 @@ import { HelpDialog } from './HelpDialog.tsx';
 import { usePaletteWidth, useTheme } from './layout.ts';
 import { PropertiesDialog, type PropertiesTarget } from './properties/PropertiesDialog.tsx';
 import { SheetDialog } from './SheetDialog.tsx';
-import { moveComponents, rotateComponents } from '../model/arrange.ts';
+import { mirrorComponents, moveComponents, rotateComponents } from '../model/arrange.ts';
+import { CanvasMenu, type MenuItem } from './CanvasMenu.tsx';
 import { keepRoutes } from '../model/routing.ts';
 import {
   EMPTY_SELECTION,
@@ -299,7 +307,7 @@ export function App() {
     setSelection(EMPTY_SELECTION);
   };
   const canCopy = current.components.length > 0 || current.annotations.length > 0;
-  const { copy, cut, paste, toSystemClipboard } = useClipboard({ diagram, current, edit, setSelection, deleteSelection });
+  const { copy, cut, paste, duplicate, hasContent, toSystemClipboard } = useClipboard({ diagram, current, edit, setSelection, deleteSelection });
   const canGroup = selectionCount(current) >= 2;
   const canUngroup = groupsIn(diagram, current).length > 0;
   const groupSelection = () => {
@@ -310,6 +318,47 @@ export function App() {
     if (canUngroup) edit(ungroup(diagram, current));
   };
   const rotate = () => edit((d) => rotateComponents(d, selectedIds));
+  const mirror = (axis: 'horizontal' | 'vertical') => edit((d) => mirrorComponents(d, selectedIds, axis));
+  const doSelectAll = () => setSelection(without(selectAll(diagram), layers.hidden, layers.locked));
+  /** Rechtsklickmenü der Zeichenfläche: Bildschirmstelle und Stelle im Schaltplan. */
+  const [menu, setMenu] = useState<{ client: Point; at: Point } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  const pasteAt = (at: Point) => {
+    // Eigener Ausschnitt zuerst; sonst die System-Zwischenablage (z. B. aus einem anderen Fenster).
+    if (hasContent()) paste(undefined, at);
+    else navigator.clipboard?.readText().then((text) => paste(text, at), () => {});
+  };
+  const menuItems = (at: Point): MenuItem[] => {
+    const any = !isEmpty(current);
+    const items: MenuItem[] = [
+      { label: 'Ausschneiden', icon: Scissors, shortcut: 'Strg+X', disabled: !canCopy, run: () => toSystemClipboard(cut()) },
+      { label: 'Kopieren', icon: Copy, shortcut: 'Strg+C', disabled: !canCopy, run: () => toSystemClipboard(copy()) },
+      { label: 'Hier einfügen', icon: ClipboardPaste, shortcut: 'Strg+V', run: () => pasteAt(at) },
+      { label: 'Duplizieren', icon: CopyPlus, shortcut: 'Strg+D', disabled: !canCopy, run: duplicate },
+      { label: 'Löschen', icon: Trash2, shortcut: 'Entf', disabled: !any, run: deleteSelection },
+    ];
+    if (selectedIds.length > 0) {
+      items.push(
+        null,
+        { label: '90° drehen', icon: RotateCw, shortcut: 'R', run: rotate },
+        { label: 'Spiegeln: links und rechts', icon: TrianglesCenterlineDashedVertical, run: () => mirror('horizontal') },
+        { label: 'Spiegeln: oben und unten', icon: TrianglesCenterlineDashedHorizontal, run: () => mirror('vertical') },
+      );
+    }
+    if (canGroup || canUngroup) {
+      items.push(
+        null,
+        { label: 'Gruppieren', icon: Group, shortcut: 'Strg+G', disabled: !canGroup, run: groupSelection },
+        { label: 'Gruppierung aufheben', icon: Ungroup, shortcut: 'Strg+Umschalt+G', disabled: !canUngroup, run: ungroupSelection },
+      );
+    }
+    items.push(null, { label: 'Alles auswählen', icon: SquareDashedMousePointer, shortcut: 'Strg+A', run: doSelectAll });
+    if (propertiesTarget) {
+      const target = propertiesTarget;
+      items.push({ label: 'Eigenschaften …', icon: SlidersHorizontal, shortcut: 'Enter', run: () => setProperties(target) });
+    }
+    return items;
+  };
   // Tastatur: Strg+Z / Strg+Y (bzw. Strg+Umschalt+Z) und Entf.
   // In Eingabefeldern bleiben die Tasten beim Feld (dort wirkt das Rückgängig des Browsers).
   useEffect(() => {
@@ -324,7 +373,7 @@ export function App() {
         return;
       }
       const t = e.target as HTMLElement;
-      if (t.closest('input, textarea, select, [contenteditable], dialog')) return;
+      if (t.closest('input, textarea, select, [contenteditable], dialog, .canvas-menu')) return;
       if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === 'z' || key === 'y')) {
         e.preventDefault();
         if (key === 'y' || e.shiftKey) redo();
@@ -340,7 +389,12 @@ export function App() {
       }
       if ((e.ctrlKey || e.metaKey) && key === 'a') {
         e.preventDefault();
-        setSelection(without(selectAll(diagram), layers.hidden, layers.locked));
+        doSelectAll();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && key === 'd') {
+        e.preventDefault();
+        duplicate();
         return;
       }
       if ((e.ctrlKey || e.metaKey) && !e.altKey && key === 'g') {
@@ -557,7 +611,9 @@ export function App() {
             onMoveJunction={(id, position) => edit((d) => keepRoutes(d, moveJunction(d, id, position)), `junction:${id}`)}
             onMoveLabel={(id, port, offset) => edit((d) => moveLabel(d, id, port, offset), `label:${id}:${port ?? ''}`)}
             onGestureEnd={history.seal}
+            onContextMenu={(client, at) => setMenu({ client, at })}
           />
+          {menu && <CanvasMenu at={menu.client} items={menuItems(menu.at)} onClose={closeMenu} />}
           <ContextBar
             diagram={diagram}
             layers={layersOf(drawing)}

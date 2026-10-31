@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { parseDiagram, serializeDiagram } from '../io/json.ts';
 import { addAnnotation, annotationBox, moveAnnotations } from './annotations.ts';
-import { copySelection, pasteFragment } from './clipboard.ts';
+import { copySelection, offsetToPoint, pasteFragment } from './clipboard.ts';
 import { connect, splitConnection } from './diagram.ts';
 import { exampleHydraulicDiagram } from './example.ts';
 import { expandGroups, group, pruneGroups, ungroup } from './groups.ts';
-import { routeAll } from './routing.ts';
+import { GRID, componentBox, routeAll } from './routing.ts';
 import { EMPTY_SELECTION, deleteSelected } from './selection.ts';
 import { DEFAULT_SNAP, snapPoint, snapTargets } from './snap.ts';
 import type { Diagram } from './types.ts';
@@ -60,6 +60,23 @@ describe('Kopieren und Einfügen', () => {
     expect(pasted).toMatchObject({ kind: 'circle', center: { x: 120, y: 100 } });
     expect(pasted.id).not.toBe(r.annotation.id);
     expect(copySelection(base(), { ...EMPTY_SELECTION, connections: ['l1'] })).toBeNull();
+  });
+});
+
+describe('Einfügen an der Mausstelle', () => {
+  it('legt die linke obere Ecke des Ausschnitts ins Raster an die Klickstelle', () => {
+    const d = base();
+    const f = copySelection(d, { ...EMPTY_SELECTION, components: ids(d, ['1.1', '1.2']) })!;
+    const at = { x: 503, y: 287 };
+    const offset = offsetToPoint(f, at);
+    expect(offset.x % GRID).toBe(0);
+    expect(offset.y % GRID).toBe(0);
+    const r = pasteFragment(d, f, offset);
+    const boxes = r.selection.components.map((id) => componentBox(r.diagram.components.find((c) => c.id === id)!)!);
+    const minX = Math.min(...boxes.map((b) => b.minX));
+    const minY = Math.min(...boxes.map((b) => b.minY));
+    expect(Math.abs(minX - at.x)).toBeLessThanOrEqual(GRID / 2);
+    expect(Math.abs(minY - at.y)).toBeLessThanOrEqual(GRID / 2);
   });
 });
 

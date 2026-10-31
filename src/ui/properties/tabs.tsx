@@ -1,5 +1,5 @@
 import { TrianglesCenterlineDashedHorizontal, TrianglesCenterlineDashedVertical } from 'lucide-react';
-import type { ComponentType } from 'react';
+import { useState, type ComponentType } from 'react';
 import { mediumOf } from '../../model/library.ts';
 import { DEFAULT_LAYER_ID } from '../../model/layers.ts';
 import { MM_PER_UNIT } from '../../model/sheet.ts';
@@ -62,6 +62,87 @@ function PositionInput({ axis, component, onChange }: { axis: 'x' | 'y' } & Omit
   );
 }
 
+/** Spiegelung in Blattrichtung: links/rechts (`h`) und oben/unten (`v`). */
+interface MirrorState {
+  h: boolean;
+  v: boolean;
+}
+
+const turn = (deg: number) => (((deg % 360) + 360) % 360) as Rotation;
+
+/**
+ * Lage im Schaltplan aus der angezeigten Drehung und den Spiegel-Schaltern:
+ * erst drehen, dann auf dem Blatt spiegeln (wie mirrorComponents in arrange.ts).
+ */
+function orientationOf(rotation: Rotation, m: MirrorState): Pick<ComponentInstance, 'rotation' | 'mirrored'> {
+  if (m.h && m.v) return { rotation: turn(rotation + 180), mirrored: false };
+  if (m.h) return { rotation: turn(360 - rotation), mirrored: true };
+  if (m.v) return { rotation: turn(540 - rotation), mirrored: true };
+  return { rotation, mirrored: false };
+}
+
+/** Angezeigte Drehung zu den Schaltern `m` (die zur Spiegelung des Bauteils passen müssen). */
+function shownRotation(component: ComponentInstance, m: MirrorState): Rotation {
+  // orientationOf ist für jede Schalterstellung zu sich selbst invers.
+  return orientationOf(component.rotation, m).rotation;
+}
+
+/**
+ * Schalter, wie sie ein gespeichertes Bauteil zeigt: ein gespiegeltes Bauteil
+ * gilt als links/rechts gespiegelt, wenn es dann 0° oder 90° gedreht ist, sonst
+ * als oben/unten gespiegelt (beides sieht gleich aus).
+ */
+function initialMirror(component: ComponentInstance): MirrorState {
+  if (!component.mirrored) return { h: false, v: false };
+  const h = shownRotation(component, { h: true, v: false });
+  return h === 0 || h === 90 ? { h: true, v: false } : { h: false, v: true };
+}
+
+function OrientationFields({ component, onChange }: Omit<ComponentTabProps, 'layers'>) {
+  const [chosen, setChosen] = useState(() => initialMirror(component));
+  // Hat sich die Spiegelung anderswo geändert, gelten wieder die Standard-Schalter.
+  const mirror = (chosen.h !== chosen.v) === Boolean(component.mirrored) ? chosen : initialMirror(component);
+  const rotation = shownRotation(component, mirror);
+  const apply = (r: Rotation, m: MirrorState) => {
+    setChosen(m);
+    onChange({ ...component, ...orientationOf(r, m) });
+  };
+  return (
+    <>
+      <div className="field">
+        <span>Drehung</span>
+        <Segmented
+          label="Drehung"
+          value={rotation}
+          onChange={(r) => apply(r, mirror)}
+          options={ROTATIONS.map((r) => ({ value: r, label: `${r}°` }))}
+        />
+      </div>
+      <div className="field">
+        <span>Spiegeln</span>
+        <div className="field-row">
+          <button
+            type="button"
+            className="with-icon toggle"
+            aria-pressed={mirror.h}
+            onClick={() => apply(rotation, { ...mirror, h: !mirror.h })}
+          >
+            <TrianglesCenterlineDashedVertical size={16} strokeWidth={1.75} aria-hidden /> Links und rechts
+          </button>
+          <button
+            type="button"
+            className="with-icon toggle"
+            aria-pressed={mirror.v}
+            onClick={() => apply(rotation, { ...mirror, v: !mirror.v })}
+          >
+            <TrianglesCenterlineDashedHorizontal size={16} strokeWidth={1.75} aria-hidden /> Oben und unten
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function PlacementTab({ component, onChange, layers }: ComponentTabProps) {
   return (
     <div className="tab-form">
@@ -72,39 +153,7 @@ function PlacementTab({ component, onChange, layers }: ComponentTabProps) {
           <PositionInput axis="y" component={component} onChange={onChange} />
         </div>
       </div>
-      <div className="field">
-        <span>Drehung</span>
-        <Segmented
-          label="Drehung"
-          value={component.rotation}
-          onChange={(rotation) => onChange({ ...component, rotation })}
-          options={ROTATIONS.map((r) => ({ value: r, label: `${r}°` }))}
-        />
-      </div>
-      <div className="field">
-        <span>Spiegeln</span>
-        <div className="field-row">
-          {/* Wie mirrorComponents (arrange.ts): oben/unten = spiegeln und um 180° drehen. */}
-          <button
-            type="button"
-            className="with-icon"
-            onClick={() =>
-              onChange({ ...component, mirrored: !component.mirrored, rotation: ((360 - component.rotation) % 360) as Rotation })
-            }
-          >
-            <TrianglesCenterlineDashedVertical size={16} strokeWidth={1.75} aria-hidden /> Links und rechts
-          </button>
-          <button
-            type="button"
-            className="with-icon"
-            onClick={() =>
-              onChange({ ...component, mirrored: !component.mirrored, rotation: ((540 - component.rotation) % 360) as Rotation })
-            }
-          >
-            <TrianglesCenterlineDashedHorizontal size={16} strokeWidth={1.75} aria-hidden /> Oben und unten
-          </button>
-        </div>
-      </div>
+      <OrientationFields component={component} onChange={onChange} />
       <label>
         Ebene
         <select
