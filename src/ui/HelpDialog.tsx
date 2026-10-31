@@ -8,6 +8,7 @@ const MOUSE: [string, string][] = [
   ['Anschluss ziehen', 'Leitung zeichnen; auf einer Leitung loslassen ergibt einen Abzweig'],
   ['Anschluss klicken', 'Leitung mit Knickpunkten: Fläche anklicken, Ziel anklicken'],
   ['Symbol aus der Liste ziehen', 'Bauteil an dieser Stelle einfügen'],
+  ['Kennzeichen oder Anschlussname ziehen', 'Beschriftung verschieben, rastet im halben Raster; Alt = frei, Doppelklick = zurück'],
   ['Mausrad', 'Zoomen'],
   ['Mittlere Taste / Leertaste+Ziehen', 'Ansicht verschieben'],
   ['Linienzug-Werkzeug', 'Punkte anklicken; Doppelklick oder Rechtsklick beendet, Klick auf den ersten Punkt schließt'],

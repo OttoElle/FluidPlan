@@ -127,6 +127,8 @@ type Drag =
   | { kind: 'label'; id: string; port: string | null; start: Point; origin: Point; last: Point };
 
 const DOUBLE_CLICK_MS = 400;
+/** Rastweite beim Verschieben von Beschriftungen: halber Rasterschritt. */
+const LABEL_STEP = GRID / 2;
 
 /**
  * Zeichnet den Schaltplan als SVG auf einem Zeichenblatt.
@@ -469,8 +471,10 @@ export function DiagramView({
             }
           } else if (d.kind === 'label') {
             const p = toDiagram(e);
-            const fine = (v: number) => Math.round(v / FINE) * FINE;
-            const to = { x: fine(d.origin.x + p.x - d.start.x), y: fine(d.origin.y + p.y - d.start.y) };
+            // Halbes Raster (1,25 mm), damit Beschriftungen in einer Flucht stehen; mit Alt frei.
+            const step = e.altKey ? FINE : LABEL_STEP;
+            const round = (v: number) => Math.round(v / step) * step;
+            const to = { x: round(d.origin.x + p.x - d.start.x), y: round(d.origin.y + p.y - d.start.y) };
             if (to.x !== d.last.x || to.y !== d.last.y) {
               d.last = to;
               onMoveLabel?.(d.id, d.port, to);
