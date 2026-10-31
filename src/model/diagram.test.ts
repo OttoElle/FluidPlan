@@ -64,10 +64,10 @@ describe('Schaltplan bearbeiten', () => {
 
   it('fügt Bauteile hinzu, ohne das Original zu verändern', () => {
     const empty = createDiagram('pneumatic');
-    const { diagram, component } = addComponent(empty, 'supply.pump', { x: 10, y: 20 }, { label: '1V1' });
+    const { diagram, component } = addComponent(empty, 'supply.pump', { x: 10, y: 20 }, { label: '1.2' });
     expect(empty.components).toHaveLength(0);
     expect(diagram.components).toEqual([component]);
-    expect(component).toMatchObject({ id: 'c1', rotation: 0, mirrored: false, label: '1V1' });
+    expect(component).toMatchObject({ id: 'c1', rotation: 0, mirrored: false, label: '1.2' });
   });
 
   it('lehnt unbekannte Bauteiltypen ab', () => {
@@ -91,7 +91,7 @@ describe('Schaltplan bearbeiten', () => {
 
   it('entfernt mit einem Bauteil auch dessen Leitungen', () => {
     const d = exampleHydraulicDiagram();
-    const valveId = d.components.find((c) => c.label === '1V1')!.id;
+    const valveId = d.components.find((c) => c.label === '1.2')!.id;
     const after = removeComponent(d, valveId);
     expect(after.components.some((c) => c.id === valveId)).toBe(false);
     expect(after.connections.some((l) => JSON.stringify(l).includes(`"${valveId}"`))).toBe(false);
@@ -100,7 +100,7 @@ describe('Schaltplan bearbeiten', () => {
 
   it('findet Leitungen an einem Anschluss', () => {
     const d = exampleHydraulicDiagram();
-    const pumpId = d.components.find((c) => c.label === '0P1')!.id;
+    const pumpId = d.components.find((c) => c.label === '0.2')!.id;
     expect(connectionsAt(d, { componentId: pumpId, portId: 'P' })).toHaveLength(2);
   });
 });

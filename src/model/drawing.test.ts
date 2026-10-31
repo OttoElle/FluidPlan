@@ -93,18 +93,18 @@ describe('Zeichnung mit mehreren Blättern', () => {
     const labelsA = a!.components.map((c) => c.label).filter(Boolean);
     const labelsB = b!.components.map((c) => c.label).filter(Boolean);
     expect(labelsB.filter((l) => labelsA.includes(l))).toEqual([]);
-    // Blatt 2 setzt Kreise und Nummern fort: 1A1 auf Blatt 1, 2A1 auf Blatt 2; Pumpe 0P1 bzw. 0P2.
-    expect(labelsA).toContain('1A1');
-    expect(labelsB).toContain('2A1');
-    expect(labelsB).toContain('0P2');
+    // Blatt 2 setzt Kreise und Nummern fort: Zylinder 1.1 auf Blatt 1, 2.1 auf Blatt 2; Kreis 0 zählt weiter.
+    expect(labelsA).toContain('1.1');
+    expect(labelsB).toContain('2.1');
+    expect(labelsB).toContain('0.4');
   });
 
   it('meldet Kennzeichen, die auf mehreren Blättern vorkommen', () => {
     const d = duplicateSheet(example(), 0).drawing;
     const issues = checkSheets(allSheetViews(d), 1);
-    const dup = issues.filter((i) => i.message.startsWith('Kennzeichen 1A1 ist auch auf'));
+    const dup = issues.filter((i) => i.message.startsWith('Kennzeichen 1.1 ist auch auf'));
     expect(dup.map((i) => i.sheet).sort()).toEqual([0, 1]);
-    expect(dup.find((i) => i.sheet === 0)!.message).toBe('Kennzeichen 1A1 ist auch auf Blatt 2 (Blatt 1 (Kopie)) vergeben.');
+    expect(dup.find((i) => i.sheet === 0)!.message).toBe('Kennzeichen 1.1 ist auch auf Blatt 2 (Blatt 1 (Kopie)) vergeben.');
     // Meldungen des angezeigten Blatts stehen vorn.
     expect(issues[0]!.sheet).toBe(1);
     const relabeled = autoLabelSheets(allSheetViews(d));

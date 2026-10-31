@@ -1,10 +1,18 @@
 import { transformLocalPoint } from '../../model/diagram.ts';
-import { definitionOf } from '../../model/library.ts';
-import type { ComponentInstance } from '../../model/types.ts';
+import { LETTERING, fontSizeFor, textWidth } from '../../model/lettering.ts';
+import { definitionOf, portName } from '../../model/library.ts';
+import type { ComponentInstance, Domain } from '../../model/types.ts';
 import { ComponentSymbol, hasSymbol } from '../symbols.tsx';
+
+/** Schriftgröße für 2,5 mm Versalhöhe (DIN ISO 1219-1, 5.12). */
+const FONT = fontSizeFor(LETTERING.normal);
+/** Innenabstand im Kasten um das Kennzeichen. */
+const PAD = 3;
+const BOX_HEIGHT = LETTERING.normal + 2 * PAD;
 
 export function ComponentShape({
   component,
+  domain,
   selected,
   locked = false,
   drawing,
@@ -14,6 +22,8 @@ export function ComponentShape({
   onPortHover,
 }: {
   component: ComponentInstance;
+  /** Medium der Zeichnung; bestimmt die angezeigten Anschlussnamen. */
+  domain: Domain;
   selected: boolean;
   /** Auf einer gesperrten Ebene: nicht anklickbar, nur die Anschlüsse nehmen Leitungen an. */
   locked?: boolean;
@@ -33,6 +43,9 @@ export function ComponentShape({
   const y = Math.min(corners[0]!.y, corners[1]!.y);
   const w = Math.abs(corners[0]!.x - corners[1]!.x);
   const h = Math.abs(corners[0]!.y - corners[1]!.y);
+
+  const showLabel = Boolean(component.label) && component.showLabel !== false;
+  const labelWidth = textWidth(component.label, LETTERING.normal) + 2 * PAD;
 
   const cx = def.size.width / 2;
   const cy = def.size.height / 2;
@@ -56,18 +69,27 @@ export function ComponentShape({
       ) : (
         <>
           <rect x={x} y={y} width={w} height={h} className="box" />
-          <text x={x + w / 2} y={y + h / 2} className="name">
+          <text x={x + w / 2} y={y + h / 2} className="name" fontSize={FONT}>
             {def.name}
           </text>
         </>
       )}
-      {component.label && component.showLabel !== false && (
-        <text x={x - 4} y={y + 4} className="label">
-          {component.label}
-        </text>
+      {showLabel && (
+        // Bezeichnungsschlüssel im rechteckigen Kasten (DIN ISO 1219-2, 5.1.1.2).
+        <g>
+          <rect x={x - 4 - labelWidth} y={y} width={labelWidth} height={BOX_HEIGHT} className="label-box" />
+          <text x={x - 4 - labelWidth / 2} y={y + PAD + LETTERING.normal} className="label" fontSize={FONT}>
+            {component.label}
+          </text>
+        </g>
       )}
       {component.description && component.showDescription && (
-        <text x={x - 4} y={y + (component.label && component.showLabel !== false ? 13 : 4)} className="description">
+        <text
+          x={x - 4}
+          y={y + (showLabel ? BOX_HEIGHT + 4 : 0) + LETTERING.normal}
+          className="description"
+          fontSize={FONT}
+        >
           {component.description}
         </text>
       )}
@@ -85,8 +107,8 @@ export function ComponentShape({
             <title>Anschluss {port.id}: Leitung ziehen oder anklicken</title>
             <circle cx={p.x} cy={p.y} r={6} className="port-hit" />
             <circle cx={p.x} cy={p.y} r={2.5} />
-            <text x={p.x + 4} y={p.y - 3}>
-              {port.label ?? port.id}
+            <text x={p.x + 3} y={p.y - 3} fontSize={FONT}>
+              {portName(component, port, domain)}
             </text>
           </g>
         );

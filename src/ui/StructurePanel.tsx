@@ -34,9 +34,9 @@ import {
   moveLayer,
   updateLayer,
 } from '../model/layers.ts';
-import { definitionOf } from '../model/library.ts';
+import { definitionOf, portName } from '../model/library.ts';
 import { EMPTY_SELECTION, isEmpty, type Selection } from '../model/selection.ts';
-import type { Annotation, ComponentInstance, Drawing, DrawingSheet, Endpoint, Layer } from '../model/types.ts';
+import type { Annotation, ComponentInstance, Domain, Drawing, DrawingSheet, Endpoint, Layer } from '../model/types.ts';
 import { IconButton } from './IconButton.tsx';
 import type { PropertiesTarget } from './properties/PropertiesDialog.tsx';
 import { SymbolPreview } from './SymbolPreview.tsx';
@@ -131,12 +131,12 @@ function componentName(c: ComponentInstance): string {
   return definitionOf(c)?.name ?? c.type;
 }
 
-function endpointName(s: DrawingSheet, e: Endpoint): string {
+function endpointName(s: DrawingSheet, e: Endpoint, domain: Domain): string {
   if ('junctionId' in e) return 'Abzweig';
   const c = s.components.find((x) => x.id === e.componentId);
   if (!c) return '?';
   const port = definitionOf(c)?.ports.find((p) => p.id === e.portId);
-  return `${c.label || componentName(c)}:${port?.label ?? e.portId}`;
+  return `${c.label || componentName(c)}:${port ? portName(c, port, domain) : e.portId}`;
 }
 
 const SHEET_ORIENTATION = { landscape: 'quer', portrait: 'hoch' } as const;
@@ -342,7 +342,7 @@ function StructureTree({
                   key={l.id}
                   depth={3}
                   icon={Spline}
-                  label={`${endpointName(s, l.from)} – ${endpointName(s, l.to)}`}
+                  label={`${endpointName(s, l.from, drawing.domain)} – ${endpointName(s, l.to, drawing.domain)}`}
                   selected={sel.connections.includes(l.id)}
                   {...layerHint(l)}
                   onClick={(e) => pick({ ...EMPTY_SELECTION, connections: [l.id] }, e)}

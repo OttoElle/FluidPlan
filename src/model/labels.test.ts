@@ -48,13 +48,14 @@ describe('autoLabel', () => {
     link(pump, 'P', v2, 'P');
     link(pump, 'P', relief, 'P');
     const labels = labelsOf(autoLabel(d));
-    expect(labels[left]).toBe('1A1');
-    expect(labels[right]).toBe('2A1');
-    expect(labels[v1]).toBe('1V1');
-    expect(labels[throttle]).toBe('2V1');
-    expect(labels[v2]).toBe('2V2');
-    expect(labels[pump]).toBe('0P1');
-    expect(labels[relief]).toBe('0V1');
+    expect(labels[left]).toBe('1.1');
+    expect(labels[right]).toBe('2.1');
+    expect(labels[v1]).toBe('1.2');
+    expect(labels[throttle]).toBe('2.2');
+    expect(labels[v2]).toBe('2.3');
+    // Das DBV ist höher als die Pumpe, sein Mittelpunkt liegt weiter oben.
+    expect(labels[relief]).toBe('0.1');
+    expect(labels[pump]).toBe('0.2');
   });
 
   it('folgt Leitungen über Abzweigpunkte', () => {
@@ -77,11 +78,16 @@ describe('autoLabel', () => {
     };
     const labels = labelsOf(autoLabel(cleared));
     expect([labels[cylinder!.id], labels[valve!.id], labels[pump!.id], labels[relief!.id]]).toEqual([
-      '1A1',
-      '1V1',
-      '0P1',
-      '0V1',
+      '1.1',
+      '1.2',
+      '0.2',
+      '0.1',
     ]);
+  });
+
+  it('kennzeichnet auch Schlauchleitungen (DIN ISO 1219-2, 5.1.1.1)', () => {
+    const { diagram } = addComponent(createDiagram('hydraulic'), 'line.hose', { x: 0, y: 0 });
+    expect(autoLabel(diagram).components[0]!.label).toBe('1.1');
   });
 
   it('lässt Schalldämpfer ohne Kennzeichen', () => {

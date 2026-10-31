@@ -396,7 +396,7 @@ export function App() {
           />
         </div>
         <div className="tool-group">
-          <IconButton icon={Tag} label="Kennzeichnen nach ISO 1219-2 (1A1, 1V1, 0P1, …)" onClick={label} />
+          <IconButton icon={Tag} label="Kennzeichnen nach ISO 1219-2 (0.1, 1.1, 1.2, …)" onClick={label} />
           <IconButton
             icon={ListChecks}
             label="Zeichnung prüfen"

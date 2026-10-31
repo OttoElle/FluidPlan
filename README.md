@@ -112,7 +112,7 @@ src/
     configRead.ts    Hilfen zum Einlesen von Konfigurationen aus Dateien
     diagram.ts       Reine Funktionen zum Bearbeiten (hinzufügen, verbinden, löschen, Anschlussposition)
     routing.ts       Rechtwinklige Leitungsführung im Raster (A*-Suche, Teilstücke verschieben)
-    labels.ts        Automatische Kennzeichnung nach ISO 1219-2 (1A1, 1V1, 0P1, …)
+    labels.ts        Automatische Kennzeichnung nach ISO 1219-2:2019 (0.1, 1.1, 1.2, …)
     check.ts         „Zeichnung prüfen“: doppelte Kennzeichen, offene Anschlüsse, Überlappungen
     example.ts       Beispielschaltplan
   io/
@@ -144,7 +144,7 @@ src/
   (Hydraulik/Pneumatik), Größe und Anschlüsse. Anschlüsse heißen wie im Normsymbol:
   Hydraulik `P`, `T`, `A`, `B`; Pneumatik `1`, `2`, `3`, `4`, `5`, `12`, `14`.
 - **Bauteil** (im Schaltplan): ID, Typ-Verweis, Position, Drehung (0/90/180/270),
-  Spiegelung, Betriebsmittelkennzeichen (z. B. `1V1`) und freie Kennwerte.
+  Spiegelung, Bezeichnungsschlüssel (z. B. `1.2`) und freie Kennwerte.
   Konfigurierbare Bauteile (`valve.directional`, `actuator.cylinder`, `supply.pump`,
   `actuator.motor`, `supply.tank`, `supply.accumulator`, `valve.ball`, `line.coupling`,
   `measure.sensor`) tragen zusätzlich

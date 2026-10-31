@@ -17,6 +17,7 @@ import {
   positionTemplates,
   resizeValve,
   type DirectionalValveConfig,
+  type ValvePosition,
 } from './valve.ts';
 
 function valveVariants(): DirectionalValveConfig[] {
@@ -157,9 +158,20 @@ describe('Konfigurierbare Bauteile', () => {
       R: '3',
       P: '1',
       S: '5',
-      X: '14',
-      Y: '12',
+      // DIN ISO 11727, 4.3: links schaltet die linke Stellung (1→2), rechts die rechte (1→4).
+      X: '12',
+      Y: '14',
     });
+  });
+
+  it('benennt pneumatische Steueranschlüsse nach der geschalteten Verbindung', () => {
+    const base = defaultValveConfig('pneumatic', 3, 2);
+    const open12: ValvePosition = { paths: [{ from: 'P', to: 'A', kind: 'flow' }] };
+    const closed: ValvePosition = { paths: [{ from: 'A', to: 'T', kind: 'flow' }] };
+    const label = (positions: ValvePosition[]) =>
+      definition({ ...base, positions, rest: 1, left: ['pilot'], right: ['spring'] }).ports.find((p) => p.id === 'X')!.label;
+    expect(label([open12, closed])).toBe('12');
+    expect(label([closed, open12])).toBe('10');
   });
 
   it('ordnet Betätigungen nach der Norm und begrenzt sie', () => {

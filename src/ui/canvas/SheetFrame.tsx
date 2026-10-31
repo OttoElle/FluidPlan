@@ -1,6 +1,7 @@
 import { GRID } from '../../model/routing.ts';
 import { drawingArea, titleBlock, titleCells, type TitleCell, type TitleField } from '../../model/sheet.ts';
 import type { Diagram } from '../../model/types.ts';
+import { LETTERING, fontSizeFor } from '../../model/lettering.ts';
 
 /** Raster: jeder fünfte Punkt ist kräftiger. */
 export const MAJOR_EVERY = 5;
@@ -29,10 +30,15 @@ export function SheetFrame({ diagram, onPick }: { diagram: Diagram; onPick?: (fi
       {titleCells(sheet).map((c) => (
         <g key={c.field}>
           <rect x={c.x} y={c.y} width={c.width} height={c.height} className="cell" />
-          <text x={c.x + 6} y={c.y + 11} className="caption">
+          <text x={c.x + 6} y={c.y + 11} className="caption" fontSize={fontSizeFor(LETTERING.small)}>
             {caption(c)}
           </text>
-          <text x={c.x + 6} y={c.y + c.height - 7} className={c.big ? 'value big' : 'value'}>
+          <text
+            x={c.x + 6}
+            y={c.y + c.height - 7}
+            className={c.big ? 'value big' : 'value'}
+            fontSize={fontSizeFor(c.big ? LETTERING.large : LETTERING.normal)}
+          >
             {value(c.field)}
           </text>
           {onPick && editable(c.field) && (

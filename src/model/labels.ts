@@ -4,14 +4,17 @@ import { componentBox } from './routing.ts';
 import type { ComponentInstance, Diagram, Endpoint, PortKind } from './types.ts';
 
 /**
- * Automatische Betriebsmittelkennzeichnung nach DIN ISO 1219-2.
+ * Automatischer Bezeichnungsschlüssel nach DIN ISO 1219-2:2019, 5.1.
  *
- * Ein Kennzeichen besteht aus Schaltkreisnummer, Bauteilkennbuchstabe und
- * laufender Nummer, z. B. "1V2" = zweites Ventil im Schaltkreis 1.
+ * Ein Kennzeichen besteht aus Schaltkreisnummer, Punkt und Bauteilnummer,
+ * z. B. "1.2" = zweites Bauteil im Schaltkreis 1. Kennbuchstaben für
+ * Bauteilgruppen (P, V, A, …) gibt es seit der Ausgabe 2012 nicht mehr.
+ * Anlagenbezeichnung und Medienschlüssel ("1-H1.2") entfallen, weil eine
+ * Zeichnung nur ein Medium und eine Anlage hat (5.1.2, 5.1.3).
+ * Auch Schlauchleitungen bekommen ein Kennzeichen (5.1.1.1).
  *
- * Kennbuchstaben: P = Pumpe, Kompressor; M = Antriebsmotor; A = Antrieb
- * (Zylinder, Motor); V = Ventil; S = Signalaufnehmer (Sensor, Druckschalter);
- * Z = alles übrige (Tank, Filter, Speicher, Wartungseinheit, Manometer, …).
+ * Intern unterscheidet componentCode noch Antriebe, Ventile usw., um die
+ * Schaltkreise zu finden.
  *
  * Schaltkreise: Die Energieversorgung ist Kreis 0. Jeder Antrieb eröffnet
  * einen eigenen Kreis, von links nach rechts nummeriert. Alle übrigen Bauteile
@@ -20,14 +23,14 @@ import type { ComponentInstance, Diagram, Endpoint, PortKind } from './types.ts'
  * Wegeventil nicht über Druck- oder Rücklaufanschluss, damit ein gemeinsames
  * Druckbegrenzungsventil an der Pumpe in Kreis 0 bleibt.
  *
- * Innerhalb eines Kreises wird je Kennbuchstabe von oben nach unten, bei
- * gleicher Höhe von links nach rechts gezählt.
+ * Innerhalb eines Kreises wird von 1 an von oben nach unten, bei gleicher
+ * Höhe von links nach rechts gezählt; der Antrieb oben bekommt also die 1.
  */
 
 export type ComponentCode = 'P' | 'M' | 'A' | 'V' | 'S' | 'Z';
 
 /** Bauteile, die kein eigenes Kennzeichen bekommen (reine Anschluss- und Leitungssymbole). */
-const UNLABELED = new Set(['supply.silencer', 'line.hose', 'line.plug']);
+const UNLABELED = new Set(['supply.silencer', 'line.plug']);
 
 export function needsLabel(component: Pick<ComponentInstance, 'type'>): boolean {
   return !UNLABELED.has(component.type);
@@ -139,7 +142,7 @@ function circuitsOf(diagram: Diagram): Map<string, number> {
 export interface LabelCounter {
   /** Schaltkreise (Antriebe) auf den vorigen Blättern. */
   circuits: number;
-  /** Zuletzt vergebene Nummer je Kreis und Kennbuchstabe, z. B. "0P" → 2. */
+  /** Zuletzt vergebene Bauteilnummer je Kreis, z. B. "0" → 2. */
   numbers: Map<string, number>;
 }
 
@@ -156,7 +159,7 @@ export function autoLabel(diagram: Diagram, counter: LabelCounter = newLabelCoun
   for (const c of diagram.components) {
     if (!needsLabel(c)) continue;
     const n = circuit.get(c.id)!;
-    const key = `${n === 0 ? 0 : n + offset}${componentCode(c.type)}`;
+    const key = `${n === 0 ? 0 : n + offset}`;
     groups.set(key, [...(groups.get(key) ?? []), c]);
   }
   const labels = new Map<string, string>();
@@ -165,7 +168,7 @@ export function autoLabel(diagram: Diagram, counter: LabelCounter = newLabelCoun
     members
       .map((c) => ({ c, p: center(c) }))
       .sort((a, b) => a.p.y - b.p.y || a.p.x - b.p.x)
-      .forEach(({ c }, i) => labels.set(c.id, `${key}${start + i + 1}`));
+      .forEach(({ c }, i) => labels.set(c.id, `${key}.${start + i + 1}`));
     counter.numbers.set(key, start + members.length);
   }
   counter.circuits += diagram.components.filter((c) => componentCode(c.type) === 'A').length;

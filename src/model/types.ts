@@ -93,7 +93,7 @@ export interface ComponentInstance {
   rotation: Rotation;
   /** Horizontal gespiegelt (vor der Drehung angewendet). */
   mirrored: boolean;
-  /** Betriebsmittelkennzeichen, z. B. "1V1", "1A1". */
+  /** Bezeichnungsschlüssel nach DIN ISO 1219-2, z. B. "1.2" oder "1-H1.2". */
   label: string;
   /** Freie Kennwerte, z. B. { "Druck": "160 bar" }. */
   properties: Record<string, string>;

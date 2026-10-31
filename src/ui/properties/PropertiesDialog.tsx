@@ -123,7 +123,7 @@ function ComponentProperties({ component, diagram, ...rest }: BodyProps & { comp
               <input
                 autoFocus
                 value={draft.label}
-                placeholder="z. B. 1V1"
+                placeholder="z. B. 1.2"
                 onChange={(e) => setDraft({ ...draft, label: e.target.value })}
               />
             </label>

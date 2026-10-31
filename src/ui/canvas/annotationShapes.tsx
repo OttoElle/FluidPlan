@@ -1,3 +1,4 @@
+import { fontSizeFor } from '../../model/lettering.ts';
 import { LINE_HEIGHT, STROKE_DASH, annotationBox, rectFromCorners, textLines, type NewAnnotation } from '../../model/annotations.ts';
 import type { Annotation, Point } from '../../model/types.ts';
 
@@ -135,9 +136,9 @@ export function AnnotationShape({
     shape = (
       <>
         <rect x={box.minX} y={box.minY} width={box.maxX - box.minX} height={box.maxY - box.minY} className="hit" />
-        <text className="note" x={a.position.x} y={a.position.y} fontSize={a.size}>
+        <text className="note" x={a.position.x} y={a.position.y} fontSize={fontSizeFor(a.size)}>
           {textLines(a).map((line, i) => (
-            <tspan key={i} x={a.position.x} dy={i === 0 ? 0 : a.size * LINE_HEIGHT}>
+            <tspan key={i} x={a.position.x} dy={i === 0 ? 0 : fontSizeFor(a.size) * LINE_HEIGHT}>
               {/* Leere Zeilen brauchen Inhalt, sonst zählt dy nicht. */}
               {line || ' '}
             </tspan>

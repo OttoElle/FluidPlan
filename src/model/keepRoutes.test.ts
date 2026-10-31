@@ -34,7 +34,7 @@ function expectClean(d: Diagram) {
 describe('Leitungen beim Verschieben', () => {
   it('lässt nicht angeschlossene Leitungen unverändert', () => {
     const before = routeAll(base);
-    const relief = idOf('0V1');
+    const relief = idOf('0.1');
     const d = moveComponents(base, [relief], { x: 40, y: 0 });
     const after = routeAll(d);
     for (const l of base.connections) {
@@ -45,7 +45,7 @@ describe('Leitungen beim Verschieben', () => {
 
   it('führt nur die Teilstücke am verschobenen Anschluss nach', () => {
     const before = routeAll(base);
-    const cylinder = idOf('1A1');
+    const cylinder = idOf('1.1');
     const d = moveComponents(base, [cylinder], { x: 30, y: 0 });
     const after = routeAll(d);
     for (const l of base.connections.filter((c) => touches(base, c.id, cylinder))) {
@@ -71,15 +71,15 @@ describe('Leitungen beim Verschieben', () => {
       { x: -150, y: 0 },
     ];
     for (const delta of steps) {
-      d = moveComponents(d, [idOf('0V1')], delta);
+      d = moveComponents(d, [idOf('0.1')], delta);
       expectClean(d);
     }
-    d = rotateComponents(d, [idOf('1V1')]);
+    d = rotateComponents(d, [idOf('1.2')]);
     expectClean(d);
   });
 
   it('keine nachgeführte Leitung läuft durch das verschobene Bauteil', () => {
-    const valve = idOf('1V1');
+    const valve = idOf('1.2');
     const d = moveComponents(base, [valve], { x: -60, y: 0 });
     const box = componentBox(d.components.find((c) => c.id === valve)!)!;
     for (const p of routeAll(d).values()) {

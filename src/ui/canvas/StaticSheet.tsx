@@ -42,6 +42,7 @@ export const StaticSheet = memo(
           <ComponentShape
             key={c.id}
             component={c}
+            domain={diagram.domain}
             selected={false}
             drawing={false}
             onPointerDown={noop}

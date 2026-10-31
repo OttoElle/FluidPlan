@@ -16,7 +16,7 @@ const ids = (d: Diagram, labels: string[]) => d.components.filter((c) => labels.
 describe('Kopieren und Einfügen', () => {
   it('nimmt Leitungen zwischen kopierten Bauteilen mit, andere nicht', () => {
     const d = base();
-    const [cyl, valve] = [ids(d, ['1A1'])[0]!, ids(d, ['1V1'])[0]!];
+    const [cyl, valve] = [ids(d, ['1.1'])[0]!, ids(d, ['1.2'])[0]!];
     const f = copySelection(d, { ...EMPTY_SELECTION, components: [cyl, valve] })!;
     expect(f.components).toHaveLength(2);
     // Ventil A/B zum Zylinder: zwei Leitungen; Pumpe und Tank bleiben draußen.
@@ -38,7 +38,7 @@ describe('Kopieren und Einfügen', () => {
 
   it('nimmt Abzweige mit, wenn sie zwischen kopierten Bauteilen liegen', () => {
     let d = base();
-    const [pump, valve, relief] = [ids(d, ['0P1'])[0]!, ids(d, ['1V1'])[0]!, ids(d, ['0V1'])[0]!];
+    const [pump, valve, relief] = [ids(d, ['0.2'])[0]!, ids(d, ['1.2'])[0]!, ids(d, ['0.1'])[0]!];
     // Pumpe→Ventil an einem Abzweig mit dem DBV verbinden.
     const line = d.connections.find((l) => JSON.stringify(l).includes(`"${pump}"`) && JSON.stringify(l).includes(`"${valve}"`))!;
     const path = routeAll(d).get(line.id)!;

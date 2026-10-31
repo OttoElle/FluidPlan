@@ -1,5 +1,6 @@
 import { DiagramError, nextId } from './diagram.ts';
 import type { Box } from './routing.ts';
+import { fontSizeFor } from './lettering.ts';
 import type {
   Annotation,
   CircleAnnotation,
@@ -18,7 +19,10 @@ import type {
  * Wie diagram.ts: reine Funktionen, die einen neuen Diagram-Wert liefern.
  */
 
-/** Schrifthöhen nach ISO 3098 in Einheiten (1 Einheit = 0,25 mm). */
+/**
+ * Schrifthöhen h nach ISO 3098 (Versalhöhe) in Einheiten (1 Einheit = 0,25 mm).
+ * Gezeichnet wird mit fontSizeFor(h), siehe lettering.ts.
+ */
 export const TEXT_SIZES: readonly { size: number; name: string }[] = [
   { size: 10, name: '2,5 mm' },
   { size: 14, name: '3,5 mm' },
@@ -27,7 +31,7 @@ export const TEXT_SIZES: readonly { size: number; name: string }[] = [
 ];
 export const DEFAULT_TEXT_SIZE = 14;
 
-/** Zeilenabstand als Vielfaches der Schrifthöhe. */
+/** Zeilenabstand als Vielfaches der Schriftgröße (Geviert). */
 export const LINE_HEIGHT = 1.25;
 
 /** Strichmuster in Einheiten; `undefined` = durchgezogen. */
@@ -172,10 +176,11 @@ export function annotationBox(a: Annotation): Box {
   }
   const lines = textLines(a);
   const longest = Math.max(1, ...lines.map((l) => l.length));
+  const em = fontSizeFor(a.size);
   return {
     minX: a.position.x,
-    minY: a.position.y - a.size * 0.8,
-    maxX: a.position.x + longest * a.size * 0.6,
-    maxY: a.position.y + (lines.length - 1) * a.size * LINE_HEIGHT + a.size * 0.25,
+    minY: a.position.y - em * 0.8,
+    maxX: a.position.x + longest * em * 0.6,
+    maxY: a.position.y + (lines.length - 1) * em * LINE_HEIGHT + em * 0.25,
   };
 }

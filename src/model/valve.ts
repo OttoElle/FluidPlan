@@ -12,7 +12,8 @@ import { isObject, type Obj } from './configRead.ts';
  *   - die Betätigungen links und rechts, von innen nach außen gestapelt.
  *
  * Anschlüsse heißen intern immer nach ISO 1219 (P, T, A, B, R, S, X, Y).
- * In der Pneumatik werden sie nach ISO 5599 angezeigt (1, 3, 2, 4, 3, 5, 14, 12).
+ * In der Pneumatik werden sie nach ISO 5599 / DIN ISO 11727 angezeigt (1, 3, 2, 4, 3, 5;
+ * Steueranschlüsse 12, 14 oder 10 je nach geschalteter Verbindung, siehe portLabel).
  * So bleiben Leitungen und Wege gültig, egal wie die Anschlüsse heißen.
  *
  * Geometrie im Modul M nach DIN ISO 1219-1: Jedes Schaltfeld ist 4M × 4M und
@@ -186,6 +187,7 @@ const ISO5599: Record<ValveRole | PilotRole, string> = {
   T: '3',
   R: '3',
   S: '5',
+  // Steueranschlüsse ohne bekannte Schaltstellungen; sonst siehe portLabel.
   X: '14',
   Y: '12',
 };
@@ -195,9 +197,25 @@ export function rolesOf(ports: DirectionalValveConfig['ports']): ValveRole[] {
   return [...top, ...bottom].map(([role]) => role);
 }
 
-/** Angezeigter Name eines Anschlusses. */
-export function portLabel(config: Pick<DirectionalValveConfig, 'medium'>, role: ValveRole | PilotRole): string {
-  return config.medium === 'pneumatic' ? ISO5599[role] : role;
+/**
+ * Angezeigter Name eines Anschlusses.
+ *
+ * Pneumatische Steueranschlüsse nach DIN ISO 11727, 4.3: erste Ziffer 1, zweite
+ * Ziffer der Hauptanschluss, der beim Betätigen mit 1 verbunden wird (12, 14),
+ * oder 0, wenn 1 gesperrt wird (10). Links betätigt schaltet die linke
+ * Stellung, rechts betätigt die rechte.
+ */
+export function portLabel(
+  config: Pick<DirectionalValveConfig, 'medium'> & Partial<Pick<DirectionalValveConfig, 'positions'>>,
+  role: ValveRole | PilotRole,
+): string {
+  if (config.medium !== 'pneumatic') return role;
+  if ((role === 'X' || role === 'Y') && config.positions?.length) {
+    const position = role === 'X' ? config.positions[0]! : config.positions[config.positions.length - 1]!;
+    const path = position.paths.find((p) => p.from === 'P' || p.to === 'P');
+    return path ? `1${ISO5599[path.from === 'P' ? path.to : path.from]}` : '10';
+  }
+  return ISO5599[role];
 }
 
 /** Lage eines Anschlusses im Schaltfeld: x relativ zum Feld, oben oder unten. */

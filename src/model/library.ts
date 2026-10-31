@@ -285,6 +285,46 @@ export function readConfig(type: string, v: unknown, path: string, errors: strin
 }
 
 /**
+ * Angezeigte Anschlussnamen, die vom Medium der Zeichnung abhängen.
+ * Die Anschluss-IDs bleiben gleich, damit Leitungen gültig bleiben.
+ *
+ * Hydraulik nach ISO 9461: Ventile mit zwei Hauptanschlüssen heißen P (Eingang)
+ * und A (Ausgang), Druckbegrenzungsventile P und T, Steueranschluss X.
+ * Pneumatik nach DIN ISO 11727: Eingang 1, Ausgang 2, Entlüftung 3 (Abschnitte 6 bis 9).
+ */
+const PORT_NAMES: Record<Domain, Record<string, Record<string, string>>> = {
+  hydraulic: {
+    'valve.check': { '1': 'P', '2': 'A' },
+    'valve.check-spring': { '1': 'P', '2': 'A' },
+    'valve.check-piloted': { '1': 'P', '2': 'A' },
+    'valve.throttle': { '1': 'P', '2': 'A' },
+    'valve.throttle-check': { '1': 'P', '2': 'A' },
+    'valve.flow-control': { '1': 'P', '2': 'A' },
+    // ISO 9461 kennt kein Wechselventil; Eingänge wie bei Ventilen mit zwei Hauptanschlüssen.
+    'valve.shuttle': { X: 'P', Y: 'P', A: 'A' },
+  },
+  pneumatic: {
+    'valve.pressure-relief': { P: '1', T: '2' },
+    'valve.pressure-reducing': { P: '1', A: '2', L: '3' },
+  },
+};
+
+/** Name eines Anschlusses, wie er im Schaltplan steht. */
+export function portName(
+  component: Pick<ComponentInstance, 'type' | 'config'>,
+  port: Pick<PortDefinition, 'id' | 'label'>,
+  domain: Domain,
+): string {
+  const byType = PORT_NAMES[domain][component.type];
+  if (byType?.[port.id]) return byType[port.id]!;
+  // Zweiwege-Kugelhahn als Absperrventil (ISO 9461, 3.3); Drei- und Vierwege bleiben nummeriert.
+  if (domain === 'hydraulic' && component.type === 'valve.ball' && (component.config as { ways?: number } | undefined)?.ways === 2) {
+    return port.id === '1' ? 'P' : port.id === '2' ? 'A' : port.id;
+  }
+  return port.label ?? port.id;
+}
+
+/**
  * Definition (Name, Größe, Anschlüsse) eines Bauteils. Bei konfigurierbaren
  * Typen wird sie aus der Konfiguration berechnet; fehlt diese, gilt die
  * Startkonfiguration für Hydraulik.

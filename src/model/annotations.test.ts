@@ -26,7 +26,8 @@ describe('Text und Grafik', () => {
   it('schätzt den Umriss mehrzeiliger Texte', () => {
     const { annotation } = addAnnotation(empty, { kind: 'text', position: { x: 0, y: 20 }, text: 'abcde\nx', size: 20 });
     const box = annotationBox(annotation);
-    expect(box.maxX).toBe(60);
+    // Größe 20 = 5 mm Versalhöhe, gezeichnet mit rund 7 mm Schriftgröße.
+    expect(box.maxX).toBeCloseTo(5 * 0.6 * (20 / 0.716), 1);
     expect(box.maxY).toBeGreaterThan(40);
   });
 

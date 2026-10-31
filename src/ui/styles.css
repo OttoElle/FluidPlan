@@ -139,9 +139,7 @@ button:hover { border-color: var(--accent); }
 .sheet-frame .frame { fill: none; stroke: var(--frame); stroke-width: 2; }
 .sheet-frame line { stroke: var(--frame); stroke-width: 1; }
 .sheet-frame text { fill: var(--text); }
-.sheet-frame .caption { font-size: 8px; fill: var(--muted); }
-.sheet-frame .value { font-size: 12px; }
-.sheet-frame .value.big { font-size: 18px; font-weight: 600; }
+.sheet-frame .caption { fill: var(--muted); }
 
 .zoom-controls {
   position: absolute;
@@ -189,11 +187,12 @@ select {
 .component.selected .hit { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 3; }
 .symbol { fill: none; stroke: var(--line); stroke-linejoin: miter; }
 .symbol .fill { fill: var(--line); }
-.component .name { font-size: 7px; text-anchor: middle; dominant-baseline: middle; fill: var(--muted); }
-.component .label { font-size: 8px; text-anchor: end; fill: var(--text); font-weight: 600; }
-.component .description { font-size: 7px; text-anchor: end; fill: var(--text); }
+.component .name { text-anchor: middle; dominant-baseline: middle; fill: var(--muted); }
+.component .label { text-anchor: middle; fill: var(--text); }
+.component .label-box { fill: none; stroke: var(--text); stroke-width: 1; }
+.component .description { text-anchor: end; fill: var(--text); }
 .port circle { fill: var(--accent); }
-.port text { font-size: 6px; fill: var(--accent); }
+.port text { fill: var(--accent); }
 
 /* Leitungen */
 .connection.selected .line { stroke: var(--accent); stroke-width: 2.5; }
