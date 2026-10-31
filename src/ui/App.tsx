@@ -447,7 +447,7 @@ export function App() {
         onClose={() => setExportOpen(false)}
       />
       <NewDocumentDialog open={newDialogOpen} onCreate={startNew} onClose={() => setNewDialogOpen(false)} />
-      <PropertiesDialog diagram={diagram} target={properties} onApply={(next) => edit(next)} onClose={() => setProperties(null)} />
+      <PropertiesDialog diagram={diagram} layers={layersOf(drawing)} target={properties} onApply={(next) => edit(next)} onClose={() => setProperties(null)} />
       <SheetDialog
         open={sheetDialog !== null}
         diagram={diagram}

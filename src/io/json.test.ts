@@ -43,6 +43,16 @@ describe('JSON speichern und laden', () => {
     expect(parseDiagram(serializeDiagram(d))).toEqual({ ok: true, diagram: d });
   });
 
+  it('speichert technische Daten, Hersteller und Teilenummer', () => {
+    const d = exampleHydraulicDiagram(fixedDate);
+    const [first, ...others] = d.components;
+    const component = { ...first!, technicalData: 'Ø100/56×50', showTechnicalData: false, manufacturer: 'ACME', partNumber: '123-45' };
+    const original = { ...d, components: [component, ...others] };
+    expect(parseDiagram(serializeDiagram(original))).toEqual({ ok: true, diagram: original });
+    const bad = mutate((f) => (f.drawing.sheets[0].components[0].partNumber = 5));
+    expect(errorsOf(bad).join()).toMatch(/partNumber: Text erwartet/);
+  });
+
   it('meldet fehlerhafte Grafik', () => {
     const errors = errorsOf(
       mutate((f) => {

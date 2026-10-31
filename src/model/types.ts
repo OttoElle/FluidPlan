@@ -103,6 +103,17 @@ export interface ComponentInstance {
   showLabel?: boolean;
   /** Bezeichnung am Symbol anzeigen (Standard: nein). */
   showDescription?: boolean;
+  /**
+   * Technische Daten nach DIN ISO 1219-2, 6.4, z. B. "Ø100/56×50" oder
+   * "160 bar"; fehlt in älteren Dateien.
+   */
+  technicalData?: string;
+  /** Technische Daten am Symbol anzeigen (Standard: ja). */
+  showTechnicalData?: boolean;
+  /** Hersteller, z. B. für eine spätere Stückliste. */
+  manufacturer?: string;
+  /** Teile- bzw. Bestellnummer des Herstellers. */
+  partNumber?: string;
   /** Verschiebung von Kennzeichen und Bezeichnung gegenüber der Standardlage (Blattkoordinaten). */
   labelOffset?: Point;
   /** Verschiebung einzelner Anschlussbezeichnungen gegenüber der Standardlage, je Anschluss-ID. */

@@ -426,11 +426,12 @@ function readComponent(v: unknown, path: string, errors: string[]): ComponentIns
   }
   // Optionale Angaben (Bezeichnung, Anzeige am Symbol); fehlen in älteren Dateien.
   const extra: Partial<ComponentInstance> = {};
-  if (v.description !== undefined) {
-    if (typeof v.description === 'string') extra.description = v.description;
-    else errors.push(`${path}.description: Text erwartet`);
+  for (const key of ['description', 'technicalData', 'manufacturer', 'partNumber'] as const) {
+    if (v[key] === undefined) continue;
+    if (typeof v[key] === 'string') extra[key] = v[key];
+    else errors.push(`${path}.${key}: Text erwartet`);
   }
-  for (const key of ['showLabel', 'showDescription'] as const) {
+  for (const key of ['showLabel', 'showDescription', 'showTechnicalData'] as const) {
     if (v[key] === undefined) continue;
     if (typeof v[key] === 'boolean') extra[key] = v[key];
     else errors.push(`${path}.${key}: true oder false erwartet`);

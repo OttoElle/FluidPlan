@@ -452,6 +452,12 @@ dialog.properties .dialog-buttons { padding: 12px 16px; border-top: 1px solid va
 .tab-panel .tab-form { padding: 0; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .tab-form textarea { min-height: 80px; }
+.field-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.field-row > label { flex: 1 1 140px; min-width: 0; }
+.field-row > .unit-input { flex: 0 1 auto; flex-direction: row; align-items: center; gap: 6px; }
+.unit-input input { width: 90px; }
+.unit-input span { color: var(--muted); }
+.tab-form .hint { margin: -6px 0 0; font-size: 12px; }
 
 dialog.sheet-dialog .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 dialog.sheet-dialog fieldset.column { gap: 8px; }

@@ -9,6 +9,16 @@ const FONT = fontSizeFor(LETTERING.normal);
 /** Innenabstand im Kasten um das Kennzeichen. */
 const PAD = 3;
 const BOX_HEIGHT = LETTERING.normal + 2 * PAD;
+/** Zeilenabstand der Texte unter dem Kennzeichen (1,6-fache Schrifthöhe). */
+const LINE_PITCH = LETTERING.normal * 1.6;
+
+/** Texte, die unter dem Kennzeichen stehen, von oben nach unten. */
+function componentTextLines(c: ComponentInstance): { text: string; className: string }[] {
+  const lines: { text: string; className: string }[] = [];
+  if (c.description && c.showDescription) lines.push({ text: c.description, className: 'description' });
+  if (c.technicalData && c.showTechnicalData !== false) lines.push({ text: c.technicalData, className: 'description technical' });
+  return lines;
+}
 
 export function ComponentShape({
   component,
@@ -46,6 +56,7 @@ export function ComponentShape({
 
   const showLabel = Boolean(component.label) && component.showLabel !== false;
   const labelWidth = textWidth(component.label, LETTERING.normal) + 2 * PAD;
+  const textLines = componentTextLines(component);
   const off = component.labelOffset ?? { x: 0, y: 0 };
   const lx = x + off.x;
   const ly = y + off.y;
@@ -94,17 +105,19 @@ export function ComponentShape({
           </text>
         </g>
       )}
-      {component.description && component.showDescription && (
+      {textLines.map((line, i) => (
+        // Bezeichnung und technische Daten (DIN ISO 1219-2, 6.4) unter dem Kennzeichen.
         <text
+          key={i}
           x={lx - 4}
-          y={ly + (showLabel ? BOX_HEIGHT + 4 : 0) + LETTERING.normal}
-          className="description"
+          y={ly + (showLabel ? BOX_HEIGHT + 4 : 0) + LETTERING.normal + i * LINE_PITCH}
+          className={line.className}
           fontSize={FONT}
           onPointerDown={grab(null)}
         >
-          {component.description}
+          {line.text}
         </text>
-      )}
+      ))}
       {def.ports.map((port) => {
         const p = transformLocalPoint(component, def, port.offset);
         const po = component.portLabelOffsets?.[port.id] ?? { x: 0, y: 0 };
