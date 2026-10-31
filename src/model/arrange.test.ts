@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { alignComponents, boundsOf, mirrorComponents, moveComponents, rotateComponents } from './arrange.ts';
+import { alignComponents, alignSelection, boundsOf, distributeSelection, mirrorComponents, moveComponents, rotateComponents } from './arrange.ts';
 import { portPosition, updateConnection } from './diagram.ts';
 import { exampleHydraulicDiagram } from './example.ts';
+import { addAnnotation, annotationBox } from './annotations.ts';
 import { componentBox } from './routing.ts';
+import { EMPTY_SELECTION } from './selection.ts';
 import type { Diagram, Point, PortRef } from './types.ts';
 
 const allPorts = (d: Diagram, ids: string[]): Point[] =>
@@ -93,5 +95,37 @@ describe('Anordnen', () => {
     const center = alignComponents(base, ids, 'center');
     for (const b of boxes(center)) expect(Math.abs((b.minX + b.maxX) / 2 - (boxes(center)[0]!.minX + boxes(center)[0]!.maxX) / 2)).toBeLessThanOrEqual(5);
     for (const p of allPorts(center, ids)) expect(onGrid(p)).toBe(true);
+  });
+
+  it('richtet auch Grafiken aus, Gruppen wandern als Ganzes', () => {
+    const r1 = addAnnotation(base, { kind: 'rect', position: { x: 33, y: 41 }, width: 20, height: 10, style: 'solid' });
+    const r2 = addAnnotation(r1.diagram, { kind: 'rect', position: { x: 70, y: 90 }, width: 30, height: 15, style: 'solid' });
+    const r3 = addAnnotation(r2.diagram, { kind: 'rect', position: { x: 200, y: 60 }, width: 10, height: 10, style: 'solid' });
+    const grouped = {
+      ...r3.diagram,
+      groups: [{ id: 'g1', components: [], connections: [], junctions: [], annotations: [r2.annotation.id, r3.annotation.id] }],
+    };
+    const sel = { ...EMPTY_SELECTION, annotations: [r1.annotation.id, r2.annotation.id, r3.annotation.id] };
+    const d = alignSelection(grouped, sel, 'left');
+    const box = (id: string) => annotationBox(d.annotations.find((a) => a.id === id)!);
+    expect(box(r1.annotation.id).minX).toBe(33);
+    expect(box(r2.annotation.id).minX).toBe(33);
+    // r3 gehört zur Gruppe mit r2 und behält den Abstand zu ihr.
+    expect(box(r3.annotation.id).minX).toBe(163);
+  });
+
+  it('verteilt gleichmäßig, äußere Teile bleiben stehen', () => {
+    const sel = { ...EMPTY_SELECTION, components: ids };
+    for (const axis of ['horizontal', 'vertical'] as const) {
+      const d = distributeSelection(base, sel, axis);
+      const [lo, hi] = axis === 'horizontal' ? (['minX', 'maxX'] as const) : (['minY', 'maxY'] as const);
+      const boxes = ids
+        .map((id) => componentBox(d.components.find((c) => c.id === id)!)!)
+        .sort((a, b) => a[lo] + a[hi] - b[lo] - b[hi]);
+      const gaps = boxes.slice(1).map((b, i) => b[lo] - boxes[i]![hi]);
+      expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(10);
+      for (const p of allPorts(d, ids)) expect(onGrid(p)).toBe(true);
+    }
+    expect(distributeSelection(base, { ...EMPTY_SELECTION, components: ids.slice(0, 2) }, 'horizontal')).toBe(base);
   });
 });

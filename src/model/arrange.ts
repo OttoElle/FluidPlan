@@ -1,9 +1,11 @@
+import { annotationBox, moveAnnotations } from './annotations.ts';
 import { definitionOf } from './library.ts';
 import { GRID, componentBox, keepRoutes, type Box } from './routing.ts';
+import { EMPTY_SELECTION, type Selection } from './selection.ts';
 import type { ComponentInstance, Diagram, Point, PortRef, Rotation } from './types.ts';
 
 /**
- * Anordnen mehrerer Bauteile auf einmal: verschieben, drehen, spiegeln, ausrichten.
+ * Anordnen mehrerer Bauteile auf einmal: verschieben, drehen, spiegeln, ausrichten, verteilen.
  *
  * Eine Gruppe wird um die Mitte ihres Umrisses gedreht bzw. gespiegelt, auf
  * das Raster gerundet, damit alle Anschlüsse im Raster bleiben. Ein einzelnes
@@ -155,32 +157,112 @@ export function mirrorComponents(diagram: Diagram, ids: readonly string[], axis:
 export type Alignment = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
 
 /**
- * Richtet die Bauteile aneinander aus: Kanten am äußersten Bauteil,
- * Mitten an der Mitte des gemeinsamen Umrisses (auf das Raster gerundet).
+ * Ein Teil, das beim Ausrichten und Verteilen als Ganzes wandert: ein
+ * Bauteil, eine Grafik oder eine ganze Gruppe.
  */
-export function alignComponents(diagram: Diagram, ids: readonly string[], alignment: Alignment): Diagram {
-  const all = boundsOf(diagram, ids);
-  if (!all || ids.length < 2) return diagram;
-  const deltas = new Map<string, Point>();
-  for (const c of diagram.components) {
-    const b = ids.includes(c.id) ? componentBox(c) : undefined;
-    if (!b) continue;
+interface ArrangeItem {
+  components: string[];
+  annotations: string[];
+  box: Box;
+}
+
+const unionBox = (boxes: Box[]): Box => ({
+  minX: Math.min(...boxes.map((b) => b.minX)),
+  minY: Math.min(...boxes.map((b) => b.minY)),
+  maxX: Math.max(...boxes.map((b) => b.maxX)),
+  maxY: Math.max(...boxes.map((b) => b.maxY)),
+});
+
+/** Bauteile und Grafiken der Auswahl; Gruppen zählen als ein Teil. */
+function arrangeItems(diagram: Diagram, s: Selection): ArrangeItem[] {
+  const items: ArrangeItem[] = [];
+  const used = new Set<string>();
+  const make = (components: string[], annotations: string[]) => {
+    const boxes = [
+      ...diagram.components.filter((c) => components.includes(c.id)).map(componentBox),
+      ...diagram.annotations.filter((a) => annotations.includes(a.id)).map(annotationBox),
+    ].filter((b): b is Box => b !== undefined);
+    if (boxes.length === 0) return;
+    items.push({ components, annotations, box: unionBox(boxes) });
+    for (const id of [...components, ...annotations]) used.add(id);
+  };
+  for (const g of diagram.groups) {
+    const components = g.components.filter((id) => s.components.includes(id));
+    const annotations = g.annotations.filter((id) => s.annotations.includes(id));
+    if (components.length + annotations.length > 0) make(components, annotations);
+  }
+  for (const id of s.components) if (!used.has(id)) make([id], []);
+  for (const id of s.annotations) if (!used.has(id)) make([], [id]);
+  return items;
+}
+
+/**
+ * Verschiebt ein Teil. Mit Bauteilen wird auf das Raster gerundet, damit die
+ * Anschlüsse im Raster bleiben; reine Grafik wandert genau.
+ */
+function moveItem(diagram: Diagram, item: ArrangeItem, delta: Point): Diagram {
+  const d = item.components.length > 0 ? { x: snap(delta.x), y: snap(delta.y) } : delta;
+  return moveAnnotations(moveComponents(diagram, item.components, d), item.annotations, d);
+}
+
+/** Wie viele Teile Ausrichten bzw. Verteilen bewegen würde (Gruppen zählen einfach). */
+export function arrangeCount(diagram: Diagram, s: Selection): number {
+  return arrangeItems(diagram, s).length;
+}
+
+/**
+ * Richtet Bauteile, Grafiken und Gruppen der Auswahl aneinander aus: Kanten
+ * am äußersten Teil, Mitten an der Mitte des gemeinsamen Umrisses.
+ */
+export function alignSelection(diagram: Diagram, s: Selection, alignment: Alignment): Diagram {
+  const items = arrangeItems(diagram, s);
+  if (items.length < 2) return diagram;
+  const all = unionBox(items.map((i) => i.box));
+  let d = diagram;
+  for (const { box: b, ...item } of items) {
     const dx = {
       left: all.minX - b.minX,
-      center: snap((all.minX + all.maxX - b.minX - b.maxX) / 2),
+      center: (all.minX + all.maxX - b.minX - b.maxX) / 2,
       right: all.maxX - b.maxX,
     };
     const dy = {
       top: all.minY - b.minY,
-      middle: snap((all.minY + all.maxY - b.minY - b.maxY) / 2),
+      middle: (all.minY + all.maxY - b.minY - b.maxY) / 2,
       bottom: all.maxY - b.maxY,
     };
-    deltas.set(c.id, {
+    d = moveItem(d, { ...item, box: b }, {
       x: alignment in dx ? dx[alignment as keyof typeof dx] : 0,
       y: alignment in dy ? dy[alignment as keyof typeof dy] : 0,
     });
   }
+  return d;
+}
+
+/** Richtet die Bauteile `ids` aneinander aus (siehe alignSelection). */
+export function alignComponents(diagram: Diagram, ids: readonly string[], alignment: Alignment): Diagram {
+  return alignSelection(diagram, { ...EMPTY_SELECTION, components: [...ids] }, alignment);
+}
+
+/**
+ * Verteilt die Teile gleichmäßig: Das erste und das letzte bleiben stehen,
+ * dazwischen werden die Abstände zwischen den Umrissen gleich groß.
+ * `horizontal` verteilt von links nach rechts, `vertical` von oben nach unten.
+ */
+export function distributeSelection(diagram: Diagram, s: Selection, axis: 'horizontal' | 'vertical'): Diagram {
+  const items = arrangeItems(diagram, s);
+  if (items.length < 3) return diagram;
+  const [lo, hi] = axis === 'horizontal' ? (['minX', 'maxX'] as const) : (['minY', 'maxY'] as const);
+  const sorted = [...items].sort((a, b) => a.box[lo] + a.box[hi] - (b.box[lo] + b.box[hi]));
+  const first = sorted[0]!;
+  const last = sorted[sorted.length - 1]!;
+  const sizes = sorted.reduce((sum, i) => sum + i.box[hi] - i.box[lo], 0);
+  const gap = (last.box[hi] - first.box[lo] - sizes) / (sorted.length - 1);
   let d = diagram;
-  for (const [id, delta] of deltas) d = moveComponents(d, [id], delta);
+  let at = first.box[hi] + gap;
+  for (const item of sorted.slice(1, -1)) {
+    const shift = at - item.box[lo];
+    d = moveItem(d, item, axis === 'horizontal' ? { x: shift, y: 0 } : { x: 0, y: shift });
+    at += item.box[hi] - item.box[lo] + gap;
+  }
   return d;
 }

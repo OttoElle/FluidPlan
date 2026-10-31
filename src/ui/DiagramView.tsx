@@ -23,7 +23,7 @@ import { sheetLayout, type SheetRect } from '../model/drawing.ts';
 import type { Annotation, Diagram, Endpoint, Point } from '../model/types.ts';
 import { IconButton } from './IconButton.tsx';
 import type { PropertiesTarget } from './properties/PropertiesDialog.tsx';
-import { GalleryHorizontal, Grid3x3, Maximize, ZoomIn, ZoomOut } from 'lucide-react';
+import { GalleryHorizontal, Grid3x3, Maximize, Tag, Type, ZoomIn, ZoomOut } from 'lucide-react';
 import { Rulers, type RulersHandle } from './Rulers.tsx';
 import { SheetLabels, type ScreenRect, type SheetAction } from './SheetLabels.tsx';
 import { AnnotationShape, createdShape, reshape, toPoints, type DragTool, type Handle } from './canvas/annotationShapes.tsx';
@@ -385,7 +385,14 @@ export function DiagramView({
       {view && size && <Rulers ref={rulersRef} view={{ ...view, x: view.x - origin.x, y: view.y - origin.y }} size={size} />}
       <svg
         ref={svgRef}
-        className={panning ? 'diagram panning' : spaceDown ? 'diagram pan-ready' : tool ? 'diagram placing' : 'diagram'}
+        className={[
+          'diagram',
+          panning ? 'panning' : spaceDown ? 'pan-ready' : tool ? 'placing' : '',
+          settings.portLabels ? '' : 'hide-port-labels',
+          settings.componentLabels ? '' : 'hide-component-labels',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         viewBox={view && size ? `${view.x} ${view.y} ${size.width / view.scale} ${size.height / view.scale}` : undefined}
         onPointerDown={(e) => {
           if (draft && e.button === 0) {
@@ -819,6 +826,20 @@ export function DiagramView({
           tooltip="above"
           aria-pressed={settings.grid}
           onClick={() => changeSettings({ ...settings, grid: !settings.grid })}
+        />
+        <IconButton
+          icon={Tag}
+          label="Bauteilkennzeichen und Bezeichnungen anzeigen"
+          tooltip="above"
+          aria-pressed={settings.componentLabels}
+          onClick={() => changeSettings({ ...settings, componentLabels: !settings.componentLabels })}
+        />
+        <IconButton
+          icon={Type}
+          label="Anschlussbezeichnungen anzeigen"
+          tooltip="above"
+          aria-pressed={settings.portLabels}
+          onClick={() => changeSettings({ ...settings, portLabels: !settings.portLabels })}
         />
         <span className="separator" />
         <IconButton icon={ZoomOut} label="Verkleinern" tooltip="above" onClick={() => zoomCenter(1 / 1.25)} />

@@ -19,13 +19,15 @@ export type ExportFormat = 'pdf' | 'svg' | 'png';
 export interface ExportOptions {
   /** Anschlussbezeichnungen (P, T, A, B, 1, 2, …) mit ausgeben. */
   portLabels: boolean;
+  /** Kennzeichen, Bezeichnung und technische Daten der Bauteile mit ausgeben. */
+  componentLabels: boolean;
   /** Auflösung beim PNG-Export. */
   dpi: number;
   /** Alle Blätter (PDF: eine Seite je Blatt, SVG/PNG: eine Datei je Blatt) oder nur das angezeigte. */
   sheets: 'all' | 'current';
 }
 
-export const DEFAULT_EXPORT_OPTIONS: ExportOptions = { portLabels: true, dpi: 300, sheets: 'all' };
+export const DEFAULT_EXPORT_OPTIONS: ExportOptions = { portLabels: true, componentLabels: true, dpi: 300, sheets: 'all' };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const FONT = DRAWING_FONT;
@@ -114,6 +116,7 @@ function printableSvg(live: SVGSVGElement, diagram: Diagram, options: ExportOpti
 
   for (const selector of EDITOR_ONLY) svg.querySelectorAll(selector).forEach((el) => el.remove());
   if (!options.portLabels) svg.querySelectorAll('.port').forEach((el) => el.remove());
+  if (!options.componentLabels) svg.querySelectorAll('.label-group, .component .description').forEach((el) => el.remove());
   for (const [selector, attributes] of PRINT_STYLE) {
     svg.querySelectorAll(selector).forEach((el) => {
       for (const [name, value] of Object.entries(attributes)) el.setAttribute(name, value);

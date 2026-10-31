@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_EXPORT_OPTIONS, paperSizeMm, type ExportFormat, type ExportOptions } from '../io/export.ts';
 import type { Diagram } from '../model/types.ts';
+import { loadViewSettings } from './canvas/viewSettings.ts';
 
 const FORMAT_NAMES: Record<ExportFormat, string> = {
   pdf: 'PDF (Vektor, zum Drucken)',
@@ -30,7 +31,12 @@ export function ExportDialog({
 
   useEffect(() => {
     const dialog = ref.current!;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      // Ausgegeben wird, was gerade zu sehen ist; im Dialog lässt sich das ändern.
+      const view = loadViewSettings();
+      setOptions((o) => ({ ...o, portLabels: view.portLabels, componentLabels: view.componentLabels }));
+      dialog.showModal();
+    }
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
@@ -92,6 +98,14 @@ export function ExportDialog({
             onChange={(e) => setOptions({ ...options, portLabels: e.target.checked })}
           />
           Anschlussbezeichnungen ausgeben
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={options.componentLabels}
+            onChange={(e) => setOptions({ ...options, componentLabels: e.target.checked })}
+          />
+          Bauteilkennzeichen und Bezeichnungen ausgeben
         </label>
         <p className="hint">
           Blatt {diagram.sheet.format}, {mm.width} × {mm.height} mm. PDF und SVG haben die echte Papiergröße und lassen

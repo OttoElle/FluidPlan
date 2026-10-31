@@ -215,6 +215,7 @@ select {
 .port .port-hit { fill: transparent; }
 .component .label-group, .component .description, .port .port-label { cursor: move; }
 .component .label-group .label-box { fill: transparent; pointer-events: all; }
+.diagram.hide-component-labels .component .label-group, .diagram.hide-component-labels .component .description, .diagram.hide-port-labels .port .port-label { display: none; }
 .port:hover circle:not(.port-hit) { r: 3.5; }
 .component.drawing { cursor: crosshair; }
 

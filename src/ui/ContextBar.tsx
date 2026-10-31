@@ -3,8 +3,10 @@ import {
   AlignCenterVertical,
   AlignEndHorizontal,
   AlignEndVertical,
+  AlignHorizontalSpaceBetween,
   AlignStartHorizontal,
   AlignStartVertical,
+  AlignVerticalSpaceBetween,
   Layers,
   RotateCw,
   Route,
@@ -14,7 +16,7 @@ import {
   TrianglesCenterlineDashedVertical,
   type LucideIcon,
 } from 'lucide-react';
-import { alignComponents, mirrorComponents, type Alignment } from '../model/arrange.ts';
+import { alignSelection, arrangeCount, distributeSelection, mirrorComponents, type Alignment } from '../model/arrange.ts';
 import { updateAnnotation } from '../model/annotations.ts';
 import { updateConnection } from '../model/diagram.ts';
 import { assignLayer, layerOf } from '../model/layers.ts';
@@ -75,7 +77,10 @@ export function ContextBar({
     (a): a is Extract<Annotation, { style: StrokeStyle }> => 'style' in a && current.annotations.includes(a.id),
   );
   const mirror = (axis: 'horizontal' | 'vertical') => edit((d) => mirrorComponents(d, selectedIds, axis));
-  const align = (alignment: Alignment) => edit((d) => alignComponents(d, selectedIds, alignment));
+  const align = (alignment: Alignment) => edit((d) => alignSelection(d, current, alignment));
+  const distribute = (axis: 'horizontal' | 'vertical') => edit((d) => distributeSelection(d, current, axis));
+  // Bauteile, Grafiken und Gruppen, die beim Ausrichten als Ganzes wandern.
+  const arrangeable = arrangeCount(diagram, current);
   const setLineKind = (kind: LineKind) =>
     edit((d) => selectedLines.reduce((acc, l) => updateConnection(acc, l.id, { kind }), d));
   const setStrokeStyle = (style: StrokeStyle) =>
@@ -98,11 +103,23 @@ export function ContextBar({
           <IconButton icon={TrianglesCenterlineDashedHorizontal} label="Spiegeln: oben und unten vertauschen" onClick={() => mirror('vertical')} />
         </div>
       )}
-      {selectedIds.length >= 2 && (
+      {arrangeable >= 2 && (
         <div className="tool-group">
           {ALIGNMENTS.map(([alignment, icon, title]) => (
             <IconButton key={alignment} icon={icon} label={title} onClick={() => align(alignment)} />
           ))}
+          <IconButton
+            icon={AlignHorizontalSpaceBetween}
+            label="Waagerecht gleichmäßig verteilen (ab 3 Teilen)"
+            disabled={arrangeable < 3}
+            onClick={() => distribute('horizontal')}
+          />
+          <IconButton
+            icon={AlignVerticalSpaceBetween}
+            label="Senkrecht gleichmäßig verteilen (ab 3 Teilen)"
+            disabled={arrangeable < 3}
+            onClick={() => distribute('vertical')}
+          />
         </div>
       )}
       {selectedLines.length > 0 && (
