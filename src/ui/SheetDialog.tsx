@@ -6,13 +6,13 @@ import { SheetFields } from './SheetSettings.tsx';
 /** Bearbeitbare Felder des Schriftfelds; Datum und Format füllt das Programm. */
 const TITLE_FIELDS: [Exclude<TitleField, 'date' | 'format' | 'sheet'>, string][] = [
   ['title', 'Titel'],
-  ['drawingNumber', 'Zeichnungsnummer'],
-  ['organization', 'Firma / Abteilung'],
-  ['author', 'Erstellt von'],
+  ['drawingNumber', 'Sachnummer'],
+  ['organization', 'Gesetzlicher Eigentümer'],
+  ['author', 'Erstellt durch'],
   ['checkedBy', 'Geprüft von'],
-  ['approvedBy', 'Freigegeben von'],
-  ['documentType', 'Dokumentart'],
-  ['revision', 'Änderungsstand'],
+  ['approvedBy', 'Genehmigt von'],
+  ['documentType', 'Dokumentenart'],
+  ['revision', 'Änderungsindex'],
 ];
 
 /**

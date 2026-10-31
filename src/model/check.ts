@@ -78,6 +78,11 @@ export function checkDiagram(diagram: Diagram): Issue[] {
     }
   }
 
+  // Blattformat: A0 bis A3 nur im Querformat (DIN EN ISO 5457, 4.1).
+  if (diagram.sheet.format !== 'A4' && diagram.sheet.orientation === 'portrait') {
+    issue('warning', `${diagram.sheet.format} hoch: Nach ISO 5457 sind A3 und größer nur quer zulässig.`);
+  }
+
   // Lage auf dem Blatt
   const boxes = diagram.components.map((c) => ({ c, box: componentBox(c) })).filter((e) => e.box) as {
     c: ComponentInstance;

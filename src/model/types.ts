@@ -166,9 +166,9 @@ export interface DiagramMeta {
   organization: string;
   /** Geprüft von. */
   checkedBy: string;
-  /** Freigegeben von (Pflichtfeld nach DIN EN ISO 7200). */
+  /** Genehmigt von (genehmigende Person, Pflichtfeld nach DIN EN ISO 7200, 5.3.4). */
   approvedBy: string;
-  /** Dokumentart nach DIN EN ISO 7200, z. B. "Schaltplan". */
+  /** Dokumentenart nach DIN EN ISO 7200 (5.3.6), z. B. "Schaltplan". */
   documentType: string;
   /** Änderungsstand, z. B. "A". */
   revision: string;

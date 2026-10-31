@@ -56,9 +56,9 @@ describe('Rahmenmarken nach ISO 5457', () => {
     const marks = frameMarks({ format: 'A4', orientation: 'landscape', frame: true });
     expect(marks.centring).toHaveLength(4);
     const top = marks.labels.filter((l) => /\d/.test(l.text) && l.y < 40);
-    const left = marks.labels.filter((l) => /[A-Z]/.test(l.text) && l.x < 80);
+    const right = marks.labels.filter((l) => /[A-Z]/.test(l.text) && l.x > 1100);
     expect(top.map((l) => l.text)).toEqual(['1', '2', '3', '4', '5', '6']);
-    expect(left.map((l) => l.text)).toEqual(['A', 'B', 'C', 'D']);
+    expect(right.map((l) => l.text)).toEqual(['A', 'B', 'C', 'D']);
   });
 
   it('lässt I und O aus und zeichnet ohne Rahmen nichts', () => {
@@ -67,5 +67,27 @@ describe('Rahmenmarken nach ISO 5457', () => {
     expect(letters).not.toContain('I');
     expect(letters).not.toContain('O');
     expect(frameMarks({ format: 'A4', orientation: 'landscape', frame: false }).labels).toEqual([]);
+  });
+});
+
+describe('Feldanzahl nach ISO 5457, Tabelle 2', () => {
+  const count = (format: 'A1' | 'A2' | 'A3', axis: 'digits' | 'letters') => {
+    const marks = frameMarks({ format, orientation: 'landscape', frame: true });
+    const texts = marks.labels.filter((l) => (axis === 'digits' ? /\d/ : /[A-Z]/).test(l.text)).map((l) => l.text);
+    return new Set(texts).size;
+  };
+  it.each([
+    ['A1', 16, 12],
+    ['A2', 12, 8],
+    ['A3', 8, 6],
+  ] as const)('%s: %i × %i Felder', (format, long, short) => {
+    expect(count(format, 'digits')).toBe(long);
+    expect(count(format, 'letters')).toBe(short);
+  });
+
+  it('beschriftet A4 nur oben und rechts', () => {
+    const marks = frameMarks({ format: 'A4', orientation: 'landscape', frame: true });
+    expect(marks.labels.filter((l) => l.text === '1')).toHaveLength(1);
+    expect(marks.labels.filter((l) => l.text === 'A')).toHaveLength(1);
   });
 });

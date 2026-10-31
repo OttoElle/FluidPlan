@@ -158,9 +158,12 @@ src/
   auch ein **Abzweigpunkt** sein (`{ junctionId }`, Liste `junctions` im Schaltplan, ab Dateiversion 3).
 - **Grafik** (`annotations`, ab Dateiversion 4): freier Text, Linie oder Rechteck
   (`solid`, `dashed`, `dashdot`; Strich-Punkt = Baugruppen-Umrandung nach ISO 1219-1).
-  Schrifthöhe in Einheiten (14 = 3,5 mm). Funktionen in `annotations.ts`.
-- **Schriftfeld**: Titel, Zeichnungsnummer, Firma, Erstellt/Geprüft von und Änderungsstand
-  stehen in `meta`; Datum und Format füllt das Programm.
+  Schrifthöhe h (Versalhöhe nach ISO 3098) in Einheiten (14 = 3,5 mm). Funktionen in `annotations.ts`.
+- **Schriftfeld** nach DIN EN ISO 7200 (180 × 27 mm): Titel, Sachnummer (`drawingNumber`),
+  gesetzlicher Eigentümer (`organization`), Erstellt durch, Geprüft von, Genehmigt von
+  (`approvedBy`), Dokumentenart (`documentType`) und Änderungsindex stehen in `meta`;
+  Ausgabedatum, Papierformat und Blatt füllt das Programm. Rahmen nach ISO 5457 mit
+  Mittenmarken und Feldeinteilung (`frameMarks` in `sheet.ts`).
 
 Das Datenmodell wird nur über die Funktionen in `diagram.ts` verändert. Sie geben jeweils
 einen neuen Schaltplan zurück, was Undo/Redo später einfach macht.

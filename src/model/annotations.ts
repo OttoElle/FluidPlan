@@ -31,8 +31,11 @@ export const TEXT_SIZES: readonly { size: number; name: string }[] = [
 ];
 export const DEFAULT_TEXT_SIZE = 14;
 
-/** Zeilenabstand als Vielfaches der Schriftgröße (Geviert). */
-export const LINE_HEIGHT = 1.25;
+/**
+ * Zeilenabstand als Vielfaches der Schriftgröße (Geviert): 1,4 em ≈ 1,9 h, der
+ * Grundlinienabstand b1 für Groß- und Kleinbuchstaben mit Umlauten (ISO 3098-1, Tabelle 2).
+ */
+export const LINE_HEIGHT = 1.4;
 
 /** Strichmuster in Einheiten; `undefined` = durchgezogen. */
 export const STROKE_DASH: Record<StrokeStyle, string | undefined> = {

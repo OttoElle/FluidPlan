@@ -86,22 +86,23 @@ export interface TitleCell extends Rect {
 
 /**
  * Aufteilung des Schriftfelds in mm (180 × 27, Zeilen 11 + 8 + 8). Enthält die
- * Pflichtangaben nach DIN EN ISO 7200: Eigentümer, Sachnummer, Titel,
- * Dokumentart, Erstellt von, Freigegeben von, Ausgabedatum, Blatt; dazu
- * Geprüft von, Änderungsstand und Format. „Blatt“ zeigt die Blattbenennung,
+ * Pflichtangaben nach DIN EN ISO 7200, Tabellen 1 bis 3: Gesetzlicher Eigentümer,
+ * Sachnummer, Ausgabedatum, Blattnummer, Titel, Genehmigt von, Erstellt durch,
+ * Dokumentenart; dazu optional Änderungsindex, Blattanzahl, Papierformat und
+ * Geprüft von (5.3.4: Prüfer dürfen im Schriftfeld stehen). „Blatt“ zeigt die Blattbenennung,
  * die Überschrift dazu die Blattnummer („Blatt 2 von 3“).
  */
 const TITLE_CELLS_MM: readonly (Omit<TitleCell, 'x' | 'y' | 'width' | 'height'> & { mm: [number, number, number, number] })[] = [
   { field: 'title', caption: 'Titel', big: true, mm: [0, 0, 110, 11] },
-  { field: 'drawingNumber', caption: 'Zeichnungsnummer', mm: [110, 0, 70, 11] },
-  { field: 'organization', caption: 'Firma / Abteilung', mm: [0, 11, 45, 8] },
-  { field: 'author', caption: 'Erstellt von', mm: [45, 11, 45, 8] },
+  { field: 'drawingNumber', caption: 'Sachnummer', mm: [110, 0, 70, 11] },
+  { field: 'organization', caption: 'Gesetzlicher Eigentümer', mm: [0, 11, 45, 8] },
+  { field: 'author', caption: 'Erstellt durch', mm: [45, 11, 45, 8] },
   { field: 'checkedBy', caption: 'Geprüft von', mm: [90, 11, 45, 8] },
-  { field: 'approvedBy', caption: 'Freigegeben von', mm: [135, 11, 45, 8] },
-  { field: 'documentType', caption: 'Dokumentart', mm: [0, 19, 45, 8] },
+  { field: 'approvedBy', caption: 'Genehmigt von', mm: [135, 11, 45, 8] },
+  { field: 'documentType', caption: 'Dokumentenart', mm: [0, 19, 45, 8] },
   { field: 'date', caption: 'Ausgabedatum', mm: [45, 19, 25, 8] },
-  { field: 'format', caption: 'Format', mm: [70, 19, 20, 8] },
-  { field: 'revision', caption: 'Änderungsstand', mm: [90, 19, 25, 8] },
+  { field: 'format', caption: 'Papierformat', mm: [70, 19, 20, 8] },
+  { field: 'revision', caption: 'Änderungsindex', mm: [90, 19, 25, 8] },
   { field: 'sheet', caption: 'Blatt', mm: [115, 19, 65, 8] },
 ];
 
@@ -126,11 +127,11 @@ export interface Segment {
 
 /** Rahmenmarken nach ISO 5457, in Einheiten. */
 export interface FrameMarks {
-  /** Mittenmarken: von der Blattkante bis 5 mm in die Zeichenfläche. */
+  /** Mittenmarken: von der Blattkante bis 10 mm in die Zeichenfläche (ISO 5457, 4.3). */
   centring: Segment[];
   /** Feldteilungsstriche im Rand, 5 mm lang vom Rahmen nach außen. */
   ticks: Segment[];
-  /** Feldbezeichnungen: Ziffern oben und unten, Buchstaben links und rechts. */
+  /** Feldbezeichnungen: Ziffern oben und unten, Buchstaben links und rechts; bei A4 nur oben und rechts (4.4). */
   labels: { x: number; y: number; text: string }[];
 }
 
@@ -139,15 +140,23 @@ const FIELD_MM = 50;
 /** Buchstaben für die Felder, ohne I und O (Verwechslung mit 1 und 0). */
 const FIELD_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
+/** Anzahl der Felder an der langen und kurzen Seite (ISO 5457, Tabelle 2). */
+const FIELD_COUNTS: Record<SheetFormat, { long: number; short: number }> = {
+  A4: { long: 6, short: 4 },
+  A3: { long: 8, short: 6 },
+  A2: { long: 12, short: 8 },
+  A1: { long: 16, short: 12 },
+};
+
 /**
- * Teilt eine Rahmenseite von der Blattmitte aus in 50-mm-Felder;
- * liefert die Teilungsstellen (ohne Rahmenecken) und die Feldmitten.
+ * Teilt eine Rahmenseite von der Blattmitte aus in `count` Felder zu 50 mm;
+ * der Rest fällt den Eckfeldern zu (ISO 5457, 4.4). Liefert die
+ * Teilungsstellen (ohne Rahmenecken) und die Feldmitten.
  */
-function fieldsAlong(start: number, end: number, middle: number): { cuts: number[]; centers: number[] } {
+function fieldsAlong(start: number, end: number, middle: number, count: number): { cuts: number[]; centers: number[] } {
   const step = FIELD_MM * UNITS_PER_MM;
   const cuts: number[] = [];
-  for (let p = middle; p > start + 1e-6; p -= step) cuts.unshift(p);
-  for (let p = middle + step; p < end - 1e-6; p += step) cuts.push(p);
+  for (let k = -(count / 2 - 1); k <= count / 2 - 1; k++) cuts.push(middle + k * step);
   const bounds = [start, ...cuts, end];
   return { cuts, centers: bounds.slice(1).map((b, i) => (bounds[i]! + b) / 2) };
 }
@@ -160,34 +169,42 @@ export function frameMarks(sheet: Sheet): FrameMarks {
   const right = a.x + a.width;
   const bottom = a.y + a.height;
   const inset = 5 * UNITS_PER_MM;
+  const centringInset = 10 * UNITS_PER_MM;
+  const allSides = sheet.format !== 'A4';
   const cx = width / 2;
   const cy = height / 2;
   const centring: Segment[] = [
-    { x1: cx, y1: 0, x2: cx, y2: a.y + inset },
+    { x1: cx, y1: 0, x2: cx, y2: a.y + centringInset },
     // Unten nicht ins Schriftfeld hinein.
-    { x1: cx, y1: height, x2: cx, y2: titleBlock(sheet).x < cx ? bottom : bottom - inset },
-    { x1: 0, y1: cy, x2: a.x + inset, y2: cy },
-    { x1: width, y1: cy, x2: right - inset, y2: cy },
+    { x1: cx, y1: height, x2: cx, y2: titleBlock(sheet).x < cx ? bottom : bottom - centringInset },
+    { x1: 0, y1: cy, x2: a.x + centringInset, y2: cy },
+    { x1: width, y1: cy, x2: right - centringInset, y2: cy },
   ];
-  const h = fieldsAlong(a.x, right, cx);
-  const v = fieldsAlong(a.y, bottom, cy);
+  const counts = FIELD_COUNTS[sheet.format];
+  const landscape = width > height;
+  const h = fieldsAlong(a.x, right, cx, landscape ? counts.long : counts.short);
+  const v = fieldsAlong(a.y, bottom, cy, landscape ? counts.short : counts.long);
   const ticks: Segment[] = [];
   const labels: FrameMarks['labels'] = [];
   for (const x of h.cuts) {
     if (Math.abs(x - cx) < 1e-6) continue;
-    ticks.push({ x1: x, y1: a.y, x2: x, y2: a.y - inset }, { x1: x, y1: bottom, x2: x, y2: bottom + inset });
+    ticks.push({ x1: x, y1: a.y, x2: x, y2: a.y - inset });
+    if (allSides) ticks.push({ x1: x, y1: bottom, x2: x, y2: bottom + inset });
   }
   for (const y of v.cuts) {
     if (Math.abs(y - cy) < 1e-6) continue;
-    ticks.push({ x1: a.x, y1: y, x2: a.x - inset, y2: y }, { x1: right, y1: y, x2: right + inset, y2: y });
+    ticks.push({ x1: right, y1: y, x2: right + inset, y2: y });
+    if (allSides) ticks.push({ x1: a.x, y1: y, x2: a.x - inset, y2: y });
   }
   // Beschriftung mittig im 10-mm-Rand, links ebenfalls 5 mm vor dem Rahmen.
   h.centers.forEach((x, i) => {
-    labels.push({ x, y: a.y - inset, text: String(i + 1) }, { x, y: bottom + inset, text: String(i + 1) });
+    labels.push({ x, y: a.y - inset, text: String(i + 1) });
+    if (allSides) labels.push({ x, y: bottom + inset, text: String(i + 1) });
   });
   v.centers.forEach((y, i) => {
     const text = FIELD_LETTERS[i] ?? '?';
-    labels.push({ x: a.x - inset, y, text }, { x: right + inset, y, text });
+    labels.push({ x: right + inset, y, text });
+    if (allSides) labels.push({ x: a.x - inset, y, text });
   });
   return { centring, ticks, labels };
 }
