@@ -17,7 +17,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { alignSelection, arrangeCount, distributeSelection, mirrorComponents, type Alignment } from '../model/arrange.ts';
-import { updateAnnotation } from '../model/annotations.ts';
+import { DEFAULT_LINE_WIDTH, LINE_WIDTHS, updateAnnotation } from '../model/annotations.ts';
+import { ColorPicker } from './ColorPicker.tsx';
 import { updateConnection } from '../model/diagram.ts';
 import { assignLayer, layerOf } from '../model/layers.ts';
 import { isEmpty, selectionCount, type Selection } from '../model/selection.ts';
@@ -76,6 +77,7 @@ export function ContextBar({
   const styledAnnotations = diagram.annotations.filter(
     (a): a is Extract<Annotation, { style: StrokeStyle }> => 'style' in a && current.annotations.includes(a.id),
   );
+  const common = <T,>(values: T[]) => (values.length > 0 && values.every((v) => v === values[0]) ? values[0] : undefined);
   const mirror = (axis: 'horizontal' | 'vertical') => edit((d) => mirrorComponents(d, selectedIds, axis));
   const align = (alignment: Alignment) => edit((d) => alignSelection(d, current, alignment));
   const distribute = (axis: 'horizontal' | 'vertical') => edit((d) => distributeSelection(d, current, axis));
@@ -85,12 +87,19 @@ export function ContextBar({
     edit((d) => selectedLines.reduce((acc, l) => updateConnection(acc, l.id, { kind }), d));
   const setStrokeStyle = (style: StrokeStyle) =>
     edit((d) => styledAnnotations.reduce((acc, a) => updateAnnotation(acc, a.id, { style }), d));
+  const setLineWidth = (lineWidth: number) =>
+    edit((d) => styledAnnotations.reduce((acc, a) => updateAnnotation(acc, a.id, { lineWidth }), d));
+  const selectedAnnotations = diagram.annotations.filter((a) => current.annotations.includes(a.id));
+  const setColor = (color: string | null) =>
+    edit((d) => selectedAnnotations.reduce((acc, a) => updateAnnotation(acc, a.id, { color }), d));
+  const colors = selectedAnnotations.map((a) => a.color);
+  const color = colors.every((c) => c === colors[0]) ? colors[0] : 'mixed';
+  const lineWidth = common(styledAnnotations.map((a) => a.lineWidth ?? DEFAULT_LINE_WIDTH));
   const selectedLayers = [
     ...diagram.components.filter((c) => current.components.includes(c.id)),
     ...selectedLines,
     ...diagram.annotations.filter((a) => current.annotations.includes(a.id)),
   ].map((x) => layerOf(layers, x).id);
-  const common = <T,>(values: T[]) => (values.length > 0 && values.every((v) => v === values[0]) ? values[0] : undefined);
 
   if (isEmpty(current)) return null;
   return (
@@ -148,6 +157,24 @@ export function ContextBar({
             value={common(styledAnnotations.map((a) => a.style))}
             onChange={setStrokeStyle}
           />
+          <select
+            aria-label="Linienbreite"
+            data-tooltip="Linienbreite nach ISO 128 (Symbole und Leitungen: 0,25 mm)"
+            value={lineWidth ?? ''}
+            onChange={(e) => setLineWidth(Number(e.target.value))}
+          >
+            {lineWidth === undefined && <option value="">Verschieden</option>}
+            {LINE_WIDTHS.map((w) => (
+              <option key={w} value={w}>
+                {String(w).replace('.', ',')} mm
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {selectedAnnotations.length > 0 && (
+        <div className="tool-group">
+          <ColorPicker value={color} onChange={setColor} />
         </div>
       )}
       {layers.length > 1 && selectionCount({ ...current, junctions: [] }) > 0 && (

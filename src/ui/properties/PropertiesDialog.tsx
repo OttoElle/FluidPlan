@@ -1,6 +1,7 @@
 import { Route } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { DEFAULT_TEXT_SIZE } from '../../model/annotations.ts';
+import { DEFAULT_LINE_WIDTH, DEFAULT_TEXT_SIZE, LINE_WIDTHS } from '../../model/annotations.ts';
+import { ColorPicker } from '../ColorPicker.tsx';
 import { updateAnnotation } from '../../model/annotations.ts';
 import { configureComponent, updateComponent, updateConnection } from '../../model/diagram.ts';
 import { DEFAULT_LAYER_ID } from '../../model/layers.ts';
@@ -226,14 +227,28 @@ function ConnectionProperties({ connection, diagram, ...rest }: BodyProps & { co
   );
 }
 
-const ANNOTATION_NAMES: Record<string, string> = { text: 'Text', line: 'Linie', rect: 'Rechteck' };
+const ANNOTATION_NAMES: Record<Annotation['kind'], string> = {
+  text: 'Text',
+  line: 'Linie',
+  rect: 'Rechteck',
+  circle: 'Kreis',
+  ellipse: 'Ellipse',
+  polyline: 'Linienzug',
+  arc: 'Kreisbogen',
+};
 
 function AnnotationProperties({ annotation, diagram, ...rest }: BodyProps & { annotation: Annotation }) {
   const [draft, setDraft] = useState<Annotation>(annotation);
-  const apply = () => updateAnnotation(diagram, annotation.id, draft);
+  // Fehlende Farbe bzw. Linienbreite heißt Standard: als null übergeben, damit sie entfällt.
+  const apply = () =>
+    updateAnnotation(diagram, annotation.id, {
+      ...draft,
+      color: draft.color ?? null,
+      lineWidth: draft.kind === 'text' ? undefined : (draft.lineWidth ?? null),
+    });
   return (
     <Frame apply={apply} {...rest}>
-      <h2>{ANNOTATION_NAMES[annotation.kind] ?? 'Grafik'}</h2>
+      <h2>{ANNOTATION_NAMES[annotation.kind]}</h2>
       <div className="tab-form">
         {draft.kind === 'text' && (
           <>
@@ -273,6 +288,25 @@ function AnnotationProperties({ annotation, diagram, ...rest }: BodyProps & { an
             />
           </div>
         )}
+        {draft.kind !== 'text' && (
+          <label className="field">
+            <span>Linienbreite</span>
+            <select
+              value={draft.lineWidth ?? DEFAULT_LINE_WIDTH}
+              onChange={(e) => setDraft({ ...draft, lineWidth: Number(e.target.value) })}
+            >
+              {LINE_WIDTHS.map((w) => (
+                <option key={w} value={w}>
+                  {String(w).replace('.', ',')} mm{w === DEFAULT_LINE_WIDTH ? ' (wie Symbole und Leitungen)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className="field">
+          <span>Farbe</span>
+          <ColorPicker inline value={draft.color} onChange={(color) => setDraft({ ...draft, color: color ?? undefined })} />
+        </div>
       </div>
     </Frame>
   );

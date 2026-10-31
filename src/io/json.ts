@@ -25,11 +25,12 @@ import { DEFAULT_DOCUMENT_TYPE } from '../model/diagram.ts';
 import { pruneGroups } from '../model/groups.ts';
 import { isObject, type Obj } from '../model/configRead.ts';
 import { contentOf, drawingOf, sheetView } from '../model/drawing.ts';
+import { isColor } from '../model/annotations.ts';
 
 /**
  * Dateiformat (.fluidplan.json):
  *
- *   { "format": "fluidplan", "version": 8, "drawing": { "meta", "sheets": [ ... ] } }
+ *   { "format": "fluidplan", "version": 9, "drawing": { "meta", "sheets": [ ... ] } }
  *
  * Bis Version 5 stand dort ein einzelner Schaltplan unter "diagram".
  * Seit Version 7 kann "drawing" Zeichnungsebenen ("layers") haben, und
@@ -37,12 +38,14 @@ import { contentOf, drawingOf, sheetView } from '../model/drawing.ts';
  * Seit Version 8 gibt es keine Hydraulik- und Pneumatik-Zeichnungen mehr:
  * Statt "drawing.domain" trägt jedes Bauteil sein Medium in "medium"
  * (siehe migrateMedium).
+ * Seit Version 9 gibt es Kreisbögen ("arc") und für freie Grafik und Text
+ * optional "lineWidth" (mm) und "color" (#rrggbb).
  *
  * `version` wird erhöht, sobald sich das Format inkompatibel ändert.
  * Ältere Versionen werden dann beim Laden in `migrate` hochgezogen.
  */
 const FILE_FORMAT = 'fluidplan';
-export const FILE_VERSION = 8;
+export const FILE_VERSION = 9;
 export const FILE_EXTENSION = '.fluidplan.json';
 
 interface FileEnvelope {
@@ -214,7 +217,7 @@ const LINE_KINDS: readonly LineKind[] = ['working', 'pilot', 'drain'];
 const SHEET_FORMAT_KEYS = Object.keys(SHEET_FORMATS) as SheetFormat[];
 const ORIENTATIONS: readonly Orientation[] = ['portrait', 'landscape'];
 const STROKE_STYLES: readonly StrokeStyle[] = ['solid', 'dashed', 'dashdot'];
-const ANNOTATION_KINDS: readonly Annotation['kind'][] = ['text', 'line', 'rect', 'circle', 'ellipse', 'polyline'];
+const ANNOTATION_KINDS: readonly Annotation['kind'][] = ['text', 'line', 'rect', 'circle', 'ellipse', 'polyline', 'arc'];
 
 function readDrawing(v: unknown, errors: string[]): Drawing | undefined {
   if (!isObject(v)) {
@@ -300,7 +303,25 @@ function readGroup(v: unknown, path: string, errors: string[]): Group | undefine
   return { id, components, connections, junctions, annotations };
 }
 
+/** Grafik samt optionaler Linienbreite und Farbe. */
 function readAnnotation(v: unknown, path: string, errors: string[]): Annotation | undefined {
+  const a = readAnnotationShape(v, path, errors);
+  if (!a || !isObject(v)) return a;
+  const look: { lineWidth?: number; color?: string } = {};
+  if (v.color !== undefined) {
+    if (isColor(v.color)) look.color = v.color;
+    else errors.push(`${path}.color: Farbe als #rrggbb erwartet`);
+  }
+  if (v.lineWidth !== undefined && a.kind !== 'text') {
+    const w = positive(v.lineWidth, `${path}.lineWidth`, errors);
+    if (w === undefined) return undefined;
+    look.lineWidth = w;
+  }
+  if (v.color !== undefined && !look.color) return undefined;
+  return { ...a, ...look };
+}
+
+function readAnnotationShape(v: unknown, path: string, errors: string[]): Annotation | undefined {
   if (!isObject(v)) {
     errors.push(`${path}: Objekt erwartet`);
     return undefined;
@@ -342,11 +363,31 @@ function readAnnotation(v: unknown, path: string, errors: string[]): Annotation 
     if (!points || points.length < 2 || closed === undefined || !style) return undefined;
     return { id, kind, points, closed, style };
   }
+  if (kind === 'arc') {
+    const center = point(v.center, `${path}.center`, errors);
+    const radius = positive(v.radius, `${path}.radius`, errors);
+    const start = finiteNumber(v.start, `${path}.start`, errors);
+    const sweep = finiteNumber(v.sweep, `${path}.sweep`, errors);
+    if (sweep !== undefined && (sweep === 0 || Math.abs(sweep) >= 360)) {
+      errors.push(`${path}.sweep: Winkel zwischen -360 und 360, nicht 0 erwartet`);
+      return undefined;
+    }
+    if (!center || radius === undefined || start === undefined || sweep === undefined || !style) return undefined;
+    return { id, kind, center, radius, start, sweep, style };
+  }
   const position = point(v.position, `${path}.position`, errors);
   const width = positive(v.width, `${path}.width`, errors);
   const height = positive(v.height, `${path}.height`, errors);
   if (!position || width === undefined || height === undefined || !style) return undefined;
   return { id, kind, position, width, height, style };
+}
+
+function finiteNumber(v: unknown, path: string, errors: string[]): number | undefined {
+  if (typeof v !== 'number' || !Number.isFinite(v)) {
+    errors.push(`${path}: Zahl erwartet`);
+    return undefined;
+  }
+  return v;
 }
 
 function positive(v: unknown, path: string, errors: string[]): number | undefined {

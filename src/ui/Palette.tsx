@@ -1,4 +1,4 @@
-import { Circle, Ellipse, Slash, SlidersHorizontal, Square, Type, Waypoints, type LucideIcon } from 'lucide-react';
+import { Circle, createLucideIcon, Ellipse, Slash, SlidersHorizontal, Square, Type, Waypoints, type LucideIcon } from 'lucide-react';
 import { MEDIUM_NAMES, PALETTE_GROUPS, type PaletteEntry } from '../model/library.ts';
 import type { Domain } from '../model/types.ts';
 import { SYMBOL_DRAG_TYPE, type AnnotationTool } from './DiagramView.tsx';
@@ -6,12 +6,19 @@ import { IconButton } from './IconButton.tsx';
 import { useOpenCatalogs } from './layout.ts';
 import { SymbolPreview } from './SymbolPreview.tsx';
 
+/** Kreisbogen mit Mittelpunkt, im Stil der übrigen Werkzeug-Icons. */
+const Arc = createLucideIcon('FluidPlanArc', [
+  ['path', { d: 'M4 16a8 8 0 0 1 16 0', key: 'arc' }],
+  ['circle', { cx: '12', cy: '16', r: '1', key: 'center' }],
+]);
+
 const TOOLS: [AnnotationTool, LucideIcon, string][] = [
   ['text', Type, 'Text: Klick auf das Blatt setzt einen Text'],
   ['line', Slash, 'Linie auf dem Blatt aufziehen'],
   ['rect', Square, 'Rechteck aufziehen, z. B. als Baugruppen-Umrandung'],
   ['circle', Circle, 'Kreis vom Mittelpunkt aus aufziehen'],
   ['ellipse', Ellipse, 'Ellipse aufziehen'],
+  ['arc', Arc, 'Kreisbogen: Mittelpunkt, Anfang und Ende anklicken; die Maus gibt die Richtung vor (im oder gegen den Uhrzeigersinn)'],
   ['polyline', Waypoints, 'Linienzug: Punkte anklicken; Doppelklick, Enter oder Rechtsklick beendet, Klick auf den ersten Punkt schließt ihn'],
 ];
 

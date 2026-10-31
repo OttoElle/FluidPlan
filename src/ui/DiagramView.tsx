@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { endpointPosition, sameEndpoint } from '../model/diagram.ts';
-import { annotationBox, type NewAnnotation } from '../model/annotations.ts';
+import { angleOf, annotationBox, arcFromPoints, normalizeAngle, type NewAnnotation } from '../model/annotations.ts';
 import { MM_PER_UNIT, sheetSize, type TitleField } from '../model/sheet.ts';
 import {
   GRID,
@@ -39,7 +39,7 @@ import { useViewSettings } from './canvas/viewSettings.ts';
 export type { Selection };
 
 /** Zeichenwerkzeug für freie Grafik; `null` = Auswählen. */
-export type AnnotationTool = 'text' | 'line' | 'rect' | 'circle' | 'ellipse' | 'polyline';
+export type AnnotationTool = 'text' | 'line' | 'rect' | 'circle' | 'ellipse' | 'polyline' | 'arc';
 
 /** Was beim Verschieben mitwandert. */
 export type MoveTarget = Pick<Selection, 'components' | 'annotations'>;
@@ -169,6 +169,12 @@ export function DiagramView({
   const [creating, setCreating] = useState<{ tool: DragTool; start: Point; end: Point } | null>(null);
   /** Linienzug, der gerade Punkt für Punkt gezeichnet wird. */
   const [poly, setPoly] = useState<{ points: Point[]; cursor: Point } | null>(null);
+  /**
+   * Kreisbogen im Entstehen: erst Mittelpunkt, dann Anfang (Radius), dann Ende.
+   * `turn` zählt, wie weit die Maus seit dem Anfang um den Mittelpunkt gewandert
+   * ist (positiv = im Uhrzeigersinn); daraus folgt die Drehrichtung.
+   */
+  const [arc, setArc] = useState<{ center: Point; from: Point | null; cursor: Point; turn: number; last: number } | null>(null);
   /** Wo der nächste Punkt einrasten würde (Anzeige beim Zeichnen). */
   const [snapMark, setSnapMark] = useState<{ point: Point; kind: SnapKind | null } | null>(null);
   const [settings, changeSettings] = useViewSettings();
@@ -176,6 +182,7 @@ export function DiagramView({
   // Werkzeugwechsel verwirft einen angefangenen Linienzug.
   useEffect(() => {
     setPoly(null);
+    setArc(null);
     setSnapMark(null);
   }, [tool]);
 
@@ -243,6 +250,32 @@ export function DiagramView({
     setPoly(null);
     if (clean.length >= 2) onCreateAnnotation?.({ kind: 'polyline', points: clean, closed: closed && clean.length >= 3, style: 'solid' });
   };
+
+  /** Bogen aus dem Stand beim Zeichnen; ohne Mausbewegung gegen den Uhrzeigersinn. */
+  const arcOf = (a: NonNullable<typeof arc>) => (a.from ? arcFromPoints(a.center, a.from, a.cursor, a.turn > 0) : null);
+
+  /** Nächste Mausposition beim Bogen: zählt die Drehung um den Mittelpunkt mit. */
+  const arcMoved = (a: NonNullable<typeof arc>, cursor: Point) => {
+    if (!a.from || (cursor.x === a.center.x && cursor.y === a.center.y)) return { ...a, cursor };
+    const angle = angleOf(a.center, cursor);
+    return { ...a, cursor, turn: a.turn + normalizeAngle(angle - a.last), last: angle };
+  };
+
+  // Kreisbogen: Esc bricht ab, Rücktaste nimmt den letzten Punkt zurück.
+  useEffect(() => {
+    if (!arc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+      if (e.key === 'Escape') setArc(null);
+      else if (e.key === 'Backspace') {
+        e.preventDefault();
+        setArc(arc.from ? { ...arc, from: null, turn: 0 } : null);
+      } else return;
+      e.stopImmediatePropagation();
+    };
+    window.addEventListener('keydown', onKey, { capture: true });
+    return () => window.removeEventListener('keydown', onKey, { capture: true });
+  });
 
   // Linienzug: Enter beendet, Esc bricht ab, Rücktaste nimmt den letzten Punkt zurück.
   useEffect(() => {
@@ -419,6 +452,21 @@ export function DiagramView({
               return;
             }
             const p = snapFree(toDiagram(e)).point;
+            if (tool === 'arc') {
+              if (!arc) setArc({ center: p, from: null, cursor: p, turn: 0, last: 0 });
+              else if (!arc.from) {
+                if (p.x !== arc.center.x || p.y !== arc.center.y) {
+                  setArc({ ...arc, from: p, cursor: p, turn: 0, last: angleOf(arc.center, p) });
+                }
+              } else {
+                const shape = arcOf(arcMoved(arc, p));
+                if (shape) {
+                  setArc(null);
+                  onCreateAnnotation?.({ kind: 'arc', ...shape, style: 'solid' });
+                }
+              }
+              return;
+            }
             if (tool === 'text') {
               onCreateAnnotation?.({ kind: 'text', position: p, text: 'Text', size: 14 });
               return;
@@ -443,6 +491,11 @@ export function DiagramView({
             e.preventDefault();
             finishPoly(poly.points, false);
           }
+          // Rechtsklick bricht einen angefangenen Bogen ab.
+          if (arc) {
+            e.preventDefault();
+            setArc(null);
+          }
         }}
         onDoubleClick={() => poly && finishPoly(poly.points, false)}
         onPointerLeave={() => {
@@ -458,6 +511,7 @@ export function DiagramView({
             const mark = snapFree(toDiagram(e), poly ? polyTargets(poly.points) : targets);
             setSnapMark(mark);
             if (poly) setPoly({ ...poly, cursor: mark.point });
+            if (arc) setArc(arcMoved(arc, mark.point));
           }
           if (!d) return;
           if (d.kind === 'segment') {
@@ -784,6 +838,7 @@ export function DiagramView({
         {poly && (
           <polyline className="note-line creating" points={toPoints([...poly.points, poly.cursor])} />
         )}
+        {arc && <ArcPreview arc={arc} shape={arcOf(arc)} />}
         <GroupFrames diagram={diagram} selection={selection} paths={paths} />
         {snapMark && snapMark.kind !== 'grid' && snapMark.kind !== null && (
           <circle
@@ -860,3 +915,22 @@ export function DiagramView({
   );
 }
 
+
+/** Vorschau beim Zeichnen eines Bogens: Radius als Hilfslinie, dann der Bogen selbst. */
+function ArcPreview({
+  arc,
+  shape,
+}: {
+  arc: { center: Point; from: Point | null; cursor: Point };
+  shape: ReturnType<typeof arcFromPoints>;
+}) {
+  const to = arc.from ?? arc.cursor;
+  return (
+    <g className="creating arc-preview">
+      <line className="arc-guide" x1={arc.center.x} y1={arc.center.y} x2={to.x} y2={to.y} />
+      {arc.from && <line className="arc-guide" x1={arc.center.x} y1={arc.center.y} x2={arc.cursor.x} y2={arc.cursor.y} />}
+      <circle className="arc-center" cx={arc.center.x} cy={arc.center.y} r={2} />
+      {shape && <AnnotationShape annotation={{ id: 'creating', kind: 'arc', ...shape, style: 'solid' }} />}
+    </g>
+  );
+}

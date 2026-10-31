@@ -218,8 +218,18 @@ export interface Sheet {
  */
 export type StrokeStyle = 'solid' | 'dashed' | 'dashdot';
 
+/**
+ * Darstellung freier Grafik und freien Texts, beides optional.
+ * `lineWidth`: Linienbreite in mm aus der Reihe nach ISO 128 (siehe LINE_WIDTHS), fehlt = 0,25 mm.
+ * `color`: Farbe als #rrggbb, fehlt = Zeichenfarbe (schwarz, im dunklen Modus hell).
+ */
+export interface AnnotationLook {
+  lineWidth?: number;
+  color?: string;
+}
+
 /** Freier Text; `position` ist der linke Rand der Grundlinie der ersten Zeile. */
-export interface TextAnnotation {
+export interface TextAnnotation extends Pick<AnnotationLook, 'color'> {
   id: string;
   kind: 'text';
   /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
@@ -231,7 +241,7 @@ export interface TextAnnotation {
   size: number;
 }
 
-export interface LineAnnotation {
+export interface LineAnnotation extends AnnotationLook {
   id: string;
   kind: 'line';
   /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
@@ -241,7 +251,7 @@ export interface LineAnnotation {
   style: StrokeStyle;
 }
 
-export interface RectAnnotation {
+export interface RectAnnotation extends AnnotationLook {
   id: string;
   kind: 'rect';
   /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
@@ -253,7 +263,7 @@ export interface RectAnnotation {
   style: StrokeStyle;
 }
 
-export interface CircleAnnotation {
+export interface CircleAnnotation extends AnnotationLook {
   id: string;
   kind: 'circle';
   /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
@@ -263,7 +273,7 @@ export interface CircleAnnotation {
   style: StrokeStyle;
 }
 
-export interface EllipseAnnotation {
+export interface EllipseAnnotation extends AnnotationLook {
   id: string;
   kind: 'ellipse';
   /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
@@ -276,13 +286,30 @@ export interface EllipseAnnotation {
 }
 
 /** Linienzug durch mindestens zwei Punkte; `closed` verbindet den letzten mit dem ersten. */
-export interface PolylineAnnotation {
+export interface PolylineAnnotation extends AnnotationLook {
   id: string;
   kind: 'polyline';
   /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
   layer?: string;
   points: Point[];
   closed: boolean;
+  style: StrokeStyle;
+}
+
+/**
+ * Kreisbogen um `center`. Winkel in Grad wie auf dem Bildschirm: 0° zeigt nach
+ * rechts, positive Winkel drehen im Uhrzeigersinn. `sweep` ist die Bogenlänge
+ * mit Richtung (positiv = im Uhrzeigersinn), 0 < |sweep| < 360.
+ */
+export interface ArcAnnotation extends AnnotationLook {
+  id: string;
+  kind: 'arc';
+  /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
+  layer?: string;
+  center: Point;
+  radius: number;
+  start: number;
+  sweep: number;
   style: StrokeStyle;
 }
 
@@ -296,7 +323,8 @@ export type Annotation =
   | RectAnnotation
   | CircleAnnotation
   | EllipseAnnotation
-  | PolylineAnnotation;
+  | PolylineAnnotation
+  | ArcAnnotation;
 
 /**
  * Gruppe: Teile, die zusammen ausgewählt und verschoben werden.

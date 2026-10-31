@@ -63,7 +63,7 @@ describe('JSON speichern und laden', () => {
       }),
     );
     expect(errors).toContain('drawing.sheets[0].annotations[0].width: positive Zahl erwartet');
-    expect(errors).toContain('drawing.sheets[0].annotations[1].kind: einer von "text", "line", "rect", "circle", "ellipse", "polyline" erwartet');
+    expect(errors).toContain('drawing.sheets[0].annotations[1].kind: einer von "text", "line", "rect", "circle", "ellipse", "polyline", "arc" erwartet');
   });
 
   it('schreibt Format und Version in die Datei', () => {

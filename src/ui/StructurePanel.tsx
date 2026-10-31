@@ -116,6 +116,7 @@ const ANNOTATION_NAMES: Record<Annotation['kind'], string> = {
   circle: 'Kreis',
   ellipse: 'Ellipse',
   polyline: 'Linienzug',
+  arc: 'Kreisbogen',
 };
 
 function annotationName(a: Annotation): string {

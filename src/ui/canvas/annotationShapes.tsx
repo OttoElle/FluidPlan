@@ -1,5 +1,19 @@
 import { fontSizeFor } from '../../model/lettering.ts';
-import { LINE_HEIGHT, STROKE_DASH, annotationBox, rectFromCorners, textLines, type NewAnnotation } from '../../model/annotations.ts';
+import {
+  LINE_HEIGHT,
+  angleOf,
+  annotationBox,
+  arcEnd,
+  arcPath,
+  arcPoint,
+  arcStart,
+  rectFromCorners,
+  strokeDash,
+  strokeWidthOf,
+  sweepBetween,
+  textLines,
+  type NewAnnotation,
+} from '../../model/annotations.ts';
 import type { Annotation, Point } from '../../model/types.ts';
 
 /** Werkzeuge, deren Form durch Aufziehen entsteht. */
@@ -7,9 +21,10 @@ export type DragTool = 'line' | 'rect' | 'circle' | 'ellipse';
 
 /**
  * Anfasser einer Linie (Anfang, Ende), eines Rechtecks bzw. einer Ellipse (Ecken des
- * Umrisses), eines Kreises (Radius) oder eines Linienzugs (Nummer des Punkts).
+ * Umrisses), eines Kreises (Radius), eines Kreisbogens (Anfang, Ende, Radius in der
+ * Bogenmitte) oder eines Linienzugs (Nummer des Punkts).
  */
-export type Handle = 'from' | 'to' | 'nw' | 'ne' | 'sw' | 'se' | 'radius' | number;
+export type Handle = 'from' | 'to' | 'nw' | 'ne' | 'sw' | 'se' | 'radius' | 'start' | 'end' | number;
 
 /** Größe der Formen, wenn nur geklickt statt gezogen wird. */
 const DEFAULT_LINE = 100;
@@ -82,6 +97,13 @@ function handlesOf(a: Annotation): [Handle, Point][] {
   if (a.kind === 'line') return [['from', a.from], ['to', a.to]];
   if (a.kind === 'circle') return [['radius', { x: a.center.x + a.radius, y: a.center.y }]];
   if (a.kind === 'polyline') return a.points.map((p, i) => [i, p]);
+  if (a.kind === 'arc') {
+    return [
+      ['start', arcStart(a)],
+      ['end', arcEnd(a)],
+      ['radius', arcPoint(a, a.start + a.sweep / 2)],
+    ];
+  }
   const box = outline(a);
   return box ? CORNERS.map((h) => [h, corner(box, h)]) : [];
 }
@@ -92,6 +114,19 @@ export function reshape(a: Annotation, handle: Handle, to: Point): Partial<Annot
   if (a.kind === 'circle') {
     const radius = Math.round(Math.hypot(to.x - a.center.x, to.y - a.center.y));
     return radius > 0 ? { radius } : {};
+  }
+  if (a.kind === 'arc') {
+    if (handle === 'radius') {
+      const radius = Math.round(Math.hypot(to.x - a.center.x, to.y - a.center.y) * 100) / 100;
+      return radius > 0 ? { radius } : {};
+    }
+    if (to.x === a.center.x && to.y === a.center.y) return {};
+    // Ein Ende wandert auf dem Kreis, das andere bleibt, die Drehrichtung auch.
+    const angle = Math.round(angleOf(a.center, to) * 1000) / 1000;
+    const end = a.start + a.sweep;
+    const sweep = handle === 'start' ? sweepBetween(angle, end, a.sweep > 0) : sweepBetween(a.start, angle, a.sweep > 0);
+    if (sweep === 0) return {};
+    return handle === 'start' ? { start: angle, sweep } : { sweep };
   }
   if (a.kind === 'polyline' && typeof handle === 'number') {
     return { points: a.points.map((p, i) => (i === handle ? to : p)) };
@@ -122,12 +157,19 @@ export function AnnotationShape({
   onPointerDown?: (e: React.PointerEvent<SVGGElement>) => void;
   onHandlePointerDown?: (handle: Handle, origin: Point, e: React.PointerEvent) => void;
 }) {
-  const dash = 'style' in a ? STROKE_DASH[a.style] : undefined;
+  const width = a.kind === 'text' ? undefined : strokeWidthOf(a);
+  const dash = a.kind === 'text' ? undefined : strokeDash(a.style, a.lineWidth);
+  // Als Inline-Stil, damit er Stylesheet und Druckdarstellung (export.ts) übersteuert.
+  const look: React.CSSProperties = {};
+  if (a.color) look[a.kind === 'text' ? 'fill' : 'stroke'] = a.color;
+  if (a.kind !== 'text' && a.lineWidth !== undefined) look.strokeWidth = width;
   /** Unsichtbare breite Kontur zum Anklicken und die sichtbare Linie. */
-  const stroke = (el: (props: { className: string; strokeDasharray?: string }) => React.ReactNode) => (
+  const stroke = (
+    el: (props: { className: string; strokeDasharray?: string; style?: React.CSSProperties }) => React.ReactNode,
+  ) => (
     <>
       {el({ className: 'stroke-hit' })}
-      {el({ className: 'note-line', strokeDasharray: dash })}
+      {el({ className: 'note-line', strokeDasharray: dash, style: look })}
     </>
   );
   let shape: React.ReactNode;
@@ -136,7 +178,7 @@ export function AnnotationShape({
     shape = (
       <>
         <rect x={box.minX} y={box.minY} width={box.maxX - box.minX} height={box.maxY - box.minY} className="hit" />
-        <text className="note" x={a.position.x} y={a.position.y} fontSize={fontSizeFor(a.size)}>
+        <text className="note" x={a.position.x} y={a.position.y} fontSize={fontSizeFor(a.size)} style={look}>
           {textLines(a).map((line, i) => (
             <tspan key={i} x={a.position.x} dy={i === 0 ? 0 : fontSizeFor(a.size) * LINE_HEIGHT}>
               {/* Leere Zeilen brauchen Inhalt, sonst zählt dy nicht. */}
@@ -154,6 +196,8 @@ export function AnnotationShape({
     shape = stroke((p) => <circle {...p} cx={a.center.x} cy={a.center.y} r={a.radius} />);
   } else if (a.kind === 'ellipse') {
     shape = stroke((p) => <ellipse {...p} cx={a.center.x} cy={a.center.y} rx={a.rx} ry={a.ry} />);
+  } else if (a.kind === 'arc') {
+    shape = stroke((p) => <path {...p} d={arcPath(a)} />);
   } else {
     const points = toPoints(a.points);
     shape = stroke((p) => (a.closed ? <polygon {...p} points={points} /> : <polyline {...p} points={points} />));

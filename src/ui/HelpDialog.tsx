@@ -11,6 +11,7 @@ const MOUSE: [string, string][] = [
   ['Kennzeichen oder Anschlussname ziehen', 'Beschriftung verschieben, rastet im halben Raster; Alt = frei, Doppelklick = zurück'],
   ['Mausrad', 'Zoomen'],
   ['Mittlere Taste / Leertaste+Ziehen', 'Ansicht verschieben'],
+  ['Kreisbogen-Werkzeug', 'Mittelpunkt, Anfang und Ende anklicken; wie die Maus um den Mittelpunkt läuft, so dreht der Bogen (Rücktaste: Schritt zurück, Rechtsklick/Esc: abbrechen)'],
   ['Linienzug-Werkzeug', 'Punkte anklicken; Doppelklick oder Rechtsklick beendet, Klick auf den ersten Punkt schließt'],
   ['Alt beim Zeichnen', 'Text und Grafik frei setzen, ohne Fangen an Raster, Anschluss und Endpunkt'],
   ['Leiste unten links', 'Raster ein/aus'],
