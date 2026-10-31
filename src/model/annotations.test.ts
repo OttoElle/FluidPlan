@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { fontSizeFor } from './lettering.ts';
 import { addAnnotation, annotationBox, moveAnnotations, rectFromCorners, updateAnnotation } from './annotations.ts';
 import { createDiagram } from './diagram.ts';
 import { deleteSelected, selectAll } from './selection.ts';
@@ -27,7 +28,7 @@ describe('Text und Grafik', () => {
     const { annotation } = addAnnotation(empty, { kind: 'text', position: { x: 0, y: 20 }, text: 'abcde\nx', size: 20 });
     const box = annotationBox(annotation);
     // Größe 20 = 5 mm Versalhöhe, gezeichnet mit rund 7 mm Schriftgröße.
-    expect(box.maxX).toBeCloseTo(5 * 0.6 * (20 / 0.716), 1);
+    expect(box.maxX).toBeCloseTo(5 * 0.6 * fontSizeFor(20), 1);
     expect(box.maxY).toBeGreaterThan(40);
   });
 

@@ -1,3 +1,10 @@
+/* Schrift nach ISO 3098 für alle Texte auf dem Blatt (siehe fonts/README.md). */
+@font-face {
+  font-family: 'osifont';
+  src: url('./fonts/osifont.ttf') format('truetype');
+  font-display: block;
+}
+
 :root {
   --bg: #f6f7f9;
   --panel: #ffffff;
@@ -15,6 +22,7 @@
   --shadow: 0 4px 16px rgb(0 0 0 / 0.12);
   color-scheme: light;
   font-family: system-ui, sans-serif;
+  --drawing-font: osifont, Arial, Helvetica, sans-serif;
   color: var(--text);
   background: var(--bg);
 }
@@ -140,6 +148,7 @@ button:hover { border-color: var(--accent); }
 .sheet-frame line { stroke: var(--frame); stroke-width: 1; }
 .sheet-frame text { fill: var(--text); }
 .sheet-frame .caption { fill: var(--muted); }
+svg.diagram text, .symbol-preview text { font-family: var(--drawing-font); }
 
 .zoom-controls {
   position: absolute;

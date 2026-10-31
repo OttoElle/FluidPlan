@@ -1,4 +1,6 @@
+import { DRAWING_FONT } from '../model/lettering.ts';
 import { SHEET_FORMATS, sheetSize } from '../model/sheet.ts';
+import fontUrl from '../ui/fonts/osifont.ttf?url';
 import type { Diagram } from '../model/types.ts';
 import { downloadBlob, fileNameFor } from './browser.ts';
 
@@ -26,7 +28,35 @@ export interface ExportOptions {
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = { portLabels: true, dpi: 300, sheets: 'all' };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const FONT = 'Arial, Helvetica, sans-serif';
+const FONT = DRAWING_FONT;
+/** Name der eingebetteten Schrift; erster Eintrag in DRAWING_FONT. */
+const FONT_NAME = 'osifont';
+
+let fontData: Promise<string> | undefined;
+
+/** osifont als Base64, einmal geladen; wird in SVG, PNG und PDF eingebettet. */
+function loadFont(): Promise<string> {
+  fontData ??= fetch(fontUrl)
+    .then((r) => {
+      if (!r.ok) throw new Error(`Schrift nicht geladen (${r.status})`);
+      return r.arrayBuffer();
+    })
+    .then((buffer) => {
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return btoa(binary);
+    });
+  fontData.catch(() => (fontData = undefined));
+  return fontData;
+}
+
+/** Bettet die Schrift als @font-face ein, damit SVG und PNG auch ohne installierte Schrift stimmen. */
+function embedFont(svg: SVGSVGElement, base64: string): void {
+  const style = document.createElementNS(SVG_NS, 'style');
+  style.textContent = `@font-face{font-family:'${FONT_NAME}';src:url(data:font/ttf;base64,${base64}) format('truetype');}`;
+  svg.insertBefore(style, svg.querySelector('title')?.nextSibling ?? svg.firstChild);
+}
 
 /** Darstellung für den Druck, in derselben Reihenfolge wie im Stylesheet. */
 const PRINT_STYLE: [selector: string, attributes: Record<string, string>][] = [
@@ -123,11 +153,14 @@ export async function exportSheets(
   options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
 ): Promise<void> {
   const svgs = drawn.map((live, i) => printableSvg(live, diagrams[i]!, options));
+  // Ohne Schrift (z. B. offline ohne Cache) wird mit Arial exportiert.
+  const font = await loadFont().catch(() => undefined);
   const title = diagrams[0]!.meta.title;
   if (format === 'pdf') {
-    downloadBlob(await renderPdf(svgs, diagrams), fileNameFor(title, '.pdf'));
+    downloadBlob(await renderPdf(svgs, diagrams, font), fileNameFor(title, '.pdf'));
     return;
   }
+  if (font) for (const svg of svgs) embedFont(svg, font);
   for (const [i, svg] of svgs.entries()) {
     const d = diagrams[i]!;
     // Bei mehreren Dateien die Blattnummer anhängen, damit die Namen verschieden sind.
@@ -170,7 +203,7 @@ async function renderPng(svg: SVGSVGElement, diagram: Diagram, dpi: number): Pro
  * Vektor-PDF mit einer Seite je Blatt, jede im Format ihres Blatts.
  * Die Bibliotheken werden erst hier geladen.
  */
-async function renderPdf(svgs: SVGSVGElement[], diagrams: Diagram[]): Promise<Blob> {
+async function renderPdf(svgs: SVGSVGElement[], diagrams: Diagram[], font: string | undefined): Promise<Blob> {
   const [{ jsPDF }, { svg2pdf }] = await Promise.all([import('jspdf'), import('svg2pdf.js')]);
   const pageOf = (d: Diagram) => {
     const mm = paperSizeMm(d);
@@ -180,6 +213,10 @@ async function renderPdf(svgs: SVGSVGElement[], diagrams: Diagram[]): Promise<Bl
   const doc = new jsPDF({ unit: 'mm', format: [first.mm.width, first.mm.height], orientation: first.orientation, compress: true });
   const { meta } = diagrams[0]!;
   doc.setProperties({ title: meta.title, author: meta.author, creator: 'FluidPlan' });
+  if (font) {
+    doc.addFileToVFS(`${FONT_NAME}.ttf`, font);
+    doc.addFont(`${FONT_NAME}.ttf`, FONT_NAME, 'normal');
+  }
   // svg2pdf liest Maße und Schrift aus dem Dokument; vorübergehend unsichtbar einhängen.
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-10000px;top:0;visibility:hidden';

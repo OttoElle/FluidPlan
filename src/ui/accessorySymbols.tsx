@@ -1,3 +1,4 @@
+import { DRAWING_FONT } from '../model/lettering.ts';
 import { ballValveLayout, BORES, PORT_DISTANCE, SIDE_DIR, SIDES, type BallValveConfig, type Side } from '../model/ballValve.ts';
 import type { CouplingConfig } from '../model/coupling.ts';
 import { QUANTITY_LETTER, sensorLayout, type SensorConfig } from '../model/sensor.ts';
@@ -174,7 +175,7 @@ function Converter({ x, y, letter, output }: { x: number; y: number; letter: str
     <>
       <rect x={x} y={y} width={4} height={4} />
       <line x1={x} y1={y} x2={x + 4} y2={y + 4} />
-      <text x={x + 1.1} y={y + 2.9} className="fill" stroke="none" fontSize={1.8} fontFamily="Arial, Helvetica, sans-serif" textAnchor="middle" dominantBaseline="central">
+      <text x={x + 1.1} y={y + 2.9} className="fill" stroke="none" fontSize={1.8} fontFamily={DRAWING_FONT} textAnchor="middle" dominantBaseline="central">
         {letter}
       </text>
       {output === 'switching' ? (
