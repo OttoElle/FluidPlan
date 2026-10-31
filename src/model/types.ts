@@ -9,6 +9,7 @@
  * Konfigurierbare Bauteile tragen zusätzlich ihre Einstellungen (`config`).
  */
 
+import type { ManifoldConfig, PressureConverterConfig, PrimeMoverConfig, SwivelConfig } from './actuators.ts';
 import type { BallValveConfig } from './ballValve.ts';
 import type { CouplingConfig } from './coupling.ts';
 import type { CylinderConfig } from './cylinder.ts';
@@ -91,7 +92,11 @@ export type ComponentConfig =
   | FilterConfig
   | CoolerConfig
   | InstrumentConfig
-  | IndicatorConfig;
+  | IndicatorConfig
+  | SwivelConfig
+  | PressureConverterConfig
+  | PrimeMoverConfig
+  | ManifoldConfig;
 
 /** Ein im Schaltplan platziertes Bauteil. */
 export interface ComponentInstance {

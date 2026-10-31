@@ -20,12 +20,15 @@ import { ACTUATOR_NAMES, ACTUATOR_WIDTH, upgradeActuator, type Actuator } from '
  * verschoben, dass die Anschlüsse auf dem 2M-Raster liegen.
  */
 
-export type CylinderDesign = 'piston' | 'plunger' | 'telescopic';
+export type CylinderDesign = 'piston' | 'diaphragm' | 'plunger' | 'telescopic';
 export type CylinderAction = 'double' | 'single';
-export type CylinderRod = 'single' | 'through';
+/** rodless = kolbenstangenlos, magnetisch gekoppelt (Beispiel 6.3.11). */
+export type CylinderRod = 'single' | 'through' | 'rodless';
 /** rod = Feder im Stangenraum (drückend, Rückstellung), piston = im Kolbenraum (ziehend). */
 export type CylinderSpring = 'none' | 'rod' | 'piston';
 export type Cushion = 'none' | 'fixed' | 'adjustable';
+/** Endschalter (8.4.7, Beispiele 6.3.11/6.3.13) über der linken bzw. rechten Ecke des Rahmens. */
+export type LimitSwitch = 'none' | 'left' | 'right' | 'both';
 /** Betätigung am Ende der Kolbenstange (z. B. Pedal am Geberzylinder). */
 export type RodActuator = 'none' | Extract<Actuator, 'push' | 'pull' | 'lever' | 'pedal' | 'roller' | 'plunger'>;
 
@@ -46,20 +49,34 @@ export interface CylinderConfig {
   rodActuator: RodActuator;
   /** Federraum mit Anschluss (Beispiel 6.3.1), nur einfachwirkend mit Feder; fehlt in älteren Dateien. */
   springPort: boolean;
+  /** Endschalter; fehlt in älteren Dateien (dann keine). */
+  limitSwitch: LimitSwitch;
+  /** Entlüftung ohne Anschlussmöglichkeit am Raum ohne Anschluss (Beispiel 6.3.5); fehlt in älteren Dateien. */
+  vent: boolean;
+  /** Hubbegrenzung, voreingestellt (Beispiel 6.3.4), nur Membranzylinder; fehlt in älteren Dateien. */
+  strokeLimiter: boolean;
 }
 
 export const DESIGN_NAMES: Record<CylinderDesign, string> = {
   piston: 'Kolbenzylinder',
+  diaphragm: 'Membranzylinder',
   plunger: 'Plungerzylinder',
   telescopic: 'Teleskopzylinder',
 };
-const ACTION_NAMES: Record<CylinderAction, string> = {
+export const ACTION_NAMES: Record<CylinderAction, string> = {
   double: 'Doppeltwirkend',
   single: 'Einfachwirkend',
 };
 export const ROD_NAMES: Record<CylinderRod, string> = {
   single: 'Einseitige Kolbenstange',
   through: 'Durchgehende Kolbenstange',
+  rodless: 'Kolbenstangenlos, magnetisch gekoppelt',
+};
+export const LIMIT_SWITCH_NAMES: Record<LimitSwitch, string> = {
+  none: 'Keine',
+  left: 'Links',
+  right: 'Rechts',
+  both: 'Beide Seiten',
 };
 const SPRING_NAMES: Record<CylinderSpring, string> = {
   none: 'Ohne Feder (Rückhub durch Last)',
@@ -95,17 +112,63 @@ export function defaultCylinderConfig(action: CylinderAction = 'double', design:
     stroke: 0,
     rodActuator: 'none',
     springPort: false,
+    limitSwitch: 'none',
+    vent: false,
+    strokeLimiter: false,
   });
+}
+
+/** Hat der Zylinder den kolbenseitigen (A) bzw. stangenseitigen (B) Anschluss? */
+export function cylinderPorts(config: CylinderConfig) {
+  if (config.action === 'double') return { a: true, b: true };
+  return {
+    a: config.spring !== 'piston' || config.springPort,
+    b: config.spring === 'piston' || config.springPort,
+  };
+}
+
+/** Kann der Raum ohne Anschluss eine Entlüftung haben (einfachwirkender Kolben- oder Membranzylinder)? */
+export function canVent(config: CylinderConfig) {
+  const { a, b } = cylinderPorts(config);
+  return (config.design === 'piston' || config.design === 'diaphragm') && !(a && b);
 }
 
 /** Hält die Einstellungen zueinander passend (z. B. Plunger immer einfachwirkend). */
 export function normalizeCylinder(config: CylinderConfig): CylinderConfig {
   const stroke = Math.round(Math.min(100, Math.max(0, config.stroke)));
-  if (config.design === 'piston') {
-    const spring = config.action === 'double' ? 'none' : config.spring;
-    return { ...config, stroke, spring, springPort: spring !== 'none' && config.springPort === true };
+  const limitSwitch = config.limitSwitch ?? 'none';
+  if (config.design === 'piston' || config.design === 'diaphragm') {
+    const diaphragm = config.design === 'diaphragm';
+    // Kolbenstangenlos: immer doppeltwirkend, ohne Betätigung am Stangenende
+    const rodless = !diaphragm && config.rod === 'rodless';
+    const action = rodless ? 'double' : config.action;
+    // Einfachwirkender Membranzylinder hat immer eine Feder (Beispiel 6.3.5)
+    let spring = action === 'double' ? 'none' : config.spring;
+    if (diaphragm && action === 'single' && spring === 'none') spring = 'piston';
+    const c: CylinderConfig = {
+      ...config,
+      action,
+      stroke,
+      spring,
+      rod: diaphragm ? 'single' : config.rod,
+      rodActuator: rodless ? 'none' : config.rodActuator,
+      springPort: spring !== 'none' && config.springPort === true,
+      limitSwitch,
+      strokeLimiter: diaphragm && config.strokeLimiter === true,
+      vent: false,
+    };
+    return { ...c, vent: canVent(c) && config.vent === true };
   }
-  const none = { rod: 'single', spring: 'none', cushion: { piston: 'none', rod: 'none' }, rodActuator: 'none', springPort: false } as const;
+  const none = {
+    rod: 'single',
+    spring: 'none',
+    cushion: { piston: 'none', rod: 'none' },
+    rodActuator: 'none',
+    springPort: false,
+    limitSwitch: 'none',
+    vent: false,
+    strokeLimiter: false,
+  } as const;
   if (config.design === 'plunger') return { ...config, ...none, action: 'single', stroke };
   // Doppeltwirkender Teleskopzylinder: Anschluss C sitzt an der ersten Stufe, daher immer eingefahren.
   return { ...config, ...none, stroke: config.action === 'double' ? 0 : stroke };
@@ -117,10 +180,17 @@ export const hasStroke = (config: CylinderConfig) => !(config.design === 'telesc
 export function cylinderTitle(config: CylinderConfig): string {
   if (config.design === 'plunger') return 'Plungerzylinder';
   if (config.design === 'telescopic') return `Teleskopzylinder, ${ACTION_NAMES[config.action].toLowerCase()}`;
-  const base = config.action === 'double' ? 'Doppeltwirkender Zylinder' : 'Einfachwirkender Zylinder';
-  const rod = config.rod === 'through' ? `${base}, durchgehende Stange` : base;
-  const name = config.springPort ? `${rod}, Federraum mit Anschluss` : rod;
-  return config.rodActuator && config.rodActuator !== 'none' ? `${name}, ${ROD_ACTUATOR_NAMES[config.rodActuator]}` : name;
+  const kind = config.design === 'diaphragm' ? 'Membranzylinder' : 'Zylinder';
+  const parts = [config.action === 'double' ? `Doppeltwirkender ${kind}` : `Einfachwirkender ${kind}`];
+  if (config.rod === 'through') parts.push('durchgehende Stange');
+  if (config.rod === 'rodless') parts.push('kolbenstangenlos, magnetisch gekoppelt');
+  if (config.springPort) parts.push('Federraum mit Anschluss');
+  if (config.strokeLimiter) parts.push('Hubbegrenzung voreingestellt');
+  if (config.vent) parts.push('Entlüftung');
+  if (config.limitSwitch === 'both') parts.push('Endschalter beidseitig');
+  else if (config.limitSwitch !== 'none') parts.push(`Endschalter ${config.limitSwitch === 'left' ? 'links' : 'rechts'}`);
+  if (config.rodActuator && config.rodActuator !== 'none') parts.push(ROD_ACTUATOR_NAMES[config.rodActuator]);
+  return parts.join(', ');
 }
 
 export const BODY_WIDTH = 9;
@@ -137,17 +207,26 @@ export const ROD = BODY_WIDTH - 1 - PISTON + ROD_OUT;
 /** Plunger 9M × 3M (8.4.19), eingefahren 2M vom Boden. */
 export const PLUNGER = { length: 9, thickness: 3, start: 2, travel: 5 };
 
+/** Kasten des Endschalters 3M × 3M (8.4.7). */
+export const SWITCH_BOX = 3;
+/** Membranzylinder: Kolbenstange ab der Membran (Beispiele 6.3.4/6.3.5). */
+export const DIAPHRAGM_ROD = 9;
+/** Höhe des Schlittens beim kolbenstangenlosen Zylinder (Beispiel 6.3.11). */
+export const CARRIAGE_HEIGHT = 2;
+
 export interface CylinderLayout {
+  /** Abstand des Rahmens vom oberen Rand (Platz für Endschalter, Schlitten, Hubbegrenzung). */
+  top: number;
   /** Linker Rand des Zylinderrahmens. */
   bodyX: number;
   bodyHeight: number;
-  /** Kolbenzylinder: linke Kante des Kolbens (Kolben ist 2M breit). */
+  /** Kolbenzylinder: linke Kante des Kolbens (Kolben ist 2M breit); Membranzylinder: Lage der Membran. */
   pistonX: number;
   /** Ausfahrweg in M: Plunger bzw. erste und zweite Teleskopstufe. */
   extension: [number, number];
   width: number;
   height: number;
-  /** Anschlüsse als x-Lage (in M); y ist immer die Unterkante. */
+  /** Anschlüsse als x-Lage (in M); y ist immer die Unterkante (height). */
   ports: { id: 'A' | 'B' | 'C'; x: number }[];
 }
 
@@ -159,27 +238,36 @@ const ceilParity = (x: number, like: number) => {
 
 export function cylinderLayout(config: CylinderConfig): CylinderLayout {
   const s = config.stroke / 100;
-  if (config.design === 'piston') {
+  if (config.design === 'piston' || config.design === 'diaphragm') {
+    const diaphragm = config.design === 'diaphragm';
     const through = config.rod === 'through';
-    const min = config.spring === 'piston' ? 4 : 1;
-    const max = config.spring === 'rod' ? 3 : 6;
+    const rodless = config.rod === 'rodless';
+    const left = config.limitSwitch === 'left' || config.limitSwitch === 'both';
+    const right = config.limitSwitch === 'right' || config.limitSwitch === 'both';
+    // Membran: Sehne 3,5M vom Boden (6.3.4), mit Feder im Kolbenraum weiter rechts (6.3.5)
+    const min = diaphragm ? (config.spring === 'piston' ? 5.5 : 3.5) : config.spring === 'piston' ? 4 : 1;
+    const max = diaphragm ? (config.spring === 'rod' ? 4.5 : 6.5) : config.spring === 'rod' ? 3 : 6;
     const offset = min + (max - min) * s;
+    // Links Platz für den Endschalter bzw. die Hubbegrenzung (reicht 4,25M nach links)
+    let bodyX = config.strokeLimiter ? 5.5 : left ? 3.5 : 1.5;
     // Durchgehende Stange: Rahmen so weit nach rechts, dass die Stange links nicht übersteht.
-    let bodyX = 1.5;
     while (through && bodyX + offset - THROUGH_ROD < 0) bodyX += 2;
+    const top = config.limitSwitch !== 'none' ? SWITCH_BOX : rodless ? CARRIAGE_HEIGHT : config.strokeLimiter ? 1 : 0;
     const pistonX = bodyX + offset;
-    const rodEnd = pistonX + PISTON + (through ? THROUGH_ROD : ROD) + rodActuatorExtra(config.rodActuator ?? 'none');
-    const height = BODY_HEIGHT + PORT_LINE;
-    const hasA = config.action === 'double' || config.spring !== 'piston' || config.springPort;
-    const hasB = config.action === 'double' || config.spring === 'piston' || config.springPort;
+    const bodyEnd = bodyX + BODY_WIDTH;
+    const extra = rodActuatorExtra(config.rodActuator ?? 'none');
+    const rodEnd = rodless ? bodyEnd : diaphragm ? pistonX + DIAPHRAGM_ROD + extra : pistonX + PISTON + (through ? THROUGH_ROD : ROD) + extra;
+    const height = top + BODY_HEIGHT + PORT_LINE;
+    const { a, b } = cylinderPorts(config);
     return {
+      top,
       bodyX,
       bodyHeight: BODY_HEIGHT,
       pistonX,
       extension: [0, 0],
-      width: ceilParity(Math.max(rodEnd, bodyX + BODY_WIDTH), height),
+      width: ceilParity(Math.max(rodEnd, bodyEnd + (right ? SWITCH_BOX : 0)), height),
       height,
-      ports: [...(hasA ? [{ id: 'A' as const, x: bodyX + 0.5 }] : []), ...(hasB ? [{ id: 'B' as const, x: bodyX + 8.5 }] : [])],
+      ports: [...(a ? [{ id: 'A' as const, x: bodyX + 0.5 }] : []), ...(b ? [{ id: 'B' as const, x: bodyX + 8.5 }] : [])],
     };
   }
 
@@ -189,6 +277,7 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
   if (config.design === 'plunger') {
     const e = PLUNGER.travel * s;
     return {
+      top: 0,
       bodyX,
       bodyHeight: LARGE_BODY_HEIGHT,
       pistonX: bodyX,
@@ -203,6 +292,7 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
     const e1 = 3 * s;
     const e2 = 6 * s;
     return {
+      top: 0,
       bodyX,
       bodyHeight: LARGE_BODY_HEIGHT,
       pistonX: bodyX,
@@ -214,6 +304,7 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
   }
   // Doppeltwirkend: Stufe 1 von 4M bis 13M mit Bund, Stufe 2 von 7M bis 16M mit Bund.
   return {
+    top: 0,
     bodyX,
     bodyHeight: LARGE_BODY_HEIGHT,
     pistonX: bodyX,
@@ -247,6 +338,22 @@ export function readCylinderConfig(v: unknown, path: string, errors: string[]): 
   const stroke = r.number('stroke', 0, 100, 0);
   const rodActuator = r.oneOf('rodActuator', ROD_ACTUATOR_NAMES, 'none');
   const springPort = r.bool('springPort', false);
+  const limitSwitch = r.oneOf('limitSwitch', LIMIT_SWITCH_NAMES, 'none');
+  const vent = r.bool('vent', false);
+  const strokeLimiter = r.bool('strokeLimiter', false);
   if (!r.ok || !piston || !rodCushion) return undefined;
-  return normalizeCylinder({ kind: 'cylinder', design, action, rod, spring, cushion: { piston, rod: rodCushion }, stroke, rodActuator, springPort });
+  return normalizeCylinder({
+    kind: 'cylinder',
+    design,
+    action,
+    rod,
+    spring,
+    cushion: { piston, rod: rodCushion },
+    stroke,
+    rodActuator,
+    springPort,
+    limitSwitch,
+    vent,
+    strokeLimiter,
+  });
 }

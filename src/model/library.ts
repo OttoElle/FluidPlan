@@ -1,4 +1,26 @@
 import {
+  defaultManifoldConfig,
+  defaultPressureConverterConfig,
+  defaultPrimeMoverConfig,
+  defaultSwivelConfig,
+  manifoldGeometry,
+  manifoldTitle,
+  pressureConverterGeometry,
+  pressureConverterTitle,
+  primeMoverGeometry,
+  primeMoverTitle,
+  readManifoldConfig,
+  readPressureConverterConfig,
+  readPrimeMoverConfig,
+  readSwivelConfig,
+  swivelGeometry,
+  swivelTitle,
+  type ManifoldConfig,
+  type PressureConverterConfig,
+  type PrimeMoverConfig,
+  type SwivelConfig,
+} from './actuators.ts';
+import {
   ballValveGeometry,
   ballValveTitle,
   defaultBallValveConfig,
@@ -142,7 +164,7 @@ const HP: Domain[] = ['hydraulic', 'pneumatic'];
 /** Feste Bauteile; Maße und Anschlusslagen in M. */
 export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
   // --- Druckerzeugung und Antriebe ---
-  fixed('supply.electric-motor', 'Elektromotor', HP, [10, 10], []),
+  fixed('supply.power-unit', 'Antriebsaggregat', H, [34, 26], [['P', 'pressure', 18, 0], ['T', 'return', 30, 0]]),
   fixed('supply.hand-pump', 'Handpumpe', H, [11, 9], [['P', 'pressure', 11, 3], ['S', 'return', 11, 6]]),
   fixed('supply.air-source', 'Druckluftquelle', P, [6, 2], [['1', 'pressure', 6, 1]]),
 
@@ -354,6 +376,47 @@ const INDICATOR: ConfigurableType<IndicatorConfig> = {
   read: readIndicatorConfig,
 };
 
+const SWIVEL: ConfigurableType<SwivelConfig> = {
+  type: 'actuator.swivel',
+  name: 'Schwenkantrieb',
+  domains: H,
+  defaultConfig: defaultSwivelConfig,
+  title: swivelTitle,
+  geometry: swivelGeometry,
+  read: readSwivelConfig,
+};
+
+const PRESSURE_CONVERTER: ConfigurableType<PressureConverterConfig> = {
+  type: 'actuator.pressure-converter',
+  name: 'Druckübersetzer / Druckmittelwandler',
+  domains: H,
+  defaultConfig: defaultPressureConverterConfig,
+  title: pressureConverterTitle,
+  geometry: pressureConverterGeometry,
+  read: readPressureConverterConfig,
+};
+
+/** Früher festes Bauteil "Elektromotor"; Dateien ohne Konfiguration bekommen die Startkonfiguration. */
+const PRIME_MOVER: ConfigurableType<PrimeMoverConfig> = {
+  type: 'supply.electric-motor',
+  name: 'Antriebsmotor',
+  domains: HP,
+  defaultConfig: () => defaultPrimeMoverConfig(),
+  title: primeMoverTitle,
+  geometry: primeMoverGeometry,
+  read: readPrimeMoverConfig,
+};
+
+const MANIFOLD: ConfigurableType<ManifoldConfig> = {
+  type: 'line.manifold',
+  name: 'Verteiler',
+  domains: H,
+  defaultConfig: defaultManifoldConfig,
+  title: manifoldTitle,
+  geometry: manifoldGeometry,
+  read: readManifoldConfig,
+};
+
 const CONFIGURABLE = new Map<string, ConfigurableType<any>>(
   [
     VALVE,
@@ -373,6 +436,10 @@ const CONFIGURABLE = new Map<string, ConfigurableType<any>>(
     COOLER,
     INSTRUMENT,
     INDICATOR,
+    SWIVEL,
+    PRESSURE_CONVERTER,
+    PRIME_MOVER,
+    MANIFOLD,
   ].map((t) => [t.type, t]),
 );
 
@@ -545,16 +612,25 @@ export function paletteFor(domain: Domain): PaletteEntry[] {
     // Druckerzeugung
     c('pump', hydraulic ? 'Pumpe' : 'Kompressor', 'Druckerzeugung', PUMP, defaultPumpConfig(domain)),
     ...f('supply.hand-pump', 'Druckerzeugung'),
+    ...f('supply.power-unit', 'Druckerzeugung'),
     ...f('supply.air-source', 'Druckerzeugung'),
     // Antriebe
-    ...f('supply.electric-motor', 'Antriebe'),
+    c('electric-motor', 'Elektromotor', 'Antriebe', PRIME_MOVER, defaultPrimeMoverConfig('electric')),
     c('motor', hydraulic ? 'Hydromotor' : 'Druckluftmotor', 'Antriebe', MOTOR, defaultMotorConfig(domain)),
-    // Zylinder
-    c('cylinder', 'Zylinder', 'Zylinder', CYLINDER, defaultCylinderConfig('double')),
     ...(hydraulic
       ? [
+          c('swivel', 'Schwenkantrieb', 'Antriebe', SWIVEL, defaultSwivelConfig()),
+          c('combustion-engine', 'Antriebseinheit', 'Antriebe', PRIME_MOVER, defaultPrimeMoverConfig('combustion')),
+        ]
+      : []),
+    // Zylinder
+    c('cylinder', hydraulic ? 'Kolbenzylinder' : 'Zylinder', 'Zylinder', CYLINDER, defaultCylinderConfig('double')),
+    ...(hydraulic
+      ? [
+          c('cyl-diaphragm', 'Membranzylinder', 'Zylinder', CYLINDER, defaultCylinderConfig('double', 'diaphragm')),
           c('cyl-plunger', 'Plungerzylinder', 'Zylinder', CYLINDER, defaultCylinderConfig('single', 'plunger')),
           c('cyl-telescopic', 'Teleskopzylinder', 'Zylinder', CYLINDER, defaultCylinderConfig('single', 'telescopic')),
+          c('pressure-converter', 'Druckübersetzer / -mittelwandler', 'Zylinder', PRESSURE_CONVERTER, defaultPressureConverterConfig()),
         ]
       : []),
     // Kugelhähne
@@ -582,6 +658,7 @@ export function paletteFor(domain: Domain): PaletteEntry[] {
     c('coupling', 'Schnelltrennkupplung', 'Verbinder', COUPLING, defaultCouplingConfig()),
     ...f('line.hose', 'Verbinder'),
     ...f('line.plug', 'Verbinder'),
+    ...(hydraulic ? [c('manifold', 'Verteiler', 'Verbinder', MANIFOLD, defaultManifoldConfig())] : []),
     ...(hydraulic ? [c('tank-return', 'Behälterrückführung', 'Verbinder', TANK, { ...defaultTankConfig(), size: 'small' })] : []),
     // Aufbereitung
     c('filter', 'Filter', 'Aufbereitung', FILTER, defaultFilterConfig()),

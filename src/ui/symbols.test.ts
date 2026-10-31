@@ -26,6 +26,10 @@ describe('Schaltzeichen', () => {
       'supply.cooler',
       'measure.gauge',
       'measure.indicator',
+      'actuator.swivel',
+      'actuator.pressure-converter',
+      'supply.electric-motor',
+      'line.manifold',
     ]) {
       expect(getDefinition(type), type).toBeDefined();
       expect(hasSymbol(type), type).toBe(true);

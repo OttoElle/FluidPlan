@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseDiagram, serializeDiagram } from '../io/json.ts';
+import { MANIFOLD_OUTLETS, type ManifoldConfig, type PressureConverterConfig, type PrimeMoverConfig, type SwivelConfig } from './actuators.ts';
 import { BORES, WAYS, type BallValveConfig } from './ballValve.ts';
 import { CHECK_COUNTS, type CouplingConfig } from './coupling.ts';
 import { defaultCylinderConfig, normalizeCylinder, ROD_ACTUATORS, type CylinderConfig } from './cylinder.ts';
@@ -57,6 +58,26 @@ function cylinderVariants(): CylinderConfig[] {
   for (const rodActuator of ROD_ACTUATORS)
     for (const stroke of [0, 50])
       out.push(normalizeCylinder({ ...defaultCylinderConfig('single'), rodActuator, stroke }));
+  // Membranzylinder, kolbenstangenlos, Endschalter, Entlüftung, Hubbegrenzung
+  for (const design of ['piston', 'diaphragm'] as const)
+    for (const action of ['double', 'single'] as const)
+      for (const rod of ['single', 'through', 'rodless'] as const)
+        for (const spring of ['rod', 'piston'] as const)
+          for (const limitSwitch of ['none', 'left', 'right', 'both'] as const)
+            for (const stroke of [0, 100])
+              for (const extra of [false, true])
+                out.push(
+                  normalizeCylinder({
+                    ...defaultCylinderConfig(action, design),
+                    rod,
+                    spring,
+                    limitSwitch,
+                    stroke,
+                    vent: extra,
+                    strokeLimiter: extra,
+                    rodActuator: extra ? 'pedal' : 'none',
+                  }),
+                );
   return out;
 }
 
@@ -68,7 +89,8 @@ function rotaryVariants(): RotaryConfig[] {
         for (const directions of [1, 2] as const)
           for (const drain of [false, true])
             for (const electricMotor of [false, true])
-              out.push(normalizeRotary({ ...base, displacement, directions, drain, electricMotor }));
+              for (const pumpMotor of [false, true])
+                out.push(normalizeRotary({ ...base, displacement, directions, drain, electricMotor, pumpMotor }));
   return out;
 }
 
@@ -103,6 +125,11 @@ function catalogVariants(): ComponentConfig[] {
   for (const coolant of ['none', 'liquid', 'fan'] as const) out.push({ kind: 'cooler', coolant } satisfies CoolerConfig);
   for (const quantity of Object.keys(INSTRUMENT_NAMES) as InstrumentQuantity[]) out.push({ kind: 'instrument', quantity } satisfies InstrumentConfig);
   for (const type of ['optical', 'digital', 'acoustic'] as const) out.push({ kind: 'indicator', type } satisfies IndicatorConfig);
+  for (const action of ['double', 'single'] as const) out.push({ kind: 'swivel', action } satisfies SwivelConfig);
+  for (const type of ['converter', 'intensifier'] as const) out.push({ kind: 'pressure-converter', type } satisfies PressureConverterConfig);
+  for (const engine of ['electric', 'combustion'] as const)
+    for (const rotation of ['none', 'cw', 'ccw', 'both'] as const) out.push({ kind: 'prime-mover', engine, rotation } satisfies PrimeMoverConfig);
+  for (const outlets of MANIFOLD_OUTLETS) out.push({ kind: 'manifold', outlets } satisfies ManifoldConfig);
   return out;
 }
 
@@ -169,6 +196,29 @@ describe('Konfigurierbare Bauteile', () => {
     expect(pump.size.width).toBe(200);
     const compressor = definition(normalizeRotary({ ...defaultPumpConfig('pneumatic'), directions: 2, drain: true }));
     expect(compressor.ports.map((p) => [p.id, p.label])).toEqual([['P', '1']]);
+  });
+
+  it('halten Membranzylinder und kolbenstangenlose Zylinder in sinnvollen Einstellungen', () => {
+    const rodless = normalizeCylinder({ ...defaultCylinderConfig('single'), rod: 'rodless', rodActuator: 'pedal', spring: 'rod' });
+    expect(rodless).toMatchObject({ action: 'double', spring: 'none', rodActuator: 'none' });
+    const diaphragm = normalizeCylinder({ ...defaultCylinderConfig('single', 'diaphragm'), spring: 'none', rod: 'through', vent: true });
+    expect(diaphragm).toMatchObject({ spring: 'piston', rod: 'single', vent: true });
+    expect(definition(diaphragm).ports.map((p) => p.id)).toEqual(['B']);
+    // Entlüftung nur am Raum ohne Anschluss, Hubbegrenzung nur beim Membranzylinder
+    expect(normalizeCylinder({ ...defaultCylinderConfig('double'), vent: true, strokeLimiter: true })).toMatchObject({ vent: false, strokeLimiter: false });
+  });
+
+  it('setzen Endschalter über den Rahmen, ohne die Anschlüsse seitlich zu verschieben', () => {
+    const plain = definition(defaultCylinderConfig('double'));
+    const right = definition({ ...defaultCylinderConfig('double'), limitSwitch: 'right' });
+    expect(right.size.height).toBe(plain.size.height + 30);
+    expect(right.ports.map((p) => p.offset.x)).toEqual(plain.ports.map((p) => p.offset.x));
+  });
+
+  it('zeichnen Pumpe/Motor nur bei hydraulischen Pumpen', () => {
+    expect(normalizeRotary({ ...defaultPumpConfig('pneumatic'), pumpMotor: true }).pumpMotor).toBe(false);
+    expect(normalizeRotary({ ...defaultMotorConfig('hydraulic'), pumpMotor: true }).pumpMotor).toBe(false);
+    expect(definition({ ...defaultPumpConfig('hydraulic'), pumpMotor: true, directions: 2 }).name).toBe('Pumpe/Motor (konstant, reversierbar)');
   });
 
   it('führen die Drehrichtung beim Motor mit den Drehrichtungen', () => {

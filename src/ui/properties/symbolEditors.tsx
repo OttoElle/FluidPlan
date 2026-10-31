@@ -1,4 +1,14 @@
 import type { ReactNode } from 'react';
+import {
+  CONVERTER_NAMES,
+  ENGINE_NAMES,
+  MANIFOLD_OUTLETS,
+  SWIVEL_ACTION_NAMES,
+  type ManifoldConfig,
+  type PressureConverterConfig,
+  type PrimeMoverConfig,
+  type SwivelConfig,
+} from '../../model/actuators.ts';
 import { BORES, normalizeBallValve, WAYS, type BallValveConfig, type BallValveWays } from '../../model/ballValve.ts';
 import { CHECK_COUNTS, CHECK_NAMES, CHECK_SIDE_NAMES, type CouplingConfig } from '../../model/coupling.ts';
 import { COOLANT_NAMES, FILTER_DESIGN_NAMES, FILTER_INDICATOR_NAMES, type CoolerConfig, type FilterConfig } from '../../model/conditioning.ts';
@@ -13,8 +23,10 @@ import {
 } from '../../model/fluidValves.ts';
 import { INDICATOR_NAMES, INSTRUMENT_NAMES, type IndicatorConfig, type InstrumentConfig } from '../../model/instruments.ts';
 import {
+  canVent,
   DESIGN_NAMES,
   hasStroke,
+  LIMIT_SWITCH_NAMES,
   normalizeCylinder,
   ROD_ACTUATOR_NAMES,
   ROD_ACTUATORS,
@@ -93,15 +105,20 @@ type Direction = 'push' | 'pull' | 'double';
 export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderConfig>) {
   const set = (c: Partial<CylinderConfig>) => onChange(normalizeCylinder({ ...config, ...c }));
   const variant = (c: Partial<CylinderConfig>) => normalizeCylinder({ ...config, stroke: 0, ...c });
-  const piston = config.design === 'piston';
+  const diaphragm = config.design === 'diaphragm';
+  const rodless = config.rod === 'rodless';
+  // Kolben- und Membranzylinder haben dieselben Einstellungen für Kolben und Stange
+  const piston = config.design === 'piston' || diaphragm;
   const direction: Direction = config.action === 'double' ? 'double' : config.spring === 'piston' ? 'pull' : 'push';
   const setDirection = (d: Direction) =>
     set(
       d === 'double'
         ? { action: 'double' }
-        : { action: 'single', spring: d === 'pull' ? 'piston' : config.spring === 'none' ? 'none' : 'rod' },
+        : { action: 'single', spring: d === 'pull' ? 'piston' : config.spring === 'none' && !diaphragm ? 'none' : 'rod' },
     );
-  const directions: { value: Direction; label: string }[] = piston
+  const directions: { value: Direction; label: string }[] = rodless
+    ? []
+    : piston
     ? [
         { value: 'push', label: 'Einfachwirkend, drückend →' },
         { value: 'pull', label: 'Einfachwirkend, ziehend ←' },
@@ -128,11 +145,11 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
             label="Bauart"
             value={config.design}
             empty={null}
-            onChange={(design) => design && set({ design, action: design === 'piston' ? config.action : 'single' })}
+            onChange={(design) => design && set(designChange(config, design))}
             options={keys(DESIGN_NAMES).map((design) => ({
               value: design,
               label: DESIGN_NAMES[design],
-              icon: variantIcon(variant({ design, action: design === 'piston' ? config.action : 'single' })),
+              icon: variantIcon(variant(designChange(config, design))),
             }))}
           />
           <div className="radio-list" role="radiogroup" aria-label="Wirkungsweise">
@@ -143,8 +160,9 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
               </label>
             ))}
             {config.design === 'plunger' && <span className="hint">Plungerzylinder sind immer einfachwirkend.</span>}
+            {rodless && <span className="hint">Kolbenstangenlose Zylinder sind doppeltwirkend.</span>}
           </div>
-          {piston && direction === 'push' && (
+          {config.design === 'piston' && direction === 'push' && (
             <label className="check">
               <input type="checkbox" checked={config.spring === 'rod'} onChange={(e) => set({ spring: e.target.checked ? 'rod' : 'none' })} />
               Rückstellfeder
@@ -182,14 +200,16 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
           </fieldset>
           <fieldset>
             <legend>Kolbenstange</legend>
-            <SymbolPicker<CylinderRod>
-              label="Kolbenstange"
-              value={config.rod}
-              empty={null}
-              onChange={(rod) => rod && set({ rod })}
-              options={keys(ROD_NAMES).map((rod) => ({ value: rod, label: ROD_NAMES[rod], icon: variantIcon(variant({ rod })) }))}
-            />
-            <div className="actuation-row">
+            {!diaphragm && (
+              <SymbolPicker<CylinderRod>
+                label="Kolbenstange"
+                value={config.rod}
+                empty={null}
+                onChange={(rod) => rod && set({ rod })}
+                options={keys(ROD_NAMES).map((rod) => ({ value: rod, label: ROD_NAMES[rod], icon: variantIcon(variant({ rod })) }))}
+              />
+            )}
+            {!rodless && <div className="actuation-row">
               <SymbolPicker<RodActuator>
                 label="Betätigung am Stangenende"
                 value={config.rodActuator === 'none' ? undefined : config.rodActuator}
@@ -197,9 +217,30 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
                 options={ROD_ACTUATORS.map((a) => ({ value: a, label: ROD_ACTUATOR_NAMES[a], icon: <ActuatorIcon kind={a} medium="hydraulic" /> }))}
               />
               <span>Betätigung am Stangenende</span>
-            </div>
+            </div>}
           </fieldset>
         </div>
+      )}
+      {piston && (
+        <fieldset>
+          <legend>Ausstattung</legend>
+          <div className="config-grid">
+            <Field title="Endschalter" wide>
+              <Segmented
+                label="Endschalter"
+                value={config.limitSwitch}
+                onChange={(limitSwitch) => set({ limitSwitch })}
+                options={symbolOptions(keys(LIMIT_SWITCH_NAMES), (v) => LIMIT_SWITCH_NAMES[v], (limitSwitch) => variant({ limitSwitch }))}
+              />
+            </Field>
+            {canVent(config) && (
+              <Check title="Entlüftung ohne Anschlussmöglichkeit" checked={config.vent} onChange={(vent) => set({ vent })} />
+            )}
+            {diaphragm && (
+              <Check title="Hubbegrenzung, voreingestellt" checked={config.strokeLimiter} onChange={(strokeLimiter) => set({ strokeLimiter })} />
+            )}
+          </div>
+        </fieldset>
       )}
       {hasStroke(config) && (
         <fieldset>
@@ -228,6 +269,14 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
       )}
     </div>
   );
+}
+
+/** Beim Wechsel der Bauart bleibt die Wirkungsweise, soweit die neue Bauart sie kennt. */
+function designChange(config: CylinderConfig, design: CylinderDesign): Partial<CylinderConfig> {
+  if (design === 'piston' || design === 'diaphragm') {
+    return { design, action: config.action, rod: config.rod === 'rodless' && design === 'diaphragm' ? 'single' : config.rod };
+  }
+  return { design, action: 'single' };
 }
 
 // --- Pumpe und Motor -------------------------------------------------------------
@@ -272,6 +321,15 @@ export function RotaryEditor<C extends RotaryConfig>({ config, onChange }: Confi
         />
       </Field>
       {hydraulic && <Check title="Leckölanschluss" checked={config.drain} onChange={(drain) => set({ drain })} />}
+      {pump && hydraulic && (
+        <Toggle
+          title="Arbeitsweise"
+          names={['Pumpe', 'Pumpe/Motor']}
+          value={config.pumpMotor}
+          variant={(pumpMotor) => variant({ pumpMotor }) as C}
+          onChange={onChange}
+        />
+      )}
       {pump && (
         <Check title="Mit Elektromotor (Motor-Pumpe-Einheit)" checked={config.electricMotor} onChange={(electricMotor) => set({ electricMotor })} />
       )}
@@ -603,6 +661,77 @@ export function IndicatorEditor({ config, onChange }: ConfigEditorProps<Indicato
           value={config.type}
           onChange={(type) => onChange({ ...config, type })}
           options={symbolOptions(keys(INDICATOR_NAMES), (t) => INDICATOR_NAMES[t], (type) => ({ ...config, type }))}
+        />
+      </Field>
+    </div>
+  );
+}
+
+// --- Antriebe, Wandler, Verteiler -----------------------------------------------
+
+export function SwivelEditor({ config, onChange }: ConfigEditorProps<SwivelConfig>) {
+  return (
+    <div className="configurator config-grid">
+      <Field title="Wirkungsweise" wide>
+        <Segmented
+          label="Wirkungsweise"
+          value={config.action}
+          onChange={(action) => onChange({ ...config, action })}
+          options={symbolOptions(keys(SWIVEL_ACTION_NAMES), (a) => SWIVEL_ACTION_NAMES[a], (action) => ({ ...config, action }))}
+        />
+      </Field>
+    </div>
+  );
+}
+
+export function PressureConverterEditor({ config, onChange }: ConfigEditorProps<PressureConverterConfig>) {
+  return (
+    <div className="configurator config-grid">
+      <Field title="Bauart" wide>
+        <Segmented
+          label="Bauart"
+          value={config.type}
+          onChange={(type) => onChange({ ...config, type })}
+          options={symbolOptions(keys(CONVERTER_NAMES), (t) => CONVERTER_NAMES[t], (type) => ({ ...config, type }))}
+        />
+      </Field>
+    </div>
+  );
+}
+
+export function PrimeMoverEditor({ config, onChange }: ConfigEditorProps<PrimeMoverConfig>) {
+  const v = (c: Partial<PrimeMoverConfig>): PrimeMoverConfig => ({ ...config, ...c });
+  return (
+    <div className="configurator config-grid">
+      <Field title="Bauart" wide>
+        <Segmented
+          label="Bauart"
+          value={config.engine}
+          onChange={(engine) => onChange(v({ engine }))}
+          options={symbolOptions(keys(ENGINE_NAMES), (e) => ENGINE_NAMES[e], (engine) => v({ engine }))}
+        />
+      </Field>
+      <Field title="Drehrichtung" wide>
+        <Segmented
+          label="Drehrichtung"
+          value={config.rotation}
+          onChange={(rotation) => onChange(v({ rotation }))}
+          options={symbolOptions(keys(ROTATION_NAMES), (r) => ROTATION_NAMES[r], (rotation) => v({ rotation }))}
+        />
+      </Field>
+    </div>
+  );
+}
+
+export function ManifoldEditor({ config, onChange }: ConfigEditorProps<ManifoldConfig>) {
+  return (
+    <div className="configurator config-grid">
+      <Field title="Abgänge" wide>
+        <Segmented
+          label="Abgänge"
+          value={config.outlets}
+          onChange={(outlets) => onChange({ ...config, outlets })}
+          options={symbolOptions(MANIFOLD_OUTLETS, (n) => `${n} Abgänge`, (outlets) => ({ ...config, outlets }))}
         />
       </Field>
     </div>

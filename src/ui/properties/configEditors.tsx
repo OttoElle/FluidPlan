@@ -11,9 +11,13 @@ import {
   FlowDividerEditor,
   IndicatorEditor,
   InstrumentEditor,
+  ManifoldEditor,
+  PressureConverterEditor,
   PressureValveEditor,
+  PrimeMoverEditor,
   RotaryEditor,
   SensorEditor,
+  SwivelEditor,
   TankEditor,
   ThrottleEditor,
 } from './symbolEditors.tsx';
@@ -53,6 +57,10 @@ const CONFIG_EDITORS: { [K in ComponentConfig['kind']]: ComponentType<ConfigEdit
   cooler: CoolerEditor,
   instrument: InstrumentEditor,
   indicator: IndicatorEditor,
+  swivel: SwivelEditor,
+  'pressure-converter': PressureConverterEditor,
+  'prime-mover': PrimeMoverEditor,
+  manifold: ManifoldEditor,
 };
 
 /** Passenden Konfigurator für eine beliebige Konfiguration anzeigen. */

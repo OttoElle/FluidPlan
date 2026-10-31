@@ -3,7 +3,8 @@ import { defaultConfigFor, isConfigurable, MODULE } from '../model/library.ts';
 import type { ComponentConfig, ComponentInstance } from '../model/types.ts';
 import { AccumulatorSymbol, BallValveSymbol, CouplingSymbol, HoseSymbol, SensorSymbol, TankSymbol } from './accessorySymbols.tsx';
 import { CylinderSymbol } from './cylinderSymbol.tsx';
-import { ElectricMotor, RotarySymbol } from './rotarySymbol.tsx';
+import { RotarySymbol } from './rotarySymbol.tsx';
+import { ManifoldSymbol, PowerUnit, PressureConverterSymbol, PrimeMoverSymbol, SwivelSymbol } from './actuatorSymbols.tsx';
 import { ArrowHead, CheckElement, DASH, Junction, pts, seatTip, Triangle, type P } from './symbolParts.tsx';
 import { ValveSymbol } from './valveSymbol.tsx';
 import { CoolerSymbol, FilterSymbol, Heater, Separator } from './conditioningSymbols.tsx';
@@ -198,7 +199,7 @@ function FlowControlValve() {
 }
 
 const SYMBOLS: Record<string, () => ReactNode> = {
-  'supply.electric-motor': ElectricMotor,
+  'supply.power-unit': PowerUnit,
   'supply.air-source': AirSource,
   'supply.silencer': Silencer,
   'supply.heater': Heater,
@@ -233,6 +234,10 @@ const CONFIG_SYMBOLS: { [K in ComponentConfig['kind']]: (props: { config: Config
   cooler: CoolerSymbol,
   instrument: InstrumentSymbol,
   indicator: IndicatorSymbol,
+  swivel: SwivelSymbol,
+  'pressure-converter': PressureConverterSymbol,
+  'prime-mover': PrimeMoverSymbol,
+  manifold: ManifoldSymbol,
 };
 
 export function hasSymbol(type: string): boolean {

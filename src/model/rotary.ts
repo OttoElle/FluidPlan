@@ -32,6 +32,8 @@ export interface RotaryConfig<K extends 'pump' | 'motor' = 'pump' | 'motor'> {
   electricMotor: boolean;
   /** Drehrichtungspfeil; fehlt in älteren Dateien (dann keiner). */
   rotation: Rotation;
+  /** Pumpe/Motor (6.2.3/6.2.4), nur hydraulische Pumpen; fehlt in älteren Dateien. */
+  pumpMotor: boolean;
 }
 
 export type PumpConfig = RotaryConfig<'pump'>;
@@ -50,11 +52,11 @@ export const ROTATION_NAMES: Record<Rotation, string> = {
 export const DIRECTION_COUNTS: readonly FlowDirections[] = [1, 2];
 
 export function defaultPumpConfig(medium: Domain): PumpConfig {
-  return { kind: 'pump', medium, displacement: 'fixed', directions: 1, drain: false, electricMotor: false, rotation: 'none' };
+  return { kind: 'pump', medium, displacement: 'fixed', directions: 1, drain: false, electricMotor: false, rotation: 'none', pumpMotor: false };
 }
 
 export function defaultMotorConfig(medium: Domain): MotorConfig {
-  return { kind: 'motor', medium, displacement: 'fixed', directions: 1, drain: false, electricMotor: false, rotation: 'none' };
+  return { kind: 'motor', medium, displacement: 'fixed', directions: 1, drain: false, electricMotor: false, rotation: 'none', pumpMotor: false };
 }
 
 /**
@@ -75,17 +77,18 @@ export function normalizeRotary<C extends RotaryConfig>(config: C): C {
     directions: compressor ? 1 : config.directions,
     drain: config.medium === 'pneumatic' ? false : config.drain,
     electricMotor: config.kind === 'pump' ? config.electricMotor : false,
+    pumpMotor: config.kind === 'pump' && config.medium === 'hydraulic' && config.pumpMotor === true,
   };
 }
 
 export function rotaryTitle(config: RotaryConfig): string {
   const pneumatic = config.medium === 'pneumatic';
   let base: string;
-  if (config.kind === 'pump') base = pneumatic ? 'Kompressor' : 'Pumpe';
+  if (config.kind === 'pump') base = pneumatic ? 'Kompressor' : config.pumpMotor ? 'Pumpe/Motor' : 'Pumpe';
   else base = pneumatic ? 'Druckluftmotor' : 'Hydromotor';
   const details = [
     config.displacement === 'variable' ? 'verstellbar' : pneumatic ? '' : 'konstant',
-    config.directions === 2 ? (config.kind === 'pump' ? 'zwei Förderrichtungen' : 'zwei Drehrichtungen') : '',
+    config.directions === 2 ? (config.kind === 'pump' ? (config.pumpMotor ? 'reversierbar' : 'zwei Förderrichtungen') : 'zwei Drehrichtungen') : '',
     config.drain ? 'mit Leckölanschluss' : '',
   ].filter(Boolean);
   const name = details.length ? `${base} (${details.join(', ')})` : base;
@@ -130,6 +133,7 @@ function readRotary<K extends 'pump' | 'motor'>(kind: K, v: unknown, path: strin
     drain: r.bool('drain'),
     electricMotor: r.bool('electricMotor', false),
     rotation: r.oneOf('rotation', ROTATION_NAMES, 'none'),
+    pumpMotor: r.bool('pumpMotor', false),
   };
   return r.ok ? normalizeRotary(config) : undefined;
 }

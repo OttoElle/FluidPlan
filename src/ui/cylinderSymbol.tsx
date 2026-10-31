@@ -1,16 +1,21 @@
 import {
   BODY_HEIGHT,
   BODY_WIDTH,
+  CARRIAGE_HEIGHT,
   cylinderLayout,
+  cylinderPorts,
+  DIAPHRAGM_ROD,
   PISTON,
   PLUNGER,
   ROD,
   rodActuatorExtra,
+  SWITCH_BOX,
   THROUGH_ROD,
   type CylinderConfig,
   type CylinderLayout,
 } from '../model/cylinder.ts';
-import { FlowArrow, pts } from './symbolParts.tsx';
+import { DRAWING_FONT } from '../model/lettering.ts';
+import { FlowArrow, pts, type P } from './symbolParts.tsx';
 import { ActuatorElement, SHAFT } from './valveSymbol.tsx';
 
 /** Oberkante der 1M dicken Kolbenstange. */
@@ -28,21 +33,26 @@ export function CylinderSymbol({ config }: { config: CylinderConfig }) {
   const l = cylinderLayout(config);
   return (
     <>
-      {config.design === 'piston' ? (
-        <PistonCylinder config={config} l={l} />
-      ) : config.design === 'plunger' ? (
-        <PlungerCylinder l={l} />
-      ) : config.action === 'single' ? (
-        <TelescopicSingle l={l} />
-      ) : (
-        <TelescopicDouble l={l} />
-      )}
+      <g transform={l.top ? `translate(0 ${l.top})` : undefined}>
+        {config.design === 'piston' ? (
+          <PistonCylinder config={config} l={l} />
+        ) : config.design === 'diaphragm' ? (
+          <DiaphragmCylinder config={config} l={l} />
+        ) : config.design === 'plunger' ? (
+          <PlungerCylinder l={l} />
+        ) : config.action === 'single' ? (
+          <TelescopicSingle l={l} />
+        ) : (
+          <TelescopicDouble l={l} />
+        )}
+        <Extras config={config} l={l} />
+      </g>
       {l.ports.map((p) => (
         <line
           key={p.id}
           x1={p.x}
           // Anschluss C kommt aus der ersten Teleskopstufe (Unterkante 4M), die übrigen aus dem Rahmen.
-          y1={p.id === 'C' ? 4 : l.bodyHeight}
+          y1={l.top + (p.id === 'C' ? 4 : l.bodyHeight)}
           x2={p.x}
           y2={l.height}
         />
@@ -51,10 +61,49 @@ export function CylinderSymbol({ config }: { config: CylinderConfig }) {
   );
 }
 
+/**
+ * Endschalter (Beispiele 6.3.11 und 6.3.13): Kasten 3M (8.4.7) mit
+ * Diagonale, "G" und Schließer, links mit der rechten unteren Ecke an der
+ * linken oberen Rahmenecke (gespiegelt), rechts mit der linken unteren Ecke
+ * an der rechten oberen Rahmenecke. Entlüftung ohne Anschluss (6.3.5):
+ * offenes V 1M breit unter dem Raum ohne Anschluss.
+ */
+function Extras({ config, l }: { config: CylinderConfig; l: CylinderLayout }) {
+  const bodyEnd = l.bodyX + BODY_WIDTH;
+  const { a } = cylinderPorts(config);
+  const ventX = a ? bodyEnd - 1 : l.bodyX;
+  const sw = config.limitSwitch;
+  return (
+    <>
+      {(sw === 'left' || sw === 'both') && <SwitchBox x={l.bodyX - SWITCH_BOX} y={-SWITCH_BOX} mirrored />}
+      {(sw === 'right' || sw === 'both') && <SwitchBox x={bodyEnd} y={-SWITCH_BOX} />}
+      {config.vent && <polyline points={pts([ventX, BODY_HEIGHT], [ventX + 0.5, BODY_HEIGHT + 1.1], [ventX + 1, BODY_HEIGHT])} />}
+    </>
+  );
+}
+
+function SwitchBox({ x, y, mirrored = false }: { x: number; y: number; mirrored?: boolean }) {
+  const s = SWITCH_BOX;
+  const m = (dx: number) => (mirrored ? x + s - dx : x + dx);
+  const p = (dx: number, dy: number): P => [m(dx), y + dy];
+  return (
+    <>
+      <rect x={x} y={y} width={s} height={s} />
+      <line x1={m(0)} y1={y} x2={m(s)} y2={y + s} />
+      <text x={m(0.85)} y={y + 2.2} className="fill" stroke="none" fontSize={1.5} fontFamily={DRAWING_FONT} textAnchor="middle" dominantBaseline="central">
+        G
+      </text>
+      <polyline points={pts(p(1.2, 0.85), p(1.7, 0.85), p(2.2, 0.5))} />
+      <line x1={m(2.25)} y1={y + 0.85} x2={m(2.7)} y2={y + 0.85} />
+    </>
+  );
+}
+
 function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayout }) {
   const { bodyX: bx, pistonX: px } = l;
   const bodyEnd = bx + BODY_WIDTH;
   const through = config.rod === 'through';
+  const rodless = config.rod === 'rodless';
   const actuator = config.rodActuator ?? 'none';
   const rodEnd = px + PISTON + (through ? THROUGH_ROD : ROD);
   const zigzag = (from: number, to: number) => {
@@ -65,7 +114,9 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
   return (
     <>
       {/* Rahmen; die Wand ist dort offen, wo die Kolbenstange austritt (Beispiele 6.3.1/6.3.2) */}
-      {through ? (
+      {rodless ? (
+        <RodlessParts bx={bx} px={px} />
+      ) : through ? (
         <>
           <polyline points={pts([bodyEnd, ROD_Y], [bodyEnd, 0], [bx, 0], [bx, ROD_Y])} />
           <polyline points={pts([bx, ROD_Y + 1], [bx, BODY_HEIGHT], [bodyEnd, BODY_HEIGHT], [bodyEnd, ROD_Y + 1])} />
@@ -74,7 +125,7 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
         <polyline points={pts([bodyEnd, ROD_Y], [bodyEnd, 0], [bx, 0], [bx, BODY_HEIGHT], [bodyEnd, BODY_HEIGHT], [bodyEnd, ROD_Y + 1])} />
       )}
       <rect x={px} y={0} width={PISTON} height={BODY_HEIGHT} />
-      {actuator === 'none' ? (
+      {rodless ? null : actuator === 'none' ? (
         <rect x={px + PISTON} y={ROD_Y} width={rodEnd - px - PISTON} height={1} />
       ) : (
         <>
@@ -91,10 +142,92 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
       {config.spring === 'rod' && zigzag(px + PISTON, bodyEnd)}
       {config.spring === 'piston' && zigzag(bx, px)}
 
-      {config.cushion.piston !== 'none' && <rect x={px - 0.5} y={1} width={0.5} height={2} />}
-      {config.cushion.rod !== 'none' && <rect x={px + PISTON} y={1} width={0.5} height={2} />}
-      {config.cushion.piston === 'adjustable' && <FlowArrow from={[px - 1.4, 4.5]} to={[px + 0.4, -0.5]} />}
-      {config.cushion.rod === 'adjustable' && <FlowArrow from={[px + 1.6, 4.5]} to={[px + 3.4, -0.5]} />}
+      <Cushions config={config} left={px} right={px + PISTON} />
+    </>
+  );
+}
+
+/** Dämpfungszapfen 0,5M × 2M links bzw. rechts am Kolben, einstellbar mit schrägem Pfeil. */
+function Cushions({ config, left, right }: { config: CylinderConfig; left: number; right: number }) {
+  return (
+    <>
+      {config.cushion.piston !== 'none' && <rect x={left - 0.5} y={1} width={0.5} height={2} />}
+      {config.cushion.rod !== 'none' && <rect x={right} y={1} width={0.5} height={2} />}
+      {config.cushion.piston === 'adjustable' && <FlowArrow from={[left - 1.4, 4.5]} to={[left + 0.4, -0.5]} />}
+      {config.cushion.rod === 'adjustable' && <FlowArrow from={[right - 0.4, 4.5]} to={[right + 1.4, -0.5]} />}
+    </>
+  );
+}
+
+/**
+ * Kolbenstangenloser Zylinder, magnetisch gekoppelt (Beispiel 6.3.11):
+ * geschlossener Rahmen, im Kolben ein gefüllter Magnet "[", darüber der
+ * Schlitten 4M × 2M mit gefülltem Magnet "⊓".
+ */
+function RodlessParts({ bx, px }: { bx: number; px: number }) {
+  const cx = px - 1;
+  const ch = CARRIAGE_HEIGHT;
+  return (
+    <>
+      <rect x={bx} y={0} width={BODY_WIDTH} height={BODY_HEIGHT} />
+      <polygon
+        className="fill"
+        points={pts([px + 0.45, 0.7], [px + 1.6, 0.7], [px + 1.6, 1.2], [px + 1, 1.2], [px + 1, 2.8], [px + 1.6, 2.8], [px + 1.6, 3.3], [px + 0.45, 3.3])}
+      />
+      <rect x={cx} y={-ch} width={4} height={ch} />
+      <polygon
+        className="fill"
+        points={pts([cx + 0.7, -ch + 1.6], [cx + 0.7, -ch + 0.45], [cx + 3.3, -ch + 0.45], [cx + 3.3, -ch + 1.6], [cx + 2.75, -ch + 1.6], [cx + 2.75, -ch + 1], [cx + 1.25, -ch + 1], [cx + 1.25, -ch + 1.6])}
+      />
+    </>
+  );
+}
+
+/**
+ * Membranzylinder (Beispiele 6.3.4/6.3.5): Rahmen 9M × 4M, Membran als
+ * senkrechte Sehne mit 1M nach links gewölbtem Bogen, Kolbenstange 1M dick ab
+ * der Membran. Hubbegrenzung voreingestellt links vor dem Boden.
+ */
+function DiaphragmCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayout }) {
+  const { bodyX: bx, pistonX: px } = l;
+  const bodyEnd = bx + BODY_WIDTH;
+  const actuator = config.rodActuator ?? 'none';
+  const rodStart = px + (config.cushion.rod !== 'none' ? 0.5 : 0);
+  const rodEnd = px + DIAPHRAGM_ROD;
+  const zigzag = (from: number, to: number) => {
+    const points: [number, number][] = [];
+    for (let i = 0; i <= 6; i++) points.push([from + ((to - from) * i) / 6, i % 2 === 0 ? BODY_HEIGHT : 0]);
+    return <polyline points={pts(...points)} />;
+  };
+  return (
+    <>
+      <polyline points={pts([bodyEnd, ROD_Y], [bodyEnd, 0], [bx, 0], [bx, BODY_HEIGHT], [bodyEnd, BODY_HEIGHT], [bodyEnd, ROD_Y + 1])} />
+      {/* Membran: Sehne und Bogen r = 2,5M (Pfeilhöhe 1M) */}
+      <line x1={px} y1={0} x2={px} y2={BODY_HEIGHT} />
+      <path d={`M${px} 0 A2.5 2.5 0 0 0 ${px} ${BODY_HEIGHT}`} />
+      {actuator === 'none' ? (
+        <rect x={rodStart} y={ROD_Y} width={rodEnd - rodStart} height={1} />
+      ) : (
+        <>
+          <polyline points={pts([rodEnd - SHAFT, ROD_Y], [rodStart, ROD_Y], [rodStart, ROD_Y + 1], [rodEnd - SHAFT, ROD_Y + 1])} />
+          <g transform={`translate(${rodEnd - SHAFT} ${ROD_Y + 0.5}) scale(1 -1)`}>
+            <ActuatorElement kind={actuator} medium="hydraulic" reach={SHAFT + rodActuatorExtra(actuator)} />
+          </g>
+        </>
+      )}
+      {config.spring === 'piston' && zigzag(bx, px - 0.6)}
+      {config.spring === 'rod' && zigzag(px + 0.6, bodyEnd)}
+      <Cushions config={config} left={px - 1} right={px} />
+      {config.strokeLimiter && (
+        // Hubbegrenzung, voreingestellt (6.3.4): Anschlag mit Stange vor dem Boden und Einstellhebel
+        <>
+          <line x1={bx - 2.5} y1={0} x2={bx - 2.5} y2={2.5} />
+          <line x1={bx - 2.5} y1={1.5} x2={bx} y2={1.5} />
+          <line x1={bx - 2.5} y1={2} x2={bx} y2={2} />
+          <line x1={bx - 0.95} y1={1.27} x2={bx - 3.85} y2={0.5} />
+          <line x1={bx - 3.86} y1={-0.47} x2={bx - 4.24} y2={0.95} />
+        </>
+      )}
     </>
   );
 }
