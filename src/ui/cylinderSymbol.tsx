@@ -136,8 +136,8 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
         <>
           {/* Die letzten 3M der Stange sind der Schaft des Betätigungselements (8.5) */}
           <polyline points={pts([rodEnd - SHAFT, ROD_Y], [px + PISTON, ROD_Y], [px + PISTON, ROD_Y + 1], [rodEnd - SHAFT, ROD_Y + 1])} />
-          {/* nach unten geklappt, damit Hebel und Pedal nicht über den Rahmen hinausragen */}
-          <g transform={`translate(${rodEnd - SHAFT} ${ROD_Y + 0.5}) scale(1 -1)`}>
+          {/* wie am Ventil rechts: Hebel nach oben, Pedal mit dem Fuß unten außen */}
+          <g transform={`translate(${rodEnd - SHAFT} ${ROD_Y + 0.5})`}>
             <ActuatorElement kind={actuator} medium="hydraulic" reach={SHAFT + rodActuatorExtra(actuator)} />
           </g>
         </>
@@ -276,7 +276,7 @@ function DiaphragmCylinder({ config, l }: { config: CylinderConfig; l: CylinderL
       ) : (
         <>
           <polyline points={pts([rodEnd - SHAFT, ROD_Y], [rodStart, ROD_Y], [rodStart, ROD_Y + 1], [rodEnd - SHAFT, ROD_Y + 1])} />
-          <g transform={`translate(${rodEnd - SHAFT} ${ROD_Y + 0.5}) scale(1 -1)`}>
+          <g transform={`translate(${rodEnd - SHAFT} ${ROD_Y + 0.5})`}>
             <ActuatorElement kind={actuator} medium="hydraulic" reach={SHAFT + rodActuatorExtra(actuator)} />
           </g>
         </>

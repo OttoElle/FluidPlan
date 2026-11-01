@@ -260,6 +260,8 @@ export const SWITCH_BOX = 3;
 export const DIAPHRAGM_ROD = 9;
 /** Höhe des Schlittens beim kolbenstangenlosen Zylinder (Beispiel 6.3.11). */
 export const CARRIAGE_HEIGHT = 2;
+/** Platz über dem Rahmen für den Hebel am Stangenende. */
+const LEVER_TOP = 2;
 
 export interface CylinderLayout {
   /** Abstand des Rahmens vom oberen Rand (Platz für Endschalter, Schlitten, Hubbegrenzung). */
@@ -301,8 +303,11 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
     let bodyX = config.strokeLimiter ? 5.5 : left ? 3.5 : 1.5;
     // Durchgehende Stange: Rahmen so weit nach rechts, dass die Stange links nicht übersteht.
     while (through && bodyX + offset - THROUGH_ROD < 0) bodyX += 2;
-    const top =
-      config.limitSwitch !== 'none' ? SWITCH_BOX : !diaphragm && hasSlide(config.pistonType ?? 'plain') ? CARRIAGE_HEIGHT : config.strokeLimiter ? 1 : 0;
+    const top = Math.max(
+      config.limitSwitch !== 'none' ? SWITCH_BOX : !diaphragm && hasSlide(config.pistonType ?? 'plain') ? CARRIAGE_HEIGHT : config.strokeLimiter ? 1 : 0,
+      // Der Hebel (8.5.16) steht wie am Ventil nach oben und ragt 1,8M über den Rahmen.
+      config.rodActuator === 'lever' ? LEVER_TOP : 0,
+    );
     const pistonX = bodyX + offset;
     const bodyEnd = bodyX + BODY_WIDTH;
     const extra = rodActuatorExtra(config.rodActuator ?? 'none');
