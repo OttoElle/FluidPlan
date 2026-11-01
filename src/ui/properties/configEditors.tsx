@@ -22,6 +22,13 @@ import {
   ThrottleEditor,
 } from './symbolEditors.tsx';
 import { ValveConfigurator } from './valveEditor.tsx';
+import {
+  GrafcetActionEditor,
+  GrafcetConnectorEditor,
+  GrafcetStepEditor,
+  GrafcetSyncEditor,
+  GrafcetTransitionEditor,
+} from './grafcetEditors.tsx';
 
 /** Was ein Konfigurator bekommt: die aktuelle Konfiguration und wohin Änderungen gehen. */
 export interface ConfigEditorProps<C extends ComponentConfig = ComponentConfig> {
@@ -61,6 +68,11 @@ const CONFIG_EDITORS: { [K in ComponentConfig['kind']]: ComponentType<ConfigEdit
   'pressure-converter': PressureConverterEditor,
   'prime-mover': PrimeMoverEditor,
   manifold: ManifoldEditor,
+  'grafcet-step': GrafcetStepEditor,
+  'grafcet-transition': GrafcetTransitionEditor,
+  'grafcet-action': GrafcetActionEditor,
+  'grafcet-sync': GrafcetSyncEditor,
+  'grafcet-connector': GrafcetConnectorEditor,
 };
 
 /** Passenden Konfigurator für eine beliebige Konfiguration anzeigen. */

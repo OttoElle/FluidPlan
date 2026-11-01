@@ -65,6 +65,8 @@ const PRINT_STYLE: [selector: string, attributes: Record<string, string>][] = [
   ['.paper', { fill: '#ffffff' }],
   ['.line', { fill: 'none', stroke: '#000000', 'stroke-width': '1.5' }],
   ['.junction', { fill: '#000000' }],
+  ['.link-junction', { fill: 'none' }],
+  ['.link-arrow', { fill: '#000000', stroke: 'none' }],
   ['.symbol', { fill: 'none', stroke: '#000000', 'stroke-linejoin': 'miter' }],
   ['.symbol .fill', { fill: '#000000' }],
   ['.component .box', { fill: '#ffffff', stroke: '#000000', 'stroke-width': '1' }],

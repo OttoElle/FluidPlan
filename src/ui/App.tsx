@@ -57,10 +57,11 @@ import {
 import { checkSheets, sheetName, type Issue } from '../model/check.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
 import { autoLabelSheets } from '../model/labels.ts';
-import { MODULE, definitionOf, paletteFor, type PaletteEntry } from '../model/library.ts';
+import { nextStepName } from '../model/grafcet.ts';
+import { MODULE, definitionOf, grafcetPalette, paletteFor, type PaletteEntry } from '../model/library.ts';
 
 /** Alle Bauteilkataloge; in der Seitenleiste je Medium aufklappbar. */
-const PALETTE: PaletteEntry[] = [...paletteFor('hydraulic'), ...paletteFor('pneumatic')];
+const PALETTE: PaletteEntry[] = [...paletteFor('hydraulic'), ...paletteFor('pneumatic'), ...grafcetPalette()];
 import { drawingArea, type TitleField } from '../model/sheet.ts';
 import type { Diagram, DiagramMeta, Drawing, Point } from '../model/types.ts';
 import { downloadDrawing, readDrawingFile } from '../io/browser.ts';
@@ -261,7 +262,12 @@ export function App() {
       const area = drawingArea(base.sheet);
       position = { x: area.x + 40 + offset, y: area.y + 40 + offset };
     }
-    const { diagram: placed, component } = addComponent(base, entry.type, position, { config: entry.config, medium: entry.medium });
+    // GRAFCET-Schritte fortlaufend nummerieren (über alle Blätter).
+    const config =
+      entry.config?.kind === 'grafcet-step' && entry.config.variant !== 'macro'
+        ? { ...entry.config, name: nextStepName(drawing.sheets) }
+        : entry.config;
+    const { diagram: placed, component } = addComponent(base, entry.type, position, { config, medium: entry.medium });
     const next = onActiveLayer(placed, { components: [component.id] });
     if (sheet === active) edit(keepRoutes(base, next));
     else {

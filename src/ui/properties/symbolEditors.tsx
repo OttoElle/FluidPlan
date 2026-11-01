@@ -71,7 +71,7 @@ function variantIcon(config: ComponentConfig): ReactNode {
 }
 
 /** Auswahl mit Symbolvorschau: `variant` baut die Konfiguration für jeden Wert. */
-function symbolOptions<T extends string | number>(
+export function symbolOptions<T extends string | number>(
   values: readonly T[],
   name: (v: T) => string,
   variant: (v: T) => ComponentConfig,
@@ -79,7 +79,7 @@ function symbolOptions<T extends string | number>(
   return values.map((value) => ({ value, label: name(value), icon: variantIcon(variant(value)) }));
 }
 
-function Field({ title, children, wide }: { title: string; children: ReactNode; wide?: boolean }) {
+export function Field({ title, children, wide }: { title: string; children: ReactNode; wide?: boolean }) {
   return (
     <div className={wide ? 'field wide' : 'field'}>
       <span>{title}</span>
@@ -88,7 +88,7 @@ function Field({ title, children, wide }: { title: string; children: ReactNode; 
   );
 }
 
-function Check({ title, checked, onChange }: { title: string; checked: boolean; onChange: (v: boolean) => void }) {
+export function Check({ title, checked, onChange }: { title: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label className="check">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />

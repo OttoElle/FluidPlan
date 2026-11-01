@@ -1,5 +1,6 @@
 import { connectionsAt } from './diagram.ts';
 import { needsLabel } from './labels.ts';
+import { isGrafcetType } from './grafcet.ts';
 import { definitionOf, mediumOf, portName } from './library.ts';
 import { componentBox, routeAll, type Box } from './routing.ts';
 import { drawingArea, titleBlock } from './sheet.ts';
@@ -61,10 +62,28 @@ export function checkDiagram(diagram: Diagram): Issue[] {
     }
   }
 
-  // Offene Anschlüsse. Entlüftungen pneumatischer Ventile dürfen offen bleiben.
+  // GRAFCET (DIN EN 60848): Schrittbezeichnungen eindeutig (Tabelle 1, [1]),
+  // jede Transition mit Bedingung (Tabelle 4, [13]).
+  const steps = new Map<string, ComponentInstance[]>();
+  for (const c of diagram.components) {
+    if (c.config?.kind === 'grafcet-step') {
+      const name = c.config.name.trim();
+      if (!name) issue('warning', 'Ein GRAFCET-Schritt hat keine Bezeichnung.', [c.id]);
+      else steps.set(name, [...(steps.get(name) ?? []), c]);
+    }
+    if (c.config?.kind === 'grafcet-transition' && !c.config.condition.trim()) {
+      issue('warning', 'Eine Transition hat keine Transitionsbedingung.', [c.id]);
+    }
+  }
+  for (const [name, members] of steps) {
+    if (members.length > 1) issue('error', `Schritt ${name} ist ${members.length}-mal vergeben.`, members.map((c) => c.id));
+  }
+
+  // Offene Anschlüsse. Entlüftungen pneumatischer Ventile dürfen offen bleiben;
+  // GRAFCET-Elemente dürfen offen enden (Quell- und Schlussschritt, Abschnitt 6.3).
   for (const c of diagram.components) {
     const def = definitionOf(c);
-    if (!def) continue;
+    if (!def || isGrafcetType(c.type)) continue;
     const open = def.ports.filter((p) => {
       if (mediumOf(c) === 'pneumatic' && p.kind === 'return' && c.type.startsWith('valve.')) return false;
       return connectionsAt(diagram, { componentId: c.id, portId: p.id }).length === 0;

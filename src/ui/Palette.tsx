@@ -1,6 +1,5 @@
 import { Circle, createLucideIcon, Ellipse, Slash, SlidersHorizontal, Square, Type, Waypoints, type LucideIcon } from 'lucide-react';
-import { MEDIUM_NAMES, PALETTE_GROUPS, type PaletteEntry } from '../model/library.ts';
-import type { Domain } from '../model/types.ts';
+import { CATALOG_NAMES, PALETTE_GROUPS, type Catalog, type PaletteEntry } from '../model/library.ts';
 import { SYMBOL_DRAG_TYPE, type AnnotationTool } from './DiagramView.tsx';
 import { IconButton } from './IconButton.tsx';
 import { useOpenCatalogs } from './layout.ts';
@@ -22,11 +21,11 @@ const TOOLS: [AnnotationTool, LucideIcon, string][] = [
   ['polyline', Waypoints, 'Linienzug: Punkte anklicken; Doppelklick, Enter oder Rechtsklick beendet, Klick auf den ersten Punkt schließt ihn'],
 ];
 
-const CATALOGS = Object.keys(MEDIUM_NAMES) as Domain[];
+const CATALOGS = Object.keys(CATALOG_NAMES) as Catalog[];
 
 /**
  * Bauteilliste links: Zeichenwerkzeuge und die Bauteilkataloge (Hydraulik,
- * Pneumatik), die man nach Bedarf aufklappt; Symbole zum Anklicken oder
+ * Pneumatik, GRAFCET), die man nach Bedarf aufklappt; Symbole zum Anklicken oder
  * Aufs-Blatt-Ziehen. Ein Plan darf Bauteile aus beiden Katalogen enthalten.
  */
 export function Palette({
@@ -35,7 +34,7 @@ export function Palette({
   setTool,
   add,
 }: {
-  /** Einträge aller Kataloge; `medium` ordnet sie zu. */
+  /** Einträge aller Kataloge; `catalog` ordnet sie zu. */
   palette: PaletteEntry[];
   tool: AnnotationTool | null;
   setTool: (tool: AnnotationTool | null) => void;
@@ -52,7 +51,7 @@ export function Palette({
       </div>
       <h2>Bauteile</h2>
       {CATALOGS.map((medium) => {
-        const catalog = palette.filter((e) => e.medium === medium);
+        const catalog = palette.filter((e) => e.catalog === medium);
         if (catalog.length === 0) return null;
         return (
           <details
@@ -61,7 +60,7 @@ export function Palette({
             className="palette-catalog"
             onToggle={(e) => setCatalogOpen(medium, e.currentTarget.open)}
           >
-            <summary>{MEDIUM_NAMES[medium]}</summary>
+            <summary>{CATALOG_NAMES[medium]}</summary>
             {/* Zugeklappte Kataloge nicht rendern: spart die vielen Symbolvorschauen. */}
             {openCatalogs[medium] &&
               PALETTE_GROUPS.map((group) => {

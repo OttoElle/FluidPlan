@@ -1,3 +1,4 @@
+import { isGrafcetType } from '../../model/grafcet.ts';
 import { Route } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { DEFAULT_LINE_WIDTH, DEFAULT_TEXT_SIZE, LINE_WIDTHS } from '../../model/annotations.ts';
@@ -140,6 +141,8 @@ function ComponentProperties({
         </div>
         <div className="props-ident">
           <h2>{def?.name ?? draft.type}</h2>
+          {/* GRAFCET-Elemente haben kein Kennzeichen nach ISO 1219-2; Schrittnummer usw. im Konfigurator. */}
+          {!isGrafcetType(draft.type) && (
           <div className="ident-row">
             <label>
               Kennzeichen
@@ -159,6 +162,7 @@ function ComponentProperties({
               Anzeigen
             </label>
           </div>
+          )}
           <div className="ident-row">
             <label>
               Bezeichnung

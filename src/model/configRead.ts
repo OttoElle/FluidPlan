@@ -49,6 +49,14 @@ export class ConfigReader {
     return value as number;
   }
 
+  /** Freier Text, z. B. eine Bezeichnung. */
+  text(key: string, fallback?: string): string {
+    const value = this.v[key];
+    if (value === undefined && fallback !== undefined) return fallback;
+    if (typeof value !== 'string') this.errors.push(`${this.path}.${key}: Text erwartet`);
+    return value as string;
+  }
+
   bool(key: string, fallback?: boolean): boolean {
     const value = this.v[key];
     if (value === undefined && fallback !== undefined) return fallback;

@@ -107,6 +107,33 @@ import {
   type IndicatorConfig,
   type InstrumentConfig,
 } from './instruments.ts';
+import {
+  actionGeometry,
+  actionTitle,
+  connectorGeometry,
+  connectorTitle,
+  defaultActionConfig,
+  defaultConnectorConfig,
+  defaultStepConfig,
+  defaultSyncConfig,
+  defaultTransitionConfig,
+  readActionConfig,
+  readConnectorConfig,
+  readStepConfig,
+  readSyncConfig,
+  readTransitionConfig,
+  stepGeometry,
+  stepTitle,
+  syncGeometry,
+  syncTitle,
+  transitionGeometry,
+  transitionTitle,
+  type GrafcetActionConfig,
+  type GrafcetConnectorConfig,
+  type GrafcetStepConfig,
+  type GrafcetSyncConfig,
+  type GrafcetTransitionConfig,
+} from './grafcet.ts';
 import type { ComponentConfig, ComponentDefinition, ComponentInstance, Domain, PortDefinition, PortKind } from './types.ts';
 import {
   defaultValveConfig,
@@ -418,6 +445,61 @@ const MANIFOLD: ConfigurableType<ManifoldConfig> = {
   read: readManifoldConfig,
 };
 
+// --- GRAFCET (DIN EN 60848, siehe grafcet.ts) ---
+
+/** GRAFCET-Elemente gehören zu keinem Medium; `domains` ist leer. */
+const NONE: Domain[] = [];
+
+const STEP: ConfigurableType<GrafcetStepConfig> = {
+  type: 'grafcet.step',
+  name: 'Schritt',
+  domains: NONE,
+  defaultConfig: () => defaultStepConfig(),
+  title: stepTitle,
+  geometry: stepGeometry,
+  read: readStepConfig,
+};
+
+const TRANSITION: ConfigurableType<GrafcetTransitionConfig> = {
+  type: 'grafcet.transition',
+  name: 'Transition',
+  domains: NONE,
+  defaultConfig: () => defaultTransitionConfig(),
+  title: transitionTitle,
+  geometry: transitionGeometry,
+  read: readTransitionConfig,
+};
+
+const ACTION: ConfigurableType<GrafcetActionConfig> = {
+  type: 'grafcet.action',
+  name: 'Aktion',
+  domains: NONE,
+  defaultConfig: () => defaultActionConfig(),
+  title: actionTitle,
+  geometry: actionGeometry,
+  read: readActionConfig,
+};
+
+const SYNC: ConfigurableType<GrafcetSyncConfig> = {
+  type: 'grafcet.sync',
+  name: 'Synchronisierung',
+  domains: NONE,
+  defaultConfig: () => defaultSyncConfig(),
+  title: syncTitle,
+  geometry: syncGeometry,
+  read: readSyncConfig,
+};
+
+const CONNECTOR: ConfigurableType<GrafcetConnectorConfig> = {
+  type: 'grafcet.connector',
+  name: 'Zielhinweis',
+  domains: NONE,
+  defaultConfig: () => defaultConnectorConfig(),
+  title: connectorTitle,
+  geometry: connectorGeometry,
+  read: readConnectorConfig,
+};
+
 const CONFIGURABLE = new Map<string, ConfigurableType<any>>(
   [
     VALVE,
@@ -441,6 +523,11 @@ const CONFIGURABLE = new Map<string, ConfigurableType<any>>(
     PRESSURE_CONVERTER,
     PRIME_MOVER,
     MANIFOLD,
+    STEP,
+    TRANSITION,
+    ACTION,
+    SYNC,
+    CONNECTOR,
   ].map((t) => [t.type, t]),
 );
 
@@ -549,10 +636,15 @@ export function definitionsFor(domain: Domain): ComponentDefinition[] {
 
 // --- Bauteilliste in der Oberfläche ----------------------------------------------
 
+/** Bauteilkataloge der Seitenleiste: die beiden Medien und GRAFCET. */
+export type Catalog = Domain | 'grafcet';
+
 export interface PaletteEntry {
   key: string;
-  /** Bauteilkatalog, aus dem der Eintrag stammt; wird beim Einfügen am Bauteil gemerkt. */
-  medium: Domain;
+  /** Katalog in der Seitenleiste, in dem der Eintrag steht. */
+  catalog: Catalog;
+  /** Medium des Katalogs; wird beim Einfügen am Bauteil gemerkt (fehlt bei GRAFCET). */
+  medium?: Domain;
   name: string;
   group: string;
   type: string;
@@ -562,7 +654,7 @@ export interface PaletteEntry {
 }
 
 /** Bauteilkataloge in der Seitenleiste, in dieser Reihenfolge. */
-export const MEDIUM_NAMES: Record<Domain, string> = { hydraulic: 'Hydraulik', pneumatic: 'Pneumatik' };
+export const CATALOG_NAMES: Record<Catalog, string> = { hydraulic: 'Hydraulik', pneumatic: 'Pneumatik', grafcet: 'GRAFCET' };
 
 /** Kategorien der Bauteilliste, in dieser Reihenfolge (nach Ottos Liste vom 31.10.2026). */
 export const PALETTE_GROUPS = [
@@ -578,6 +670,11 @@ export const PALETTE_GROUPS = [
   'Verbinder',
   'Aufbereitung',
   'Messen',
+  // GRAFCET (DIN EN 60848)
+  'Schritte',
+  'Transitionen',
+  'Aktionen',
+  'Ablaufstruktur',
 ] as const;
 
 type PaletteGroup = (typeof PALETTE_GROUPS)[number];
@@ -591,6 +688,7 @@ export function paletteFor(domain: Domain): PaletteEntry[] {
   const hydraulic = domain === 'hydraulic';
   const c = (key: string, name: string, group: PaletteGroup, t: ConfigurableType<any>, config: ComponentConfig): PaletteEntry => ({
     key: `${domain}:${key}`,
+    catalog: domain,
     medium: domain,
     name,
     group,
@@ -601,7 +699,7 @@ export function paletteFor(domain: Domain): PaletteEntry[] {
   const f = (type: string, group: PaletteGroup): PaletteEntry[] => {
     const d = BY_TYPE.get(type);
     if (!d || !d.domains.includes(domain)) return [];
-    return [{ key: `${domain}:${type}`, medium: domain, name: d.name, group, type }];
+    return [{ key: `${domain}:${type}`, catalog: domain, medium: domain, name: d.name, group, type }];
   };
   const valve = (ports: DirectionalValveConfig['ports']) =>
     c(`valve-${ports}`, `${ports}/x-Wegeventil`, 'Wegeventile', VALVE, defaultValveConfig(domain, ports, 2));
@@ -675,6 +773,34 @@ export function paletteFor(domain: Domain): PaletteEntry[] {
     sensor('flow-sensor', 'Durchflusssensor', 'flow', 'analog'),
     sensor('temperature-sensor', 'Temperatursensor', 'temperature', 'analog'),
     sensor('position-sensor', 'Näherungsschalter', 'position', 'switching'),
+  ];
+}
+
+/**
+ * GRAFCET-Katalog nach DIN EN 60848: ein Eintrag je Grundform, Bezeichnungen,
+ * Bedingungen und Aktionsart stellt man im Konfigurator ein.
+ */
+export function grafcetPalette(): PaletteEntry[] {
+  const c = (key: string, name: string, group: PaletteGroup, t: ConfigurableType<any>, config: ComponentConfig): PaletteEntry => ({
+    key: `grafcet:${key}`,
+    catalog: 'grafcet',
+    name,
+    group,
+    type: t.type,
+    config,
+    configurable: true,
+  });
+  return [
+    c('step', 'Schritt', 'Schritte', STEP, defaultStepConfig('step')),
+    c('initial-step', 'Anfangsschritt', 'Schritte', STEP, defaultStepConfig('initial')),
+    c('enclosing-step', 'Einschließender Schritt', 'Schritte', STEP, defaultStepConfig('enclosing')),
+    c('macro-step', 'Makroschritt', 'Schritte', STEP, defaultStepConfig('macro', 'M1')),
+    c('transition', 'Transition', 'Transitionen', TRANSITION, defaultTransitionConfig('a')),
+    c('action', 'Kontinuierlich wirkende Aktion', 'Aktionen', ACTION, defaultActionConfig('continuous')),
+    c('stored-action', 'Gespeichert wirkende Aktion', 'Aktionen', ACTION, defaultActionConfig('activation', 'A := 1')),
+    c('forcing', 'Zwangssteuernder Befehl', 'Aktionen', ACTION, defaultActionConfig('forcing', 'G2{INIT}')),
+    c('sync', 'Synchronisierung', 'Ablaufstruktur', SYNC, defaultSyncConfig()),
+    c('connector', 'Zielhinweis', 'Ablaufstruktur', CONNECTOR, defaultConnectorConfig()),
   ];
 }
 

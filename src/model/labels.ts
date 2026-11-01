@@ -33,7 +33,8 @@ export type ComponentCode = 'P' | 'M' | 'A' | 'V' | 'S' | 'Z';
 const UNLABELED = new Set(['supply.silencer', 'line.plug']);
 
 export function needsLabel(component: Pick<ComponentInstance, 'type'>): boolean {
-  return !UNLABELED.has(component.type);
+  // GRAFCET-Elemente tragen ihre Bezeichnung selbst (Schrittnummer, Bedingung).
+  return !UNLABELED.has(component.type) && !component.type.startsWith('grafcet.');
 }
 
 export function componentCode(type: string): ComponentCode {

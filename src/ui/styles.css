@@ -211,6 +211,10 @@ select {
 .segment-hit.vertical { cursor: ew-resize; }
 .line.draft { stroke: var(--accent); stroke-dasharray: 4 3; pointer-events: none; }
 .junction { fill: var(--line); pointer-events: none; }
+/* Abzweige von GRAFCET-Wirkungslinien ohne Punkt; ausgewählt bleibt er sichtbar. */
+.junction-node .junction.link-junction { fill: transparent; }
+.junction-node.selected .junction.link-junction { fill: var(--accent); }
+.link-arrow { fill: var(--line); stroke: none; pointer-events: none; }
 .port { cursor: crosshair; }
 .port .port-hit { fill: transparent; }
 .component .label-group, .component .description, .port .port-label { cursor: move; }
@@ -727,3 +731,8 @@ dialog.help { width: min(560px, calc(100vw - 32px)); }
 .canvas-menu button:hover:not(:disabled), .canvas-menu button:focus-visible { background: var(--bg); border-color: var(--border); outline: none; }
 .canvas-menu button:disabled { opacity: 0.4; }
 .canvas-menu hr { width: 100%; margin: 3px 0; border: 0; border-top: 1px solid var(--border); }
+
+/* GRAFCET: Bedingungen mit Sonderzeichen */
+.expression-input { display: flex; flex-direction: column; gap: 6px; }
+.expression-chars { display: flex; gap: 4px; flex-wrap: wrap; }
+.char-button { min-width: 30px; height: 26px; padding: 0 6px; font-size: 14px; }

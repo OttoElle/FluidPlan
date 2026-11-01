@@ -5,6 +5,8 @@ import type { Diagram, Point } from '../../model/types.ts';
 import { AnnotationShape } from './annotationShapes.tsx';
 import { ComponentShape } from './ComponentShape.tsx';
 import { LINE_DASH } from './lineStyle.ts';
+import { LinkArrows } from './LinkArrows.tsx';
+import { grafcetConnections, grafcetJunctions, upwardArrows } from '../../model/grafcet.ts';
 import { SheetFrame } from './SheetFrame.tsx';
 
 const SHEET_KEYS = ['sheet', 'components', 'connections', 'junctions', 'annotations', 'groups', 'meta', 'layers'] as const;
@@ -19,7 +21,10 @@ export const StaticSheet = memo(
     const { hidden } = useMemo(() => layerState(diagram), [diagram]);
     const connections = diagram.connections.filter((l) => !hidden.connections.has(l.id));
     const shownPaths = new Map(connections.map((l) => [l.id, paths.get(l.id)!]));
-    const dots = branchDots(connections, shownPaths);
+    const links = grafcetConnections(diagram);
+    const linkJunctions = grafcetJunctions(diagram, links);
+    const dots = branchDots(connections.filter((l) => !links.has(l.id)), shownPaths);
+    const arrows = upwardArrows(diagram, shownPaths, links);
     const jumps = diagram.sheet.lineJumps ? crossings(shownPaths) : new Map<string, Point[]>();
     return (
       <>
@@ -35,7 +40,8 @@ export const StaticSheet = memo(
         {dots.map((p) => (
           <circle key={`${p.x},${p.y}`} className="junction" cx={p.x} cy={p.y} r={2} />
         ))}
-        {diagram.junctions.filter((j) => !hidden.junctions.has(j.id)).map((j) => (
+        <LinkArrows arrows={arrows} />
+        {diagram.junctions.filter((j) => !hidden.junctions.has(j.id) && !linkJunctions.has(j.id)).map((j) => (
           <circle key={j.id} className="junction" cx={j.position.x} cy={j.position.y} r={2} />
         ))}
         {diagram.components.filter((c) => !hidden.components.has(c.id)).map((c) => (

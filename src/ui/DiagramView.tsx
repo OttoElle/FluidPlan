@@ -20,6 +20,7 @@ import { expandGroups } from '../model/groups.ts';
 import { layerState, without } from '../model/layers.ts';
 import { DEFAULT_SNAP, FINE, snapPoint as snapToTargets, snapTargets, type SnapKind, type SnapOptions, type SnapTargets } from '../model/snap.ts';
 import { sheetLayout, type SheetRect } from '../model/drawing.ts';
+import { grafcetConnections, grafcetJunctions, upwardArrows } from '../model/grafcet.ts';
 import type { Annotation, Diagram, Endpoint, Point } from '../model/types.ts';
 import { IconButton } from './IconButton.tsx';
 import type { PropertiesTarget } from './properties/PropertiesDialog.tsx';
@@ -32,6 +33,7 @@ import { GroupFrames } from './canvas/GroupFrames.tsx';
 import { LINE_DASH } from './canvas/lineStyle.ts';
 import { useModifierKeys } from './canvas/modifierKeys.ts';
 import { GridDots, MAJOR_EVERY, SheetFrame, type GridLook } from './canvas/SheetFrame.tsx';
+import { LinkArrows } from './canvas/LinkArrows.tsx';
 import { StaticSheet } from './canvas/StaticSheet.tsx';
 import { PX_PER_MM, useViewport, type View } from './canvas/viewport.ts';
 import { useViewSettings } from './canvas/viewSettings.ts';
@@ -340,10 +342,14 @@ export function DiagramView({
     () => (hidden.connections.size === 0 ? paths : new Map([...paths].filter(([id]) => !hidden.connections.has(id)))),
     [paths, hidden],
   );
+  // GRAFCET-Wirkungslinien verzweigen ohne Punkt und bekommen aufwärts einen Pfeil (DIN EN 60848, Tabelle 3).
+  const links = useMemo(() => grafcetConnections(diagram), [diagram]);
+  const linkJunctions = useMemo(() => grafcetJunctions(diagram, links), [diagram, links]);
   const dots = branchDots(
-    diagram.connections.filter((l) => !hidden.connections.has(l.id)),
+    diagram.connections.filter((l) => !hidden.connections.has(l.id) && !links.has(l.id)),
     shownPaths,
   );
+  const arrows = upwardArrows(diagram, shownPaths, links);
   const jumps = sheet.lineJumps ? crossings(shownPaths) : new Map<string, Point[]>();
 
   /** Alles, was ganz im Rahmen zwischen a und b liegt. */
@@ -787,6 +793,7 @@ export function DiagramView({
         {dots.map((p) => (
           <circle key={`${p.x},${p.y}`} className="junction" cx={p.x} cy={p.y} r={2} />
         ))}
+        <LinkArrows arrows={arrows} />
         {diagram.junctions.map((j) => {
           if (hidden.junctions.has(j.id)) return null;
           const ref = { junctionId: j.id };
@@ -818,7 +825,7 @@ export function DiagramView({
             >
               <title>Abzweig: ziehen zum Verschieben</title>
               <circle cx={j.position.x} cy={j.position.y} r={6} className="hit" />
-              <circle cx={j.position.x} cy={j.position.y} r={2} className="junction" />
+              <circle cx={j.position.x} cy={j.position.y} r={2} className={linkJunctions.has(j.id) ? 'junction link-junction' : 'junction'} />
             </g>
           );
         })}

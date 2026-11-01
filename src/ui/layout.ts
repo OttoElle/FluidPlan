@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
-import type { Domain } from '../model/types.ts';
+import type { Catalog } from '../model/library.ts';
 
 export type Theme = 'light' | 'dark';
 
@@ -94,20 +94,18 @@ const CATALOGS_KEY = 'fluidplan.catalogs';
  * Welche Bauteilkataloge (Hydraulik, Pneumatik) in der Seitenleiste
  * aufgeklappt sind; ohne gespeicherte Wahl nur Hydraulik.
  */
-export function useOpenCatalogs(): [Record<Domain, boolean>, (medium: Domain, open: boolean) => void] {
-  const [open, setOpen] = useState<Record<Domain, boolean>>(() => {
-    const fallback = { hydraulic: true, pneumatic: false };
+export function useOpenCatalogs(): [Record<Catalog, boolean>, (catalog: Catalog, open: boolean) => void] {
+  const [open, setOpen] = useState<Record<Catalog, boolean>>(() => {
+    const fallback = { hydraulic: true, pneumatic: false, grafcet: false };
     try {
-      const raw = JSON.parse(load(CATALOGS_KEY) ?? 'null') as Partial<Record<Domain, unknown>> | null;
-      return {
-        hydraulic: typeof raw?.hydraulic === 'boolean' ? raw.hydraulic : fallback.hydraulic,
-        pneumatic: typeof raw?.pneumatic === 'boolean' ? raw.pneumatic : fallback.pneumatic,
-      };
+      const raw = JSON.parse(load(CATALOGS_KEY) ?? 'null') as Partial<Record<Catalog, unknown>> | null;
+      const pick = (k: Catalog) => (typeof raw?.[k] === 'boolean' ? (raw[k] as boolean) : fallback[k]);
+      return { hydraulic: pick('hydraulic'), pneumatic: pick('pneumatic'), grafcet: pick('grafcet') };
     } catch {
       return fallback;
     }
   });
-  const toggle = useCallback((medium: Domain, value: boolean) => {
+  const toggle = useCallback((medium: Catalog, value: boolean) => {
     setOpen((prev) => {
       if (prev[medium] === value) return prev;
       const next = { ...prev, [medium]: value };

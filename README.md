@@ -1,6 +1,6 @@
 # FluidPlan
 
-Leichtgewichtiger Editor für einfache **Hydraulik- und Pneumatik-Schaltpläne** im Browser.
+Leichtgewichtiger Editor für einfache **Hydraulik- und Pneumatik-Schaltpläne** und **GRAFCET-Pläne** im Browser.
 
 Stand: lauffähiger Editor mit mehreren Blättern, Ebenen, Rückgängig/Wiederholen, Prüfen und Export als PDF, SVG und PNG.
 Schaltzeichen nach DIN ISO 1219-1 für die Grundbauteile: Pumpen, Handpumpe, Kompressor, Motoren,
@@ -66,6 +66,15 @@ verschiebt die Ansicht; 100 % entspricht der Papiergröße.
 Es gibt nur eine Art Schaltplan: Die Bauteilliste hat je einen ausklappbaren Katalog für
 Hydraulik und Pneumatik, und ein Plan darf Bauteile aus beiden enthalten. Jedes Bauteil merkt
 sich, aus welchem Katalog es stammt (`medium`), davon hängen z. B. die Anschlussnamen ab.
+
+Ein dritter Katalog „GRAFCET“ enthält die Elemente nach DIN EN 60848 (`src/model/grafcet.ts`,
+Zeichnungen in `src/ui/grafcetSymbols.tsx`): Schritt, Anfangsschritt, einschließender Schritt,
+Makroschritt, Transition mit Bedingung und Name, kontinuierlich und gespeichert wirkende
+Aktionen, zwangssteuernder Befehl, Synchronisierung (Doppellinie) und Zielhinweis.
+Bezeichnungen, Bedingungen und Aktionsart stellt man im Konfigurator ein; neue Schritte werden
+fortlaufend nummeriert. In Bedingungen setzt `!` vor einem Namen oder einer Klammer einen
+Überstrich (Negation), z. B. `B3 · !B4`. Wirkungslinien sind normale Leitungen zwischen den
+Anschlüssen: Verzweigungen bekommen keinen Punkt, Linien nach oben einen Pfeil (Symbol [11]).
 
 Bedienung: Bauteile per Klick oder Ziehen aus der Bauteilliste aufs Blatt bringen; die Liste
 ist am rechten Rand in der Breite ziehbar. Was ausgewählt ist, bearbeitet eine kleine Leiste

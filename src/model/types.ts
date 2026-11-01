@@ -20,6 +20,13 @@ import type { DirectionalValveConfig } from './valve.ts';
 import type { CheckValveConfig, FlowDividerConfig, PressureValveConfig, ThrottleConfig } from './fluidValves.ts';
 import type { CoolerConfig, FilterConfig } from './conditioning.ts';
 import type { IndicatorConfig, InstrumentConfig } from './instruments.ts';
+import type {
+  GrafcetActionConfig,
+  GrafcetConnectorConfig,
+  GrafcetStepConfig,
+  GrafcetSyncConfig,
+  GrafcetTransitionConfig,
+} from './grafcet.ts';
 
 /** Medium eines Bauteils (Hydraulik oder Pneumatik). */
 export type Domain = 'hydraulic' | 'pneumatic';
@@ -96,7 +103,12 @@ export type ComponentConfig =
   | SwivelConfig
   | PressureConverterConfig
   | PrimeMoverConfig
-  | ManifoldConfig;
+  | ManifoldConfig
+  | GrafcetStepConfig
+  | GrafcetTransitionConfig
+  | GrafcetActionConfig
+  | GrafcetSyncConfig
+  | GrafcetConnectorConfig;
 
 /** Ein im Schaltplan platziertes Bauteil. */
 export interface ComponentInstance {
