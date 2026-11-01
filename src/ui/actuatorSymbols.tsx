@@ -8,6 +8,7 @@ import {
 import { DRAWING_FONT } from '../model/lettering.ts';
 import { MotorLetter, RotationArrow } from './rotarySymbol.tsx';
 import { ArrowHead, Spring, Triangle, type P } from './symbolParts.tsx';
+import { Upright } from './symbolOrientation.tsx';
 
 /**
  * Schwenkantrieb, Druckmittelwandler/Druckübersetzer, Antriebsmotoren,
@@ -58,9 +59,11 @@ export function SwivelSymbol({ config }: { config: SwivelConfig }) {
 
 function Label({ x, y, children }: { x: number; y: number; children: string }) {
   return (
-    <text x={x} y={y} className="fill" stroke="none" fontSize={1.4} fontFamily={DRAWING_FONT} textAnchor="middle">
-      {children}
-    </text>
+    <Upright x={x} y={y - 0.5}>
+      <text x={x} y={y} className="fill" stroke="none" fontSize={1.4} fontFamily={DRAWING_FONT} textAnchor="middle">
+        {children}
+      </text>
+    </Upright>
   );
 }
 

@@ -1,5 +1,6 @@
 import { MOTOR_OFFSET, type RotaryConfig } from '../model/rotary.ts';
 import { ArrowHead, DASH, FlowArrow, InwardTriangle, pts, Triangle, type P } from './symbolParts.tsx';
+import { Upright } from './symbolOrientation.tsx';
 
 /**
  * Pumpen, Kompressoren und Motoren aus ihrer Konfiguration (siehe
@@ -14,7 +15,11 @@ const CY = 5;
 /** Buchstabe M für Motoren (8.4.51): 2,5M breit und hoch, Mittelspitze 1,25M tief. */
 export function MotorLetter({ cx, cy }: { cx: number; cy: number }) {
   const h = 1.25;
-  return <polyline points={pts([cx - h, cy + h], [cx - h, cy - h], [cx, cy], [cx + h, cy - h], [cx + h, cy + h])} />;
+  return (
+    <Upright x={cx} y={cy}>
+      <polyline points={pts([cx - h, cy + h], [cx - h, cy - h], [cx, cy], [cx + h, cy - h], [cx + h, cy + h])} />
+    </Upright>
+  );
 }
 
 /**

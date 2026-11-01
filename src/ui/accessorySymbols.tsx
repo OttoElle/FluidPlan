@@ -4,6 +4,7 @@ import type { CouplingConfig } from '../model/coupling.ts';
 import { QUANTITY_LETTER, sensorLayout, type SensorConfig } from '../model/sensor.ts';
 import { tankLayout, type AccumulatorConfig, type TankConfig } from '../model/storage.ts';
 import { CheckElement, FlowArrow, pts, Spring, Triangle, type P } from './symbolParts.tsx';
+import { Upright } from './symbolOrientation.tsx';
 
 /**
  * Konfigurierbare Zubehör-Symbole nach DIN ISO 1219-1: Kugelhahn, Speicher,
@@ -225,9 +226,11 @@ function Converter({ x, y, letter, output }: { x: number; y: number; letter: str
     <>
       <rect x={x} y={y} width={4} height={4} />
       <line x1={x} y1={y} x2={x + 4} y2={y + 4} />
-      <text x={x + 1.1} y={y + 2.9} className="fill" stroke="none" fontSize={1.8} fontFamily={DRAWING_FONT} textAnchor="middle" dominantBaseline="central">
-        {letter}
-      </text>
+      <Upright x={x + 1.1} y={y + 2.9}>
+        <text x={x + 1.1} y={y + 2.9} className="fill" stroke="none" fontSize={1.8} fontFamily={DRAWING_FONT} textAnchor="middle" dominantBaseline="central">
+          {letter}
+        </text>
+      </Upright>
       {output === 'switching' ? (
         // schaltend (8.7.7): Schließer
         <>

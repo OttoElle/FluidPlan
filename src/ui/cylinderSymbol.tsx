@@ -18,6 +18,7 @@ import {
 import { DRAWING_FONT } from '../model/lettering.ts';
 import { FlowArrow, pts, type P } from './symbolParts.tsx';
 import { ActuatorElement, SHAFT } from './valveSymbol.tsx';
+import { Upright } from './symbolOrientation.tsx';
 
 /** Oberkante der 1M dicken Kolbenstange. */
 const ROD_Y = 1.5;
@@ -91,9 +92,11 @@ function SwitchBox({ x, y, mirrored = false }: { x: number; y: number; mirrored?
     <>
       <rect x={x} y={y} width={s} height={s} />
       <line x1={m(0)} y1={y} x2={m(s)} y2={y + s} />
-      <text x={m(0.85)} y={y + 2.2} className="fill" stroke="none" fontSize={1.5} fontFamily={DRAWING_FONT} textAnchor="middle" dominantBaseline="central">
-        G
-      </text>
+      <Upright x={m(0.85)} y={y + 2.2}>
+        <text x={m(0.85)} y={y + 2.2} className="fill" stroke="none" fontSize={1.5} fontFamily={DRAWING_FONT} textAnchor="middle" dominantBaseline="central">
+          G
+        </text>
+      </Upright>
       <polyline points={pts(p(1.2, 0.85), p(1.7, 0.85), p(2.2, 0.5))} />
       <line x1={m(2.25)} y1={y + 0.85} x2={m(2.7)} y2={y + 0.85} />
     </>

@@ -11,6 +11,7 @@ import { CoolerSymbol, FilterSymbol, Heater, Separator } from './conditioningSym
 import { CheckValveSymbol, FlowDividerSymbol, PressureValveSymbol, ThrottleSymbol } from './fluidValveSymbols.tsx';
 import { ActionSymbol, ConnectorSymbol, StepSymbol, SyncSymbol, TransitionSymbol } from './grafcetSymbols.tsx';
 import { GaugeFace, IndicatorSymbol, InstrumentSymbol } from './instrumentSymbols.tsx';
+import { SymbolOrientation } from './symbolOrientation.tsx';
 
 /**
  * Schaltzeichen nach DIN ISO 1219-1.
@@ -251,7 +252,7 @@ export function hasSymbol(type: string): boolean {
 }
 
 /** Zeichnet das Symbol in lokalen Bauteilkoordinaten (Einheiten, nicht M). */
-export function ComponentSymbol({ component }: { component: Pick<ComponentInstance, 'type' | 'config'> }) {
+export function ComponentSymbol({ component }: { component: Pick<ComponentInstance, 'type' | 'config'> & Partial<Pick<ComponentInstance, 'rotation' | 'mirrored'>> }) {
   // Konfigurierbare Bauteile ohne Konfiguration (ältere Stände) in Startkonfiguration zeichnen.
   const config = component.config ?? defaultConfigFor(component.type, 'hydraulic');
   let content: ReactNode = null;
@@ -264,8 +265,10 @@ export function ComponentSymbol({ component }: { component: Pick<ComponentInstan
   }
   if (!content) return null;
   return (
-    <g className="symbol" transform={`scale(${MODULE})`} strokeWidth={LINE_WIDTH}>
-      {content}
-    </g>
+    <SymbolOrientation.Provider value={{ rotation: component.rotation ?? 0, mirrored: component.mirrored === true }}>
+      <g className="symbol" transform={`scale(${MODULE})`} strokeWidth={LINE_WIDTH}>
+        {content}
+      </g>
+    </SymbolOrientation.Provider>
   );
 }
