@@ -53,6 +53,8 @@ export interface CylinderConfig {
   rodActuator: RodActuator;
   /** Federraum mit Anschluss (Beispiel 6.3.1), nur einfachwirkend mit Feder; fehlt in älteren Dateien. */
   springPort: boolean;
+  /** Anschluss auf der Druckseite (gegenüber der Feder); false = nur Federraum-Anschluss. Fehlt in älteren Dateien (dann true). */
+  pressurePort?: boolean;
   /** Endschalter; fehlt in älteren Dateien (dann keine). */
   limitSwitch: LimitSwitch;
   /** Entlüftung ohne Anschlussmöglichkeit am Raum ohne Anschluss (Beispiel 6.3.5); fehlt in älteren Dateien. */
@@ -155,8 +157,8 @@ export const canDetent = (c: CylinderConfig) =>
 export function cylinderPorts(config: CylinderConfig) {
   if (config.action === 'double') return { a: true, b: true };
   return {
-    a: config.spring !== 'piston' || config.springPort,
-    b: config.spring === 'piston' || config.springPort,
+    a: config.spring === 'piston' ? config.springPort : config.pressurePort !== false,
+    b: config.spring === 'piston' ? config.pressurePort !== false : config.springPort,
   };
 }
 
@@ -186,6 +188,8 @@ export function normalizeCylinder(config: CylinderConfig): CylinderConfig {
       rod: diaphragm ? 'single' : config.rod,
       rodActuator: rodless ? 'none' : config.rodActuator,
       springPort: spring !== 'none' && config.springPort === true,
+      // Ohne Federraum-Anschluss braucht der Zylinder den Anschluss auf der Druckseite
+      pressurePort: !(spring !== 'none' && config.springPort === true && config.pressurePort === false),
       limitSwitch,
       strokeLimiter: diaphragm && config.strokeLimiter === true,
       vent: false,
@@ -225,7 +229,7 @@ export function cylinderTitle(config: CylinderConfig): string {
   if (config.rod === 'none') parts.push('ohne Kolbenstange');
   if (config.hollowRod) parts.push('Hohlkolbenstange');
   if (config.pistonType && config.pistonType !== 'plain') parts.push(PISTON_TYPE_NAMES[config.pistonType]);
-  if (config.springPort) parts.push('Federraum mit Anschluss');
+  if (config.springPort) parts.push(config.pressurePort === false ? 'Anschluss nur im Federraum' : 'Federraum mit Anschluss');
   if (config.strokeLimiter) parts.push('Hubbegrenzung voreingestellt');
   if (config.vent) parts.push('Entlüftung');
   if (config.detent === 'both') parts.push('Raste in beiden Endlagen');
@@ -390,6 +394,7 @@ export function readCylinderConfig(v: unknown, path: string, errors: string[]): 
   const stroke = r.number('stroke', 0, 100, 0);
   const rodActuator = r.oneOf('rodActuator', ROD_ACTUATOR_NAMES, 'none');
   const springPort = r.bool('springPort', false);
+  const pressurePort = r.bool('pressurePort', true);
   const limitSwitch = r.oneOf('limitSwitch', LIMIT_SWITCH_NAMES, 'none');
   const vent = r.bool('vent', false);
   const strokeLimiter = r.bool('strokeLimiter', false);
@@ -407,6 +412,7 @@ export function readCylinderConfig(v: unknown, path: string, errors: string[]): 
     stroke,
     rodActuator,
     springPort,
+    pressurePort,
     limitSwitch,
     vent,
     strokeLimiter,

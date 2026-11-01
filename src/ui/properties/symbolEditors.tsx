@@ -186,10 +186,25 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
             </label>
           )}
           {piston && config.spring !== 'none' && (
-            <label className="check">
-              <input type="checkbox" checked={config.springPort} onChange={(e) => set({ springPort: e.target.checked })} />
-              Federraum mit Anschluss
-            </label>
+            <div className="radio-list" role="radiogroup" aria-label="Anschlüsse">
+              {(
+                [
+                  ['pressure', 'Anschluss auf der Druckseite', { springPort: false, pressurePort: true }],
+                  ['spring', 'Anschluss nur auf der Federseite', { springPort: true, pressurePort: false }],
+                  ['both', 'Anschluss auf beiden Seiten', { springPort: true, pressurePort: true }],
+                ] as const
+              ).map(([key, label, change]) => (
+                <label key={key} className="check">
+                  <input
+                    type="radio"
+                    name="cyl-ports"
+                    checked={(config.springPort ? (config.pressurePort === false ? 'spring' : 'both') : 'pressure') === key}
+                    onChange={() => set(change)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
           )}
         </div>
       </fieldset>

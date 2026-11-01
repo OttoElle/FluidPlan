@@ -54,7 +54,8 @@ function cylinderVariants(): CylinderConfig[] {
         for (const spring of ['none', 'rod', 'piston'] as const)
           for (const stroke of [0, 35, 50, 100])
             for (const springPort of [false, true])
-              out.push(normalizeCylinder({ ...defaultCylinderConfig(action, design), rod, spring, stroke, springPort }));
+              for (const pressurePort of [true, false])
+                out.push(normalizeCylinder({ ...defaultCylinderConfig(action, design), rod, spring, stroke, springPort, pressurePort }));
   for (const rodActuator of ROD_ACTUATORS)
     for (const stroke of [0, 50])
       out.push(normalizeCylinder({ ...defaultCylinderConfig('single'), rodActuator, stroke }));
@@ -459,6 +460,13 @@ describe('Federraum mit Anschluss (6.3.1)', () => {
     expect(ports({ springPort: true })).toEqual(['A', 'B']);
     expect(ports({ spring: 'piston', springPort: true })).toEqual(['A', 'B']);
     expect(ports({ spring: 'piston' })).toEqual(['B']);
+  });
+  it('kann nur den Anschluss auf der Federseite haben', () => {
+    expect(ports({ springPort: true, pressurePort: false })).toEqual(['B']);
+    expect(ports({ spring: 'piston', springPort: true, pressurePort: false })).toEqual(['A']);
+    expect(ports({ rod: 'none', springPort: true, pressurePort: false })).toEqual(['B']);
+    // ohne Federraum-Anschluss bleibt der Druckanschluss immer erhalten
+    expect(ports({ pressurePort: false })).toEqual(['A']);
   });
   it('gilt nur mit Feder', () => {
     expect(normalizeCylinder({ ...defaultCylinderConfig('single'), spring: 'none', springPort: true }).springPort).toBe(false);
