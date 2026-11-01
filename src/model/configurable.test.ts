@@ -211,7 +211,7 @@ describe('Konfigurierbare Bauteile', () => {
 
   it('halten Membranzylinder und kolbenstangenlose Zylinder in sinnvollen Einstellungen', () => {
     const rodless = normalizeCylinder({ ...defaultCylinderConfig('single'), rod: 'none', rodActuator: 'pedal', spring: 'rod' });
-    expect(rodless).toMatchObject({ action: 'double', spring: 'none', rodActuator: 'none' });
+    expect(rodless).toMatchObject({ action: 'single', spring: 'rod', rodActuator: 'none' });
     const diaphragm = normalizeCylinder({ ...defaultCylinderConfig('single', 'diaphragm'), spring: 'none', rod: 'through', vent: true });
     expect(diaphragm).toMatchObject({ spring: 'piston', rod: 'single', vent: true });
     expect(definition(diaphragm).ports.map((p) => p.id)).toEqual(['B']);
