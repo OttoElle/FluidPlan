@@ -39,8 +39,6 @@ export const BORES: Record<BallValveWays, Record<string, Bore>> = {
   4: {
     'lt-rb': { name: 'Links – oben, rechts – unten', paths: [['left', 'top'], ['right', 'bottom']] },
     'lb-rt': { name: 'Links – unten, rechts – oben', paths: [['left', 'bottom'], ['right', 'top']] },
-    'left-right': { name: 'Links – rechts', paths: [['left', 'right']] },
-    'top-bottom': { name: 'Oben – unten', paths: [['top', 'bottom']] },
   },
 };
 
@@ -109,6 +107,8 @@ export function readBallValveConfig(v: unknown, path: string, errors: string[]):
   const ways = r.count('ways', WAYS);
   if (!r.ok) return undefined;
   const names = Object.fromEntries(Object.entries(BORES[ways]).map(([k, b]) => [k, b.name]));
-  const bore = r.oneOf('bore', names);
+  // Gerade Durchgänge beim 4-Wege-Kugelhahn gibt es seit 2026-11 nicht mehr (Doppel-L-Bohrung); dann erste Stellung.
+  const removed = ways === 4 && (r.v.bore === 'left-right' || r.v.bore === 'top-bottom');
+  const bore = removed ? Object.keys(names)[0]! : r.oneOf('bore', names);
   return r.ok ? { kind: 'ball-valve', ways, bore } : undefined;
 }

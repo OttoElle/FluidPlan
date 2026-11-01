@@ -24,10 +24,23 @@ export function BallValveSymbol({ config }: { config: BallValveConfig }) {
   return (
     <>
       <circle cx={c[0]} cy={c[1]} r={BALL_R} />
-      {/* Anschlussleitungen direkt an der Kugel (8.2.12), ohne Absperrdreiecke */}
-      {SIDES[config.ways].map(({ side }) => (
-        <line key={side} x1={at(side, BALL_R)[0]} y1={at(side, BALL_R)[1]} x2={at(side, PORT_DISTANCE)[0]} y2={at(side, PORT_DISTANCE)[1]} />
-      ))}
+      {/*
+        Je Anschluss ein Dreieck des Absperrventils (8.7.23: 2M lang, Grundseite 1,5M) mit der Spitze
+        an der Kugel (8.2.12, Kreis 3M), dahinter die Leitung bis zum Anschluss.
+      */}
+      {SIDES[config.ways].map(({ side }) => {
+        const [dx, dy] = SIDE_DIR[side];
+        const base = at(side, BALL_R + 2);
+        return (
+          <g key={side}>
+            <polygon
+              points={pts(at(side, BALL_R), [base[0] - dy * 0.75, base[1] + dx * 0.75], [base[0] + dy * 0.75, base[1] - dx * 0.75])}
+              strokeLinejoin="round"
+            />
+            <line x1={base[0]} y1={base[1]} x2={at(side, PORT_DISTANCE)[0]} y2={at(side, PORT_DISTANCE)[1]} />
+          </g>
+        );
+      })}
       {bore.paths.map((path, i) => {
         if (separate && path.length === 2) {
           // Zwei getrennte Wege: Viertelbogen um die gemeinsame Ecke, damit sie sich nicht berühren.
