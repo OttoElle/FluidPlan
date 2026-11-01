@@ -14,8 +14,8 @@ import { CheckElement, FlowArrow, pts, Spring, Triangle, type P } from './symbol
 // --- Kugelhahn ------------------------------------------------------------------
 
 const BALL_R = 1.5;
-/** Abstand der (verdeckten) Dreiecksspitze von der Kugelmitte: die Dreiecke reichen in die Kugel hinein. */
-const TIP_DEPTH = 0.75;
+/** Abstand der (verdeckten) Dreiecksspitze von der Kugelmitte: die Dreiecke treffen sich in der Kugelmitte. */
+const TIP_DEPTH = 0;
 
 export function BallValveSymbol({ config }: { config: BallValveConfig }) {
   const form = formOf(config);
