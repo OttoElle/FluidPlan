@@ -16,6 +16,9 @@ import { CheckElement, FlowArrow, pts, Spring, Triangle, type P } from './symbol
 const BALL_R = 1.5;
 /** Abstand der (verdeckten) Dreiecksspitze von der Kugelmitte: die Dreiecke treffen sich in der Kugelmitte. */
 const TIP_DEPTH = 0;
+/** Dreieck wie in FluidDraw im Verhältnis zur Kugel (Ø 3): 3 lang ab Kugelmitte, 2 breit. */
+const TRIANGLE_LENGTH = 3;
+const TRIANGLE_HALF_WIDTH = 1;
 
 export function BallValveSymbol({ config }: { config: BallValveConfig }) {
   const form = formOf(config);
@@ -28,14 +31,14 @@ export function BallValveSymbol({ config }: { config: BallValveConfig }) {
     <>
       <circle cx={c[0]} cy={c[1]} r={BALL_R} />
       {/*
-        Je Anschluss ein Dreieck des Absperrventils (8.7.23, Grundseite 1,5M), dessen Spitze in der
+        Je Anschluss ein Dreieck des Absperrventils (8.7.23), 3M lang und 2M breit, dessen Spitze in der
         Kugel (8.2.12, Kreis 3M) liegt: gezeichnet wird nur der Teil außerhalb der Kugel.
       */}
       {SIDES[form].map(({ side }) => {
         const [dx, dy] = SIDE_DIR[side];
-        const base = at(side, BALL_R + 2);
-        const c0: P = [base[0] - dy * 0.75, base[1] + dx * 0.75];
-        const c1: P = [base[0] + dy * 0.75, base[1] - dx * 0.75];
+        const base = at(side, TRIANGLE_LENGTH);
+        const c0: P = [base[0] - dy * TRIANGLE_HALF_WIDTH, base[1] + dx * TRIANGLE_HALF_WIDTH];
+        const c1: P = [base[0] + dy * TRIANGLE_HALF_WIDTH, base[1] - dx * TRIANGLE_HALF_WIDTH];
         const tip = at(side, TIP_DEPTH);
         // Schnittpunkt der Dreiecksseite (Spitze → Ecke) mit dem Kugelkreis
         const onBall = ([bx, by]: P): P => {
