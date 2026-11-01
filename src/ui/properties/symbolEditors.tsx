@@ -9,7 +9,7 @@ import {
   type PrimeMoverConfig,
   type SwivelConfig,
 } from '../../model/actuators.ts';
-import { BORES, normalizeBallValve, WAYS, type BallValveConfig, type BallValveWays } from '../../model/ballValve.ts';
+import { BORES, FORM_NAMES, FORMS, formOf, normalizeBallValve, type BallValveConfig, type BallValveForm, type BallValveWays } from '../../model/ballValve.ts';
 import { CHECK_COUNTS, CHECK_NAMES, CHECK_SIDE_NAMES, type CouplingConfig } from '../../model/coupling.ts';
 import { COOLANT_NAMES, FILTER_DESIGN_NAMES, FILTER_INDICATOR_NAMES, type CoolerConfig, type FilterConfig } from '../../model/conditioning.ts';
 import {
@@ -352,15 +352,17 @@ export function RotaryEditor<C extends RotaryConfig>({ config, onChange }: Confi
 // --- Kugelhahn ------------------------------------------------------------------
 
 export function BallValveEditor({ config, onChange }: ConfigEditorProps<BallValveConfig>) {
-  const bores = Object.keys(BORES[config.ways]);
+  const form = formOf(config);
+  const bores = Object.keys(BORES[form]);
+  const withForm = (f: BallValveForm) => normalizeBallValve({ ...config, ways: Number(f[0]) as BallValveWays, angle: f === '2a' });
   return (
     <div className="configurator config-grid">
-      <Field title="Wege" wide>
-        <Segmented<BallValveWays>
-          label="Wege"
-          value={config.ways}
-          onChange={(ways) => onChange(normalizeBallValve({ ...config, ways }))}
-          options={symbolOptions(WAYS, (n) => `${n}-Wege-Kugelhahn`, (ways) => normalizeBallValve({ ...config, ways }))}
+      <Field title="Bauform" wide>
+        <Segmented<BallValveForm>
+          label="Bauform"
+          value={form}
+          onChange={(f) => onChange(withForm(f))}
+          options={symbolOptions(FORMS, (f) => FORM_NAMES[f], withForm)}
         />
       </Field>
       <Field title="Schaltstellung" wide>
@@ -368,7 +370,7 @@ export function BallValveEditor({ config, onChange }: ConfigEditorProps<BallValv
           label="Schaltstellung"
           value={config.bore}
           onChange={(bore) => onChange({ ...config, bore })}
-          options={symbolOptions(bores, (b) => BORES[config.ways][b]!.name, (bore) => ({ ...config, bore }))}
+          options={symbolOptions(bores, (b) => BORES[form][b]!.name, (bore) => ({ ...config, bore }))}
         />
       </Field>
     </div>

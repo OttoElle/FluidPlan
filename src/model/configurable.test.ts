@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseDiagram, serializeDiagram } from '../io/json.ts';
 import { MANIFOLD_OUTLETS, type ManifoldConfig, type PressureConverterConfig, type PrimeMoverConfig, type SwivelConfig } from './actuators.ts';
-import { BORES, WAYS, type BallValveConfig } from './ballValve.ts';
+import { BORES, FORMS, normalizeBallValve, type BallValveConfig, type BallValveWays } from './ballValve.ts';
 import { CHECK_COUNTS, type CouplingConfig } from './coupling.ts';
 import { defaultCylinderConfig, normalizeCylinder, ROD_ACTUATORS, type CylinderConfig } from './cylinder.ts';
 import { addComponent, configureComponent, connect, createDiagram, transformLocalPoint } from './diagram.ts';
@@ -100,7 +100,9 @@ function rotaryVariants(): RotaryConfig[] {
 
 function accessoryVariants(): ComponentConfig[] {
   const out: ComponentConfig[] = [];
-  for (const ways of WAYS) for (const bore of Object.keys(BORES[ways])) out.push({ kind: 'ball-valve', ways, bore } satisfies BallValveConfig);
+  for (const form of FORMS)
+    for (const bore of Object.keys(BORES[form]))
+      out.push(normalizeBallValve({ kind: 'ball-valve', ways: Number(form[0]) as BallValveWays, angle: form === '2a', bore } satisfies BallValveConfig));
   for (const type of Object.keys(ACCUMULATOR_NAMES) as AccumulatorType[]) out.push({ kind: 'accumulator', type } satisfies AccumulatorConfig);
   for (const closed of [false, true])
     for (const lines of TANK_LINES)

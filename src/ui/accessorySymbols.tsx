@@ -1,5 +1,5 @@
 import { DRAWING_FONT } from '../model/lettering.ts';
-import { ballValveLayout, BORES, PORT_DISTANCE, SIDE_DIR, SIDES, type BallValveConfig, type Side } from '../model/ballValve.ts';
+import { ballValveLayout, BORES, formOf, PORT_DISTANCE, SIDE_DIR, SIDES, type BallValveConfig, type Side } from '../model/ballValve.ts';
 import type { CouplingConfig } from '../model/coupling.ts';
 import { QUANTITY_LETTER, sensorLayout, type SensorConfig } from '../model/sensor.ts';
 import { tankLayout, type AccumulatorConfig, type TankConfig } from '../model/storage.ts';
@@ -16,10 +16,11 @@ import { CheckElement, FlowArrow, pts, Spring, Triangle, type P } from './symbol
 const BALL_R = 1.5;
 
 export function BallValveSymbol({ config }: { config: BallValveConfig }) {
-  const { center } = ballValveLayout(config.ways);
+  const form = formOf(config);
+  const { center } = ballValveLayout(form);
   const c: P = [center.x, center.y];
   const at = (side: Side, r: number): P => [c[0] + SIDE_DIR[side][0] * r, c[1] + SIDE_DIR[side][1] * r];
-  const bore = BORES[config.ways][config.bore] ?? Object.values(BORES[config.ways])[0]!;
+  const bore = BORES[form][config.bore] ?? Object.values(BORES[form])[0]!;
   const separate = bore.paths.length > 1;
   return (
     <>
@@ -28,7 +29,7 @@ export function BallValveSymbol({ config }: { config: BallValveConfig }) {
         Je Anschluss ein Dreieck des Absperrventils (8.7.23: 2M lang, Grundseite 1,5M) mit der Spitze
         an der Kugel (8.2.12, Kreis 3M), dahinter die Leitung bis zum Anschluss.
       */}
-      {SIDES[config.ways].map(({ side }) => {
+      {SIDES[form].map(({ side }) => {
         const [dx, dy] = SIDE_DIR[side];
         const base = at(side, BALL_R + 2);
         return (
