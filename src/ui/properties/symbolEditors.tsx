@@ -23,8 +23,10 @@ import {
 } from '../../model/fluidValves.ts';
 import { INDICATOR_NAMES, INSTRUMENT_NAMES, type IndicatorConfig, type InstrumentConfig } from '../../model/instruments.ts';
 import {
+  canDetent,
   canVent,
   DESIGN_NAMES,
+  DETENT_NAMES,
   hasStroke,
   LIMIT_SWITCH_NAMES,
   normalizeCylinder,
@@ -233,6 +235,16 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
                 options={symbolOptions(keys(LIMIT_SWITCH_NAMES), (v) => LIMIT_SWITCH_NAMES[v], (limitSwitch) => variant({ limitSwitch }))}
               />
             </Field>
+            {canDetent(config) && (
+              <Field title="Raste" wide>
+                <Segmented
+                  label="Raste"
+                  value={config.detent}
+                  onChange={(detent) => set({ detent })}
+                  options={symbolOptions(keys(DETENT_NAMES), (v) => DETENT_NAMES[v], (detent) => variant({ detent }))}
+                />
+              </Field>
+            )}
             {canVent(config) && (
               <Check title="Entlüftung ohne Anschlussmöglichkeit" checked={config.vent} onChange={(vent) => set({ vent })} />
             )}

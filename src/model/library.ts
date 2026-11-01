@@ -164,7 +164,8 @@ const HP: Domain[] = ['hydraulic', 'pneumatic'];
 /** Feste Bauteile; Maße und Anschlusslagen in M. */
 export const COMPONENT_LIBRARY: readonly ComponentDefinition[] = [
   // --- Druckerzeugung und Antriebe ---
-  fixed('supply.power-unit', 'Antriebsaggregat', H, [34, 26], [['P', 'pressure', 18, 0], ['T', 'return', 30, 0]]),
+  // Antriebsaggregat als allgemeine Druckquelle (8.7.36); Typname aus Schritt 2 beibehalten
+  fixed('supply.power-unit', 'Hydraulische Energiequelle', H, [6, 2], [['P', 'pressure', 6, 1]]),
   fixed('supply.hand-pump', 'Handpumpe', H, [11, 9], [['P', 'pressure', 11, 3], ['S', 'return', 11, 6]]),
   fixed('supply.air-source', 'Druckluftquelle', P, [6, 2], [['1', 'pressure', 6, 1]]),
 

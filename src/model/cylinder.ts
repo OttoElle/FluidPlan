@@ -29,6 +29,8 @@ export type CylinderSpring = 'none' | 'rod' | 'piston';
 export type Cushion = 'none' | 'fixed' | 'adjustable';
 /** Endschalter (8.4.7, Beispiele 6.3.11/6.3.13) über der linken bzw. rechten Ecke des Rahmens. */
 export type LimitSwitch = 'none' | 'left' | 'right' | 'both';
+/** Raste in den Endlagen (Beispiel 6.3.12). */
+export type Detent = 'none' | 'retracted' | 'extended' | 'both';
 /** Betätigung am Ende der Kolbenstange (z. B. Pedal am Geberzylinder). */
 export type RodActuator = 'none' | Extract<Actuator, 'push' | 'pull' | 'lever' | 'pedal' | 'roller' | 'plunger'>;
 
@@ -55,6 +57,8 @@ export interface CylinderConfig {
   vent: boolean;
   /** Hubbegrenzung, voreingestellt (Beispiel 6.3.4), nur Membranzylinder; fehlt in älteren Dateien. */
   strokeLimiter: boolean;
+  /** Raste, nur Kolbenzylinder mit einseitiger Stange ohne Betätigung; fehlt in älteren Dateien. */
+  detent: Detent;
 }
 
 export const DESIGN_NAMES: Record<CylinderDesign, string> = {
@@ -71,6 +75,12 @@ export const ROD_NAMES: Record<CylinderRod, string> = {
   single: 'Einseitige Kolbenstange',
   through: 'Durchgehende Kolbenstange',
   rodless: 'Kolbenstangenlos, magnetisch gekoppelt',
+};
+export const DETENT_NAMES: Record<Detent, string> = {
+  none: 'Keine',
+  retracted: 'Eingefahren',
+  extended: 'Ausgefahren',
+  both: 'Beide Endlagen',
 };
 export const LIMIT_SWITCH_NAMES: Record<LimitSwitch, string> = {
   none: 'Keine',
@@ -115,8 +125,12 @@ export function defaultCylinderConfig(action: CylinderAction = 'double', design:
     limitSwitch: 'none',
     vent: false,
     strokeLimiter: false,
+    detent: 'none',
   });
 }
+
+/** Kann der Zylinder eine Raste haben (Raste sitzt auf der einseitigen Kolbenstange)? */
+export const canDetent = (c: CylinderConfig) => c.design === 'piston' && c.rod === 'single' && (c.rodActuator ?? 'none') === 'none';
 
 /** Hat der Zylinder den kolbenseitigen (A) bzw. stangenseitigen (B) Anschluss? */
 export function cylinderPorts(config: CylinderConfig) {
@@ -156,8 +170,9 @@ export function normalizeCylinder(config: CylinderConfig): CylinderConfig {
       limitSwitch,
       strokeLimiter: diaphragm && config.strokeLimiter === true,
       vent: false,
+      detent: 'none',
     };
-    return { ...c, vent: canVent(c) && config.vent === true };
+    return { ...c, vent: canVent(c) && config.vent === true, detent: canDetent(c) ? (config.detent ?? 'none') : 'none' };
   }
   const none = {
     rod: 'single',
@@ -168,6 +183,7 @@ export function normalizeCylinder(config: CylinderConfig): CylinderConfig {
     limitSwitch: 'none',
     vent: false,
     strokeLimiter: false,
+    detent: 'none',
   } as const;
   if (config.design === 'plunger') return { ...config, ...none, action: 'single', stroke };
   // Doppeltwirkender Teleskopzylinder: Anschluss C sitzt an der ersten Stufe, daher immer eingefahren.
@@ -187,6 +203,8 @@ export function cylinderTitle(config: CylinderConfig): string {
   if (config.springPort) parts.push('Federraum mit Anschluss');
   if (config.strokeLimiter) parts.push('Hubbegrenzung voreingestellt');
   if (config.vent) parts.push('Entlüftung');
+  if (config.detent === 'both') parts.push('Raste in beiden Endlagen');
+  else if (config.detent && config.detent !== 'none') parts.push(`Raste ${config.detent === 'retracted' ? 'eingefahren' : 'ausgefahren'}`);
   if (config.limitSwitch === 'both') parts.push('Endschalter beidseitig');
   else if (config.limitSwitch !== 'none') parts.push(`Endschalter ${config.limitSwitch === 'left' ? 'links' : 'rechts'}`);
   if (config.rodActuator && config.rodActuator !== 'none') parts.push(ROD_ACTUATOR_NAMES[config.rodActuator]);
@@ -222,6 +240,8 @@ export interface CylinderLayout {
   bodyHeight: number;
   /** Kolbenzylinder: linke Kante des Kolbens (Kolben ist 2M breit); Membranzylinder: Lage der Membran. */
   pistonX: number;
+  /** Kolbenlage (Abstand vom Rahmenboden) eingefahren und ausgefahren, Kolben- und Membranzylinder. */
+  travel: [number, number];
   /** Ausfahrweg in M: Plunger bzw. erste und zweite Teleskopstufe. */
   extension: [number, number];
   width: number;
@@ -264,6 +284,7 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
       bodyX,
       bodyHeight: BODY_HEIGHT,
       pistonX,
+      travel: [min, max],
       extension: [0, 0],
       width: ceilParity(Math.max(rodEnd, bodyEnd + (right ? SWITCH_BOX : 0)), height),
       height,
@@ -281,6 +302,7 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
       bodyX,
       bodyHeight: LARGE_BODY_HEIGHT,
       pistonX: bodyX,
+      travel: [0, 0],
       extension: [e, e],
       width: ceilParity(bodyX + PLUNGER.start + PLUNGER.length + e, height),
       height,
@@ -296,6 +318,7 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
       bodyX,
       bodyHeight: LARGE_BODY_HEIGHT,
       pistonX: bodyX,
+      travel: [0, 0],
       extension: [e1, e2],
       width: ceilParity(bodyX + 18.5 + e2, height),
       height,
@@ -308,6 +331,7 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
     bodyX,
     bodyHeight: LARGE_BODY_HEIGHT,
     pistonX: bodyX,
+    travel: [0, 0],
     extension: [0, 0],
     width: ceilParity(bodyX + 16, height),
     height,
@@ -341,6 +365,7 @@ export function readCylinderConfig(v: unknown, path: string, errors: string[]): 
   const limitSwitch = r.oneOf('limitSwitch', LIMIT_SWITCH_NAMES, 'none');
   const vent = r.bool('vent', false);
   const strokeLimiter = r.bool('strokeLimiter', false);
+  const detent = r.oneOf('detent', DETENT_NAMES, 'none');
   if (!r.ok || !piston || !rodCushion) return undefined;
   return normalizeCylinder({
     kind: 'cylinder',
@@ -355,5 +380,6 @@ export function readCylinderConfig(v: unknown, path: string, errors: string[]): 
     limitSwitch,
     vent,
     strokeLimiter,
+    detent,
   });
 }

@@ -25,6 +25,8 @@ export function Triangle({ tip, dir, side = 2, filled }: { tip: P; dir: P; side?
     <polygon
       points={pts([x, y], [bx - uy * s, by + ux * s], [bx + uy * s, by - ux * s])}
       className={filled ? 'fill' : undefined}
+      // runde Ecken: eine spitze Gehrung ragte sonst bis 0,25M über die Spitze hinaus (z. B. über den Ventilkasten)
+      strokeLinejoin="round"
     />
   );
 }
@@ -39,7 +41,7 @@ export function ArrowHead({ from, to, length = 1 }: { from: P; to: P; length?: n
   const half = Math.tan(Math.PI / 12) * length;
   const bx = x2 - ux * length;
   const by = y2 - uy * length;
-  return <polygon points={pts([x2, y2], [bx - uy * half, by + ux * half], [bx + uy * half, by - ux * half])} className="fill" />;
+  return <polygon points={pts([x2, y2], [bx - uy * half, by + ux * half], [bx + uy * half, by - ux * half])} className="fill" strokeLinejoin="round" />;
 }
 
 /** Durchflusspfeil von `from` nach `to`, Spitze 1M lang. Auch als Verstellpfeil. */
@@ -103,4 +105,21 @@ export function Throttle({ x, cy }: { x: number; cy: number }) {
 /** Verbindungspunkt zweier Leitungen. */
 export function Junction({ at: [x, y] }: { at: P }) {
   return <circle cx={x} cy={y} r={0.2} className="fill" />;
+}
+
+/**
+ * Dreieck nach innen in einem Kreis (Motor, 8.4.4): Grundseite als Bogen auf
+ * dem Kreis, damit das Dreieck bis an den Kreis gefüllt ist. `angle` zeigt von
+ * der Kreismitte zur Grundseite.
+ */
+export function InwardTriangle({ c, r, angle, side = 2, filled }: { c: P; r: number; angle: number; side?: number; filled: boolean }) {
+  const delta = Math.asin(side / 2 / r);
+  const d = r * Math.cos(delta) - (side * Math.sqrt(3)) / 2;
+  const at = (a: number, dist: number): P => [c[0] + dist * Math.cos(a), c[1] + dist * Math.sin(a)];
+  const [tx, ty] = at(angle, d);
+  const [x1, y1] = at(angle - delta, r);
+  const [x2, y2] = at(angle + delta, r);
+  return (
+    <path d={`M${tx} ${ty} L${x1} ${y1} A${r} ${r} 0 0 1 ${x2} ${y2} Z`} className={filled ? 'fill' : undefined} strokeLinejoin="round" />
+  );
 }

@@ -126,7 +126,7 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
       )}
       <rect x={px} y={0} width={PISTON} height={BODY_HEIGHT} />
       {rodless ? null : actuator === 'none' ? (
-        <rect x={px + PISTON} y={ROD_Y} width={rodEnd - px - PISTON} height={1} />
+        <RodWithDetent config={config} l={l} from={px + PISTON} to={rodEnd} />
       ) : (
         <>
           {/* Die letzten 3M der Stange sind der Schaft des Betätigungselements (8.5) */}
@@ -143,6 +143,39 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
       {config.spring === 'piston' && zigzag(bx, px)}
 
       <Cushions config={config} left={px} right={px + PISTON} />
+    </>
+  );
+}
+
+/** Raste (6.3.12): Abstand des Rastbolzens hinter dem Rahmen. */
+const LATCH = 2.25;
+
+/**
+ * Kolbenstange, mit Raste (Beispiel 6.3.12): je Endlage eine V-Kerbe 0,75M
+ * breit und 0,7M tief in der Oberkante der Stange, die in dieser Endlage
+ * genau unter dem Rastbolzen (1M langer Strich über der Stange, 2,25M hinter
+ * dem Rahmen) liegt.
+ */
+function RodWithDetent({ config, l, from, to }: { config: CylinderConfig; l: CylinderLayout; from: number; to: number }) {
+  const detent = config.detent ?? 'none';
+  if (detent === 'none') return <rect x={from} y={ROD_Y} width={to - from} height={1} />;
+  const latch = l.bodyX + BODY_WIDTH + LATCH;
+  const [min, max] = l.travel;
+  // Kerben in Stangenkoordinaten (ab Rahmenboden in der jeweiligen Endlage), dann in der gezeichneten Lage
+  const offsets = [
+    ...(detent === 'retracted' || detent === 'both' ? [latch - (l.bodyX + min)] : []),
+    ...(detent === 'extended' || detent === 'both' ? [latch - (l.bodyX + max)] : []),
+  ].sort((a, b) => a - b);
+  const top: P[] = [[from, ROD_Y]];
+  for (const o of offsets) {
+    const x = l.pistonX + o;
+    top.push([x - 0.375, ROD_Y], [x, ROD_Y + 0.7], [x + 0.375, ROD_Y]);
+  }
+  top.push([to, ROD_Y]);
+  return (
+    <>
+      <polygon points={pts(...top, [to, ROD_Y + 1], [from, ROD_Y + 1])} />
+      <line x1={latch} y1={ROD_Y - 1.5} x2={latch} y2={ROD_Y - 0.45} />
     </>
   );
 }

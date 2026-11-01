@@ -4,7 +4,7 @@ import type { ComponentConfig, ComponentInstance } from '../model/types.ts';
 import { AccumulatorSymbol, BallValveSymbol, CouplingSymbol, HoseSymbol, SensorSymbol, TankSymbol } from './accessorySymbols.tsx';
 import { CylinderSymbol } from './cylinderSymbol.tsx';
 import { RotarySymbol } from './rotarySymbol.tsx';
-import { ManifoldSymbol, PowerUnit, PressureConverterSymbol, PrimeMoverSymbol, SwivelSymbol } from './actuatorSymbols.tsx';
+import { HydraulicSource, ManifoldSymbol, PressureConverterSymbol, PrimeMoverSymbol, SwivelSymbol } from './actuatorSymbols.tsx';
 import { ArrowHead, CheckElement, DASH, Junction, pts, seatTip, Triangle, type P } from './symbolParts.tsx';
 import { ValveSymbol } from './valveSymbol.tsx';
 import { CoolerSymbol, FilterSymbol, Heater, Separator } from './conditioningSymbols.tsx';
@@ -199,7 +199,7 @@ function FlowControlValve() {
 }
 
 const SYMBOLS: Record<string, () => ReactNode> = {
-  'supply.power-unit': PowerUnit,
+  'supply.power-unit': HydraulicSource,
   'supply.air-source': AirSource,
   'supply.silencer': Silencer,
   'supply.heater': Heater,

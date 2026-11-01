@@ -1,5 +1,5 @@
 import { MOTOR_OFFSET, type RotaryConfig } from '../model/rotary.ts';
-import { ArrowHead, DASH, FlowArrow, pts, Triangle, type P } from './symbolParts.tsx';
+import { ArrowHead, DASH, FlowArrow, InwardTriangle, pts, Triangle, type P } from './symbolParts.tsx';
 
 /**
  * Pumpen, Kompressoren und Motoren aus ihrer Konfiguration (siehe
@@ -10,9 +10,6 @@ import { ArrowHead, DASH, FlowArrow, pts, Triangle, type P } from './symbolParts
 
 const CX = 6;
 const CY = 5;
-/** Sehne der Länge 2M im Kreis r = 3M liegt 2√2 M von der Mitte entfernt. */
-const CHORD = 2 * Math.SQRT2;
-const TRI_H = Math.sqrt(3);
 
 /** Buchstabe M für Motoren (8.4.51): 2,5M breit und hoch, Mittelspitze 1,25M tief. */
 export function MotorLetter({ cx, cy }: { cx: number; cy: number }) {
@@ -70,24 +67,20 @@ export function RotarySymbol({ config }: { config: RotaryConfig }) {
   const filled = config.medium === 'hydraulic';
   const bottom = !(pump && config.medium === 'pneumatic');
   const two = config.directions === 2;
-  // Pumpe: Spitze am Kreis, zeigt nach außen; Motor: Grundseite am Kreis, Spitze nach innen.
-  const out = (key: string, y: number, dir: number) => <Triangle key={key} tip={[CX, y]} dir={[0, dir]} filled={filled} />;
-  const inner = CHORD - TRI_H;
+  // Pumpe: Spitze am Kreis, zeigt nach außen; Motor: Grundseite als Bogen am Kreis, Spitze nach innen.
+  const out = (key: string, y: number, dir: number, side = 2) => <Triangle key={key} tip={[CX, y]} dir={[0, dir]} side={side} filled={filled} />;
+  const UP = -Math.PI / 2;
+  const DOWN = Math.PI / 2;
+  const inward = (key: string, angle: number, side = 2) => <InwardTriangle key={key} c={[CX, CY]} r={3} angle={angle} side={side} filled={filled} />;
   const triangles = config.pumpMotor
     ? two
       ? // Pumpe/Motor reversierbar (6.2.3): an beiden Anschlüssen ein Dreieck 1,1M nach innen und eines nach außen, Spitze an Spitze 2M von der Mitte
-        [[-1, 't'] as const, [1, 'b'] as const].flatMap(([s, k]) => [
-          <Triangle key={`${k}i`} tip={[CX, CY + 2 * s]} dir={[0, -s]} side={1.1} filled={filled} />,
-          <Triangle key={`${k}o`} tip={[CX, CY + 2 * s]} dir={[0, s]} side={1.1} filled={filled} />,
-        ])
+        [inward('ti', UP, 1.1), out('to', CY - 2, -1, 1.1), inward('bi', DOWN, 1.1), out('bo', CY + 2, 1, 1.1)]
       : // Pumpe/Motor (6.2.4): oben nach außen (Pumpe), unten nach innen (Motor)
-        [out('t', CY - 3, -1), out('b', CY + inner, -1)]
+        [out('t', CY - 3, -1), inward('b', DOWN)]
     : pump
-    ? [<Triangle key="t" tip={[CX, CY - 3]} dir={[0, -1]} filled={filled} />, two && <Triangle key="b" tip={[CX, CY + 3]} dir={[0, 1]} filled={filled} />]
-    : [
-        <Triangle key="t" tip={[CX, CY - CHORD + TRI_H]} dir={[0, 1]} filled={filled} />,
-        two && <Triangle key="b" tip={[CX, CY + CHORD - TRI_H]} dir={[0, -1]} filled={filled} />,
-      ];
+      ? [out('t', CY - 3, -1), two && out('b', CY + 3, 1)]
+      : [inward('t', UP), two && inward('b', DOWN)];
   const d = 3 * Math.SQRT1_2;
   return (
     <>

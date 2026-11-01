@@ -5,16 +5,13 @@ import {
   type PrimeMoverConfig,
   type SwivelConfig,
 } from '../model/actuators.ts';
-import { defaultPressureValveConfig } from '../model/fluidValves.ts';
 import { DRAWING_FONT } from '../model/lettering.ts';
-import { defaultPumpConfig } from '../model/rotary.ts';
-import { PressureValveSymbol } from './fluidValveSymbols.tsx';
-import { MotorLetter, RotarySymbol, RotationArrow } from './rotarySymbol.tsx';
-import { ArrowHead, Junction, Spring, Triangle, type P } from './symbolParts.tsx';
+import { MotorLetter, RotationArrow } from './rotarySymbol.tsx';
+import { ArrowHead, Spring, Triangle, type P } from './symbolParts.tsx';
 
 /**
  * Schwenkantrieb, Druckmittelwandler/Druckübersetzer, Antriebsmotoren,
- * Verteiler und Antriebsaggregat (model/actuators.ts). Koordinaten in M.
+ * Verteiler und hydraulische Energiequelle (model/actuators.ts). Koordinaten in M.
  */
 
 // --- Schwenkantrieb ---------------------------------------------------------------
@@ -145,36 +142,14 @@ export function ManifoldSymbol({ config }: { config: ManifoldConfig }) {
   );
 }
 
-// --- Antriebsaggregat -----------------------------------------------------------------
+// --- Hydraulische Energiequelle ------------------------------------------------------
 
-const AGGREGATE_PUMP = { ...defaultPumpConfig('hydraulic'), electricMotor: true };
-const AGGREGATE_RELIEF = { ...defaultPressureValveConfig('relief'), adjustable: true };
-
-/**
- * Antriebsaggregat (34M × 26M): Motor-Pumpe-Einheit, Druckbegrenzungsventil
- * und Behälter (8.7.32) in einer strichpunktierten Baugruppenumrahmung
- * (Abschnitt 5.10). Anschlüsse P und T oben.
- */
-export function PowerUnit() {
+/** Hydraulische Energiequelle (8.7.36, 6M × 2M): gefülltes Dreieck 2M, Leitung 4M zum Anschluss. */
+export function HydraulicSource() {
   return (
     <>
-      <rect x={1} y={2} width={32} height={23} strokeDasharray="1.6 0.4 0.2 0.4" />
-      <g transform="translate(2 8)">
-        <RotarySymbol config={AGGREGATE_PUMP} />
-      </g>
-      {/* Druckbegrenzungsventil gespiegelt: Eingang oben, Ausgang unten zum Behälter */}
-      <g transform="translate(20 14) scale(1 -1)">
-        <PressureValveSymbol config={AGGREGATE_RELIEF} />
-      </g>
-      <line x1={18} y1={0} x2={18} y2={8} />
-      <polyline points="18,4 24,4 24,6" />
-      <Junction at={[18, 4]} />
-      <line x1={18} y1={18} x2={18} y2={21} />
-      <line x1={24} y1={14} x2={24} y2={21} />
-      <line x1={30} y1={0} x2={30} y2={21} />
-      {/* Behälter: Seitenwände 1M über den Deckel */}
-      <polyline points="15,20 15,23 32,23 32,20" />
-      <line x1={15} y1={21} x2={32} y2={21} />
+      <Triangle tip={[2, 1]} dir={[1, 0]} filled />
+      <line x1={2} y1={1} x2={6} y2={1} />
     </>
   );
 }

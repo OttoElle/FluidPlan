@@ -58,6 +58,10 @@ function cylinderVariants(): CylinderConfig[] {
   for (const rodActuator of ROD_ACTUATORS)
     for (const stroke of [0, 50])
       out.push(normalizeCylinder({ ...defaultCylinderConfig('single'), rodActuator, stroke }));
+  for (const detent of ['retracted', 'extended', 'both'] as const)
+    for (const spring of ['none', 'rod', 'piston'] as const)
+      for (const stroke of [0, 50, 100])
+        out.push(normalizeCylinder({ ...defaultCylinderConfig(spring === 'none' ? 'double' : 'single'), spring, stroke, detent }));
   // Membranzylinder, kolbenstangenlos, Endschalter, Entlüftung, Hubbegrenzung
   for (const design of ['piston', 'diaphragm'] as const)
     for (const action of ['double', 'single'] as const)
@@ -206,6 +210,13 @@ describe('Konfigurierbare Bauteile', () => {
     expect(definition(diaphragm).ports.map((p) => p.id)).toEqual(['B']);
     // Entlüftung nur am Raum ohne Anschluss, Hubbegrenzung nur beim Membranzylinder
     expect(normalizeCylinder({ ...defaultCylinderConfig('double'), vent: true, strokeLimiter: true })).toMatchObject({ vent: false, strokeLimiter: false });
+  });
+
+  it('geben die Raste nur dem Kolbenzylinder mit einseitiger Stange ohne Betätigung', () => {
+    expect(normalizeCylinder({ ...defaultCylinderConfig('double'), detent: 'both' }).detent).toBe('both');
+    expect(normalizeCylinder({ ...defaultCylinderConfig('double'), detent: 'both', rod: 'through' }).detent).toBe('none');
+    expect(normalizeCylinder({ ...defaultCylinderConfig('double'), detent: 'both', rodActuator: 'pedal' }).detent).toBe('none');
+    expect(normalizeCylinder({ ...defaultCylinderConfig('double', 'diaphragm'), detent: 'both' }).detent).toBe('none');
   });
 
   it('setzen Endschalter über den Rahmen, ohne die Anschlüsse seitlich zu verschieben', () => {
