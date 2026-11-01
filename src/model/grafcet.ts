@@ -391,6 +391,17 @@ export function nextStepName(diagrams: Pick<Diagram, 'components'>[]): string {
   return String(max + 1);
 }
 
+/** Nächster freier Name für einen Teil-GRAFCET-Rahmen (G1, G2, …). */
+export function nextFrameName(diagrams: Pick<Diagram, 'annotations'>[]): string {
+  let max = 0;
+  for (const d of diagrams)
+    for (const a of d.annotations) {
+      const m = a.kind === 'rect' ? /^G(\d+)$/.exec(a.grafcet?.name.trim() ?? '') : null;
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+  return `G${max + 1}`;
+}
+
 /**
  * Wirkungslinien: Leitungen, die (auch über Abzweige) an GRAFCET-Elementen
  * hängen. Ihre Verzweigungen bekommen keinen Punkt (Tabelle 3, Symbol [10]).

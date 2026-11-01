@@ -6,6 +6,7 @@ import type {
   Diagram,
   DiagramMeta,
   Domain,
+  GrafcetFrame,
   Drawing,
   DrawingSheet,
   Endpoint,
@@ -333,8 +334,9 @@ function readAnnotationShape(v: unknown, path: string, errors: string[]): Annota
     const position = point(v.position, `${path}.position`, errors);
     const text = str(v.text, `${path}.text`, errors);
     const size = positive(v.size, `${path}.size`, errors);
-    if (!position || text === undefined || size === undefined) return undefined;
-    return { id, kind, position, text, size };
+    const comment = v.comment === undefined ? undefined : bool(v.comment, `${path}.comment`, errors);
+    if (!position || text === undefined || size === undefined || (v.comment !== undefined && comment === undefined)) return undefined;
+    return comment ? { id, kind, position, text, size, comment } : { id, kind, position, text, size };
   }
   const style = oneOf(v.style, STROKE_STYLES, `${path}.style`, errors);
   if (kind === 'line') {
@@ -378,8 +380,21 @@ function readAnnotationShape(v: unknown, path: string, errors: string[]): Annota
   const position = point(v.position, `${path}.position`, errors);
   const width = positive(v.width, `${path}.width`, errors);
   const height = positive(v.height, `${path}.height`, errors);
-  if (!position || width === undefined || height === undefined || !style) return undefined;
-  return { id, kind, position, width, height, style };
+  const grafcet = v.grafcet === undefined ? undefined : readGrafcetFrame(v.grafcet, `${path}.grafcet`, errors);
+  if (!position || width === undefined || height === undefined || !style || (v.grafcet !== undefined && !grafcet)) return undefined;
+  return grafcet ? { id, kind, position, width, height, style, grafcet } : { id, kind, position, width, height, style };
+}
+
+function readGrafcetFrame(v: unknown, path: string, errors: string[]): GrafcetFrame | undefined {
+  if (!isObject(v)) {
+    errors.push(`${path}: Objekt erwartet`);
+    return undefined;
+  }
+  const kind = oneOf(v.kind, ['partial', 'enclosure'] as const, `${path}.kind`, errors);
+  const name = str(v.name, `${path}.name`, errors);
+  const step = v.step === undefined ? undefined : str(v.step, `${path}.step`, errors);
+  if (!kind || name === undefined || (v.step !== undefined && step === undefined)) return undefined;
+  return step === undefined ? { kind, name } : { kind, name, step };
 }
 
 function finiteNumber(v: unknown, path: string, errors: string[]): number | undefined {

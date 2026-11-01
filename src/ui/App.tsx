@@ -57,7 +57,7 @@ import {
 import { checkSheets, sheetName, type Issue } from '../model/check.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
 import { autoLabelSheets } from '../model/labels.ts';
-import { nextStepName } from '../model/grafcet.ts';
+import { nextFrameName, nextStepName } from '../model/grafcet.ts';
 import { MODULE, definitionOf, grafcetPalette, paletteFor, type PaletteEntry } from '../model/library.ts';
 
 /** Alle Bauteilkataloge; in der Seitenleiste je Medium aufklappbar. */
@@ -298,13 +298,16 @@ export function App() {
         : current.annotations[0]
           ? { kind: 'annotation', id: current.annotations[0] }
           : null;
-  const createAnnotation = (a: NewAnnotation) => {
+  const createAnnotation = (created: NewAnnotation) => {
+    // Teil-GRAFCET-Rahmen fortlaufend benennen (G1, G2, …).
+    const a: NewAnnotation =
+      created.kind === 'rect' && created.grafcet ? { ...created, grafcet: { ...created.grafcet, name: nextFrameName(drawing.sheets) } } : created;
     const r = addAnnotation(diagram, a);
     edit(onActiveLayer(r.diagram, { annotations: [r.annotation.id] }));
     setSelection(selectAnnotation(r.annotation.id));
     setTool(null);
     // Neuen Text gleich im Eigenschaften-Fenster eintippen.
-    if (a.kind === 'text') setProperties({ kind: 'annotation', id: r.annotation.id });
+    if (a.kind === 'text' || (a.kind === 'rect' && a.grafcet)) setProperties({ kind: 'annotation', id: r.annotation.id });
   };
   const setMeta = (field: keyof DiagramMeta, value: string) =>
     edit((d) => ({ ...d, meta: { ...d.meta, [field]: value } }), `meta:${field}`);

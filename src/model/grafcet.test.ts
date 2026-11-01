@@ -6,6 +6,7 @@ import {
   CONNECTOR_DIRECTION_NAMES,
   grafcetConnections,
   negationParts,
+  nextFrameName,
   nextStepName,
   STEP_VARIANT_NAMES,
   SYNC_COUNTS,
@@ -18,6 +19,9 @@ import {
 import { definitionOf, grafcetPalette, PALETTE_GROUPS, typeOfConfig } from './library.ts';
 import { needsLabel } from './labels.ts';
 import { routeAll } from './routing.ts';
+import { addAnnotation, textLines, updateAnnotation } from './annotations.ts';
+import { drawingOf } from './drawing.ts';
+import { parseDrawing, serializeDrawing } from '../io/json.ts';
 import type { ComponentConfig, Diagram } from './types.ts';
 
 function variants(): ComponentConfig[] {
@@ -140,5 +144,38 @@ describe('Wirkungslinien', () => {
     expect(messages).toContain('Eine Transition hat keine Transitionsbedingung.');
     expect(messages.some((m) => m.includes('offen'))).toBe(false);
     expect(messages.some((m) => m.includes('Kennzeichen'))).toBe(false);
+  });
+});
+
+describe('Rahmen und Kommentare', () => {
+  it('setzt Kommentare in Anführungszeichen (Symbol [30])', () => {
+    expect(textLines({ text: 'Warteschritt', comment: true })).toEqual(['„Warteschritt“']);
+    expect(textLines({ text: 'Stempel-\nteil', comment: true })).toEqual(['„Stempel-', 'teil“']);
+    expect(textLines({ text: 'ohne' })).toEqual(['ohne']);
+  });
+
+  it('benennt Teil-GRAFCET-Rahmen fortlaufend', () => {
+    let d = createDiagram('Test');
+    expect(nextFrameName([d])).toBe('G1');
+    d = addAnnotation(d, { kind: 'rect', position: { x: 0, y: 0 }, width: 100, height: 100, style: 'solid', grafcet: { kind: 'partial', name: 'G3' } }).diagram;
+    expect(nextFrameName([d])).toBe('G4');
+  });
+
+  it('speichert Rahmen und Kommentar und kann sie wieder entfernen', () => {
+    let d = createDiagram('Test');
+    const r = addAnnotation(d, { kind: 'rect', position: { x: 0, y: 0 }, width: 100, height: 100, style: 'solid', grafcet: { kind: 'enclosure', name: 'G2', step: '4' } });
+    d = r.diagram;
+    const t = addAnnotation(d, { kind: 'text', position: { x: 0, y: 0 }, text: 'Synchronisierung', size: 10, comment: true });
+    d = t.diagram;
+    const parsed = parseDrawing(serializeDrawing(drawingOf(d)));
+    expect(parsed.ok).toBe(true);
+    const back = parsed.ok ? parsed.drawing.sheets[0]!.annotations : [];
+    expect(back).toEqual(d.annotations);
+    d = updateAnnotation(d, r.annotation.id, { grafcet: null });
+    d = updateAnnotation(d, t.annotation.id, { comment: null });
+    expect('grafcet' in d.annotations[0]!).toBe(false);
+    expect('comment' in d.annotations[1]!).toBe(false);
+    d = updateAnnotation(d, t.annotation.id, { comment: true });
+    expect(d.annotations[1]).toMatchObject({ comment: true });
   });
 });

@@ -267,6 +267,8 @@ export interface TextAnnotation extends Pick<AnnotationLook, 'color'> {
   text: string;
   /** Schrifthöhe in Einheiten (14 = 3,5 mm). */
   size: number;
+  /** GRAFCET-Kommentar: in Anführungszeichen gezeichnet (DIN EN 60848, Symbol [30]). */
+  comment?: boolean;
 }
 
 export interface LineAnnotation extends AnnotationLook {
@@ -289,6 +291,21 @@ export interface RectAnnotation extends AnnotationLook {
   width: number;
   height: number;
   style: StrokeStyle;
+  /** Rahmen eines Teil-GRAFCET bzw. einer Einschließung (DIN EN 60848, 7.2.2 und 7.4). */
+  grafcet?: GrafcetFrame;
+}
+
+/**
+ * GRAFCET-Rahmen: `partial` = Teil-GRAFCET (abgerundet, Name G* unten links,
+ * Symbol [31]); `enclosure` = Einschließung (Name des einschließenden Schritts
+ * oben links, Kennung G# unten links, Symbol [38]).
+ */
+export interface GrafcetFrame {
+  kind: 'partial' | 'enclosure';
+  /** Name des Teil-GRAFCET, z. B. "G1". */
+  name: string;
+  /** Nur bei Einschließung: Name des einschließenden Schritts. */
+  step?: string;
 }
 
 export interface CircleAnnotation extends AnnotationLook {

@@ -736,3 +736,4 @@ dialog.help { width: min(560px, calc(100vw - 32px)); }
 .expression-input { display: flex; flex-direction: column; gap: 6px; }
 .expression-chars { display: flex; gap: 4px; flex-wrap: wrap; }
 .char-button { min-width: 30px; height: 26px; padding: 0 6px; font-size: 14px; }
+.palette-tools.grafcet-tools { margin: 8px 0 2px 8px; }

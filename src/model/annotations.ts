@@ -173,7 +173,7 @@ type AnnotationChanges = Partial<Omit<TextAnnotation, 'id' | 'kind'>> &
   Partial<Omit<ArcAnnotation, 'id' | 'kind'>>;
 
 /** Optionale Darstellungsfelder; `null` setzt sie auf den Standard zurück. */
-type LookChanges = { lineWidth?: number | null; color?: string | null };
+type LookChanges = { lineWidth?: number | null; color?: string | null; comment?: boolean | null; grafcet?: RectAnnotation['grafcet'] | null };
 
 export function addAnnotation(diagram: Diagram, a: NewAnnotation): { diagram: Diagram; annotation: Annotation } {
   const annotation = structuredClone({ ...a, id: nextId('a', diagram.annotations) }) as Annotation;
@@ -184,7 +184,7 @@ export function addAnnotation(diagram: Diagram, a: NewAnnotation): { diagram: Di
 export function updateAnnotation(
   diagram: Diagram,
   id: string,
-  changes: Omit<AnnotationChanges, 'lineWidth' | 'color'> & LookChanges,
+  changes: Omit<AnnotationChanges, 'lineWidth' | 'color' | 'comment' | 'grafcet'> & LookChanges,
 ): Diagram {
   if (!diagram.annotations.some((a) => a.id === id)) throw new DiagramError(`Grafik "${id}" existiert nicht`);
   return {
@@ -197,7 +197,13 @@ export function updateAnnotation(
         if (v === undefined) continue;
         // Farbe für alles, Linienbreite für alles außer Text; beide dürfen noch fehlen.
         const look = k === 'color' || (k === 'lineWidth' && a.kind !== 'text');
-        if (!look && !(k in a)) continue;
+        // Optionale Zusätze: Kommentar bei Text, GRAFCET-Rahmen beim Rechteck (null entfernt sie).
+        const extra = (k === 'comment' && a.kind === 'text') || (k === 'grafcet' && a.kind === 'rect');
+        if (extra && v === null) {
+          delete next[k];
+          continue;
+        }
+        if (!look && !extra && !(k in a)) continue;
         if (look && (v === null || (k === 'lineWidth' && v === DEFAULT_LINE_WIDTH))) delete next[k];
         else next[k] = v;
       }
@@ -274,8 +280,14 @@ export function rectFromCorners(a: Point, b: Point): Pick<RectAnnotation, 'posit
   };
 }
 
-export function textLines(t: Pick<TextAnnotation, 'text'>): string[] {
-  return t.text.split('\n');
+export function textLines(t: Pick<TextAnnotation, 'text' | 'comment'>): string[] {
+  const lines = t.text.split('\n');
+  // GRAFCET-Kommentar in deutschen Anführungszeichen (DIN EN 60848, Symbol [30]).
+  if (t.comment && lines.length) {
+    lines[0] = `„${lines[0]}`;
+    lines[lines.length - 1] = `${lines[lines.length - 1]}“`;
+  }
+  return lines;
 }
 
 /**
@@ -309,7 +321,7 @@ export function annotationBox(a: Annotation): Box {
     return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
   }
   const lines = textLines(a);
-  const longest = Math.max(1, ...lines.map((l) => l.length));
+  const longest = Math.max(1, ...lines.map((l) => l.length)) + (a.comment ? 2 : 0);
   const em = fontSizeFor(a.size);
   return {
     minX: a.position.x,

@@ -75,6 +75,10 @@ Bezeichnungen, Bedingungen und Aktionsart stellt man im Konfigurator ein; neue S
 fortlaufend nummeriert. In Bedingungen setzt `!` vor einem Namen oder einer Klammer einen
 Überstrich (Negation), z. B. `B3 · !B4`. Wirkungslinien sind normale Leitungen zwischen den
 Anschlüssen: Verzweigungen bekommen keinen Punkt, Linien nach oben einen Pfeil (Symbol [11]).
+Oben im Katalog stehen zwei Werkzeuge: Teil-GRAFCET-Rahmen (abgerundet, Name G1, G2 … unten
+links; im Eigenschaften-Fenster umschaltbar auf Einschließung mit Name des einschließenden
+Schritts) und Kommentar (Text in Anführungszeichen, Symbol [30]). Beides ist Grafik
+(`RectAnnotation.grafcet`, `TextAnnotation.comment`), kein Bauteil.
 
 Bedienung: Bauteile per Klick oder Ziehen aus der Bauteilliste aufs Blatt bringen; die Liste
 ist am rechten Rand in der Breite ziehbar. Was ausgewählt ist, bearbeitet eine kleine Leiste

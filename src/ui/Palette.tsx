@@ -1,4 +1,4 @@
-import { Circle, createLucideIcon, Ellipse, Slash, SlidersHorizontal, Square, Type, Waypoints, type LucideIcon } from 'lucide-react';
+import { Circle, createLucideIcon, Ellipse, Quote, Slash, SlidersHorizontal, Square, Type, Waypoints, type LucideIcon } from 'lucide-react';
 import { CATALOG_NAMES, PALETTE_GROUPS, type Catalog, type PaletteEntry } from '../model/library.ts';
 import { SYMBOL_DRAG_TYPE, type AnnotationTool } from './DiagramView.tsx';
 import { IconButton } from './IconButton.tsx';
@@ -19,6 +19,17 @@ const TOOLS: [AnnotationTool, LucideIcon, string][] = [
   ['ellipse', Ellipse, 'Ellipse aufziehen'],
   ['arc', Arc, 'Kreisbogen: Mittelpunkt, Anfang und Ende anklicken; die Maus gibt die Richtung vor (im oder gegen den Uhrzeigersinn)'],
   ['polyline', Waypoints, 'Linienzug: Punkte anklicken; Doppelklick, Enter oder Rechtsklick beendet, Klick auf den ersten Punkt schließt ihn'],
+];
+
+/** Teil-GRAFCET-Rahmen mit abgerundeten Ecken. */
+const Frame = createLucideIcon('FluidPlanGrafcetFrame', [
+  ['rect', { x: '3', y: '4', width: '18', height: '15', rx: '3', key: 'frame' }],
+  ['path', { d: 'M7 15h3', key: 'name' }],
+]);
+
+const GRAFCET_TOOLS: [AnnotationTool, LucideIcon, string][] = [
+  ['grafcet-frame', Frame, 'Teil-GRAFCET-Rahmen aufziehen (Name G1, G2 … unten links); im Eigenschaften-Fenster auch als Einschließung'],
+  ['comment', Quote, 'Kommentar: Klick auf das Blatt setzt einen Text in Anführungszeichen'],
 ];
 
 const CATALOGS = Object.keys(CATALOG_NAMES) as Catalog[];
@@ -61,6 +72,14 @@ export function Palette({
             onToggle={(e) => setCatalogOpen(medium, e.currentTarget.open)}
           >
             <summary>{CATALOG_NAMES[medium]}</summary>
+            {medium === 'grafcet' && openCatalogs.grafcet && (
+              // Rahmen und Kommentar sind Grafik, keine Bauteile: als Werkzeuge wie oben.
+              <div className="palette-tools grafcet-tools">
+                {GRAFCET_TOOLS.map(([t, icon, title]) => (
+                  <IconButton key={t} icon={icon} label={title} aria-pressed={tool === t} onClick={() => setTool(tool === t ? null : t)} />
+                ))}
+              </div>
+            )}
             {/* Zugeklappte Kataloge nicht rendern: spart die vielen Symbolvorschauen. */}
             {openCatalogs[medium] &&
               PALETTE_GROUPS.map((group) => {

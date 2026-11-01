@@ -249,11 +249,54 @@ function AnnotationProperties({ annotation, diagram, ...rest }: BodyProps & { an
       ...draft,
       color: draft.color ?? null,
       lineWidth: draft.kind === 'text' ? undefined : (draft.lineWidth ?? null),
+      comment: draft.kind === 'text' ? draft.comment || null : undefined,
+      grafcet: draft.kind === 'rect' ? (draft.grafcet ?? null) : undefined,
     });
   return (
     <Frame apply={apply} {...rest}>
-      <h2>{ANNOTATION_NAMES[annotation.kind]}</h2>
+      <h2>
+        {draft.kind === 'rect' && draft.grafcet
+          ? draft.grafcet.kind === 'partial' ? 'Teil-GRAFCET' : 'Einschließung'
+          : draft.kind === 'text' && draft.comment ? 'Kommentar' : ANNOTATION_NAMES[annotation.kind]}
+      </h2>
       <div className="tab-form">
+        {draft.kind === 'rect' && draft.grafcet && (
+          <>
+            <div className="field">
+              <span>Art (DIN EN 60848)</span>
+              <Segmented
+                label="Art"
+                options={[
+                  { value: 'partial', label: 'Teil-GRAFCET: abgerundeter Rahmen, Name unten links (7.2.2)', icon: 'Teil-GRAFCET' },
+                  { value: 'enclosure', label: 'Einschließung: Rahmen eines einschließenden Schritts (7.4, Symbol [38])', icon: 'Einschließung' },
+                ]}
+                value={draft.grafcet.kind}
+                onChange={(kind) => setDraft({ ...draft, grafcet: { ...draft.grafcet!, kind } })}
+              />
+            </div>
+            <div className="field-row">
+              <label className="field">
+                <span>Name des Teil-GRAFCET</span>
+                <input
+                  autoFocus
+                  value={draft.grafcet.name}
+                  placeholder="z. B. G1"
+                  onChange={(e) => setDraft({ ...draft, grafcet: { ...draft.grafcet!, name: e.target.value } })}
+                />
+              </label>
+              {draft.grafcet.kind === 'enclosure' && (
+                <label className="field">
+                  <span>Einschließender Schritt</span>
+                  <input
+                    value={draft.grafcet.step ?? ''}
+                    placeholder="z. B. 4"
+                    onChange={(e) => setDraft({ ...draft, grafcet: { ...draft.grafcet!, step: e.target.value } })}
+                  />
+                </label>
+              )}
+            </div>
+          </>
+        )}
         {draft.kind === 'text' && (
           <>
             <label>
@@ -269,6 +312,14 @@ function AnnotationProperties({ annotation, diagram, ...rest }: BodyProps & { an
                   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) e.currentTarget.form?.requestSubmit();
                 }}
               />
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={draft.comment ?? false}
+                onChange={(e) => setDraft({ ...draft, comment: e.target.checked })}
+              />
+              GRAFCET-Kommentar (in Anführungszeichen, DIN EN 60848 Symbol [30])
             </label>
             <div className="field">
               <span>Schrifthöhe</span>

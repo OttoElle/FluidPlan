@@ -41,7 +41,8 @@ import { useViewSettings } from './canvas/viewSettings.ts';
 export type { Selection };
 
 /** Zeichenwerkzeug für freie Grafik; `null` = Auswählen. */
-export type AnnotationTool = 'text' | 'line' | 'rect' | 'circle' | 'ellipse' | 'polyline' | 'arc';
+/** Zeichenwerkzeuge; `comment` und `grafcet-frame` sind Kommentar und Rahmen für GRAFCET. */
+export type AnnotationTool = 'text' | 'line' | 'rect' | 'circle' | 'ellipse' | 'polyline' | 'arc' | 'comment' | 'grafcet-frame';
 
 /** Was beim Verschieben mitwandert. */
 export type MoveTarget = Pick<Selection, 'components' | 'annotations'>;
@@ -513,6 +514,11 @@ export function DiagramView({
             }
             if (tool === 'text') {
               onCreateAnnotation?.({ kind: 'text', position: p, text: 'Text', size: 14 });
+              return;
+            }
+            if (tool === 'comment') {
+              // GRAFCET-Kommentar: 2,5 mm wie die übrige Beschriftung.
+              onCreateAnnotation?.({ kind: 'text', position: p, text: 'Kommentar', size: 10, comment: true });
               return;
             }
             drag.current = { kind: 'create', tool, start: p, end: p };

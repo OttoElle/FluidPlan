@@ -1,4 +1,4 @@
-import { fontSizeFor } from '../../model/lettering.ts';
+import { fontSizeFor, LETTERING, textWidth } from '../../model/lettering.ts';
 import {
   LINE_HEIGHT,
   angleOf,
@@ -14,10 +14,11 @@ import {
   textLines,
   type NewAnnotation,
 } from '../../model/annotations.ts';
-import type { Annotation, Point } from '../../model/types.ts';
+import type { Annotation, GrafcetFrame, Point, RectAnnotation } from '../../model/types.ts';
 
 /** Werkzeuge, deren Form durch Aufziehen entsteht. */
-export type DragTool = 'line' | 'rect' | 'circle' | 'ellipse';
+/** `grafcet-frame` zieht einen Teil-GRAFCET-Rahmen auf (Rechteck mit Zusatz `grafcet`). */
+export type DragTool = 'line' | 'rect' | 'circle' | 'ellipse' | 'grafcet-frame';
 
 /**
  * Anfasser einer Linie (Anfang, Ende), eines Rechtecks bzw. einer Ellipse (Ecken des
@@ -29,6 +30,7 @@ export type Handle = 'from' | 'to' | 'nw' | 'ne' | 'sw' | 'se' | 'radius' | 'sta
 /** Größe der Formen, wenn nur geklickt statt gezogen wird. */
 const DEFAULT_LINE = 100;
 const DEFAULT_RECT = { width: 200, height: 120 };
+const DEFAULT_FRAME = { width: 400, height: 600 };
 const DEFAULT_RADIUS = 40;
 const DEFAULT_ELLIPSE = { rx: 80, ry: 50 };
 
@@ -62,6 +64,10 @@ export function createdShape(tool: DragTool, start: Point, end: Point, final = t
     case 'rect': {
       const corner = clicked ? { x: start.x + DEFAULT_RECT.width, y: start.y + DEFAULT_RECT.height } : end;
       return { kind: 'rect', ...rectFromCorners(start, corner), style: 'dashdot' };
+    }
+    case 'grafcet-frame': {
+      const corner = clicked ? { x: start.x + DEFAULT_FRAME.width, y: start.y + DEFAULT_FRAME.height } : end;
+      return { kind: 'rect', ...rectFromCorners(start, corner), style: 'solid', grafcet: { kind: 'partial', name: 'G1' } };
     }
   }
 }
@@ -141,6 +147,37 @@ export function reshape(a: Annotation, handle: Handle, to: Point): Partial<Annot
   return a.kind === 'rect' ? rectFromCorners(to, fixed) : ellipseFromCorners(to, fixed);
 }
 
+/** Schrift im GRAFCET-Rahmen: 2,5 mm wie im Plan. */
+const FRAME_FONT = fontSizeFor(LETTERING.normal);
+
+/**
+ * Umriss und Beschriftung eines GRAFCET-Rahmens (DIN EN 60848): Teil-GRAFCET
+ * mit abgerundeten Ecken (Bild in 7.2.2), Einschließung eckig (Symbol [38]).
+ * Der Name G* steht unten links und unterbricht die Unterkante; bei der
+ * Einschließung steht der Name des einschließenden Schritts oben links darüber.
+ */
+export function grafcetFrame(r: RectAnnotation, frame: GrafcetFrame): { path: string; texts: { x: number; y: number; text: string }[] } {
+  const { x, y } = r.position;
+  const w = r.width;
+  const h = r.height;
+  const rad = frame.kind === 'partial' ? Math.min(20, w / 4, h / 4) : 0;
+  const bottom = y + h;
+  const label = frame.name.trim();
+  const texts: { x: number; y: number; text: string }[] = [];
+  // Lücke in der Unterkante für den Namen.
+  const gapStart = x + rad + 10;
+  const gapEnd = label ? Math.min(x + w - rad, gapStart + textWidth(label, LETTERING.normal) + 8) : gapStart;
+  if (label) texts.push({ x: gapStart + 4, y: bottom + LETTERING.normal / 2, text: label });
+  if (frame.kind === 'enclosure' && frame.step?.trim()) texts.push({ x: x + 4, y: y - 4, text: frame.step.trim() });
+  const arc = (tx: number, ty: number) => (rad ? `A${rad} ${rad} 0 0 0 ${tx} ${ty}` : `L${tx} ${ty}`);
+  const path = label
+    ? `M${gapEnd} ${bottom} L${x + w - rad} ${bottom} ${arc(x + w, bottom - rad)} L${x + w} ${y + rad} ${arc(x + w - rad, y)} ` +
+      `L${x + rad} ${y} ${arc(x, y + rad)} L${x} ${bottom - rad} ${arc(x + rad, bottom)} L${gapStart} ${bottom}`
+    : `M${x + rad} ${bottom} L${x + w - rad} ${bottom} ${arc(x + w, bottom - rad)} L${x + w} ${y + rad} ${arc(x + w - rad, y)} ` +
+      `L${x + rad} ${y} ${arc(x, y + rad)} L${x} ${bottom - rad} ${arc(x + rad, bottom)} Z`;
+  return { path, texts };
+}
+
 export function AnnotationShape({
   annotation: a,
   selected = false,
@@ -190,6 +227,18 @@ export function AnnotationShape({
     );
   } else if (a.kind === 'line') {
     shape = stroke((p) => <line {...p} x1={a.from.x} y1={a.from.y} x2={a.to.x} y2={a.to.y} />);
+  } else if (a.kind === 'rect' && a.grafcet) {
+    const frame = grafcetFrame(a, a.grafcet);
+    shape = (
+      <>
+        {stroke((p) => <path {...p} d={frame.path} />)}
+        {frame.texts.map((t, i) => (
+          <text key={i} className="note" x={t.x} y={t.y} fontSize={FRAME_FONT} style={a.color ? { fill: a.color } : undefined}>
+            {t.text}
+          </text>
+        ))}
+      </>
+    );
   } else if (a.kind === 'rect') {
     shape = stroke((p) => <rect {...p} {...rectProps(a)} />);
   } else if (a.kind === 'circle') {
