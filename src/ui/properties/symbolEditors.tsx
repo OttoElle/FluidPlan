@@ -23,10 +23,11 @@ import {
 } from '../../model/fluidValves.ts';
 import { INDICATOR_NAMES, INSTRUMENT_NAMES, type IndicatorConfig, type InstrumentConfig } from '../../model/instruments.ts';
 import {
-  canDetent,
   canVent,
   DESIGN_NAMES,
-  DETENT_NAMES,
+  PISTON_TYPE_NAMES,
+  type Detent,
+  type PistonType,
   hasStroke,
   LIMIT_SWITCH_NAMES,
   normalizeCylinder,
@@ -103,12 +104,29 @@ const keys = <T extends string>(r: Record<T, string>) => Object.keys(r) as T[];
 
 type Direction = 'push' | 'pull' | 'double';
 
+/** Stangenart wie in FluidDraw: Standard, hohl oder mit Raste (Endlagenverriegelung). */
+type RodStyle = 'standard' | 'hollow' | Exclude<Detent, 'none'>;
+const ROD_STYLES: readonly RodStyle[] = ['standard', 'hollow', 'retracted', 'extended', 'both'];
+const ROD_STYLE_NAMES: Record<RodStyle, string> = {
+  standard: 'Standard-Kolbenstange',
+  hollow: 'Hohlkolbenstange',
+  retracted: 'Raste eingefahren',
+  extended: 'Raste ausgefahren',
+  both: 'Raste in beiden Endlagen',
+};
+
 /** Wie in FluidDraw gegliedert: Zylinderart, Kolben, Kolbenstange, Kolbenstellung. */
 export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderConfig>) {
   const set = (c: Partial<CylinderConfig>) => onChange(normalizeCylinder({ ...config, ...c }));
   const variant = (c: Partial<CylinderConfig>) => normalizeCylinder({ ...config, stroke: 0, ...c });
   const diaphragm = config.design === 'diaphragm';
-  const rodless = config.rod === 'rodless';
+  const rodless = config.rod === 'none';
+  const pistonOnly = config.design === 'piston';
+  const rodStyle: RodStyle = config.hollowRod ? 'hollow' : config.detent === 'none' ? 'standard' : config.detent;
+  const rodStyleChange = (st: RodStyle): Partial<CylinderConfig> =>
+    st === 'standard' || st === 'hollow'
+      ? { hollowRod: st === 'hollow', detent: 'none' }
+      : { hollowRod: false, detent: st, rodActuator: 'none' };
   // Kolben- und Membranzylinder haben dieselben Einstellungen für Kolben und Stange
   const piston = config.design === 'piston' || diaphragm;
   const direction: Direction = config.action === 'double' ? 'double' : config.spring === 'piston' ? 'pull' : 'push';
@@ -181,7 +199,20 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
       {piston && (
         <div className="group-columns">
           <fieldset>
-            <legend>Kolben: Endlagendämpfung</legend>
+            <legend>Kolben</legend>
+            {pistonOnly && (
+              <div className="actuation-row">
+                <SymbolPicker<PistonType>
+                  label="Kolbenart"
+                  value={config.pistonType}
+                  empty={null}
+                  onChange={(pistonType) => pistonType && set({ pistonType })}
+                  options={keys(PISTON_TYPE_NAMES).map((t) => ({ value: t, label: PISTON_TYPE_NAMES[t], icon: variantIcon(variant({ pistonType: t })) }))}
+                />
+                <span>Kolbenart</span>
+              </div>
+            )}
+            <span className="hint">Endlagendämpfung</span>
             <label className="check">
               <input type="checkbox" checked={cp !== 'none'} onChange={(e) => cushion(e.target.checked, cr !== 'none', adjustable)} />
               Kolbenseitig
@@ -203,13 +234,28 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
           <fieldset>
             <legend>Kolbenstange</legend>
             {!diaphragm && (
-              <SymbolPicker<CylinderRod>
-                label="Kolbenstange"
-                value={config.rod}
-                empty={null}
-                onChange={(rod) => rod && set({ rod })}
-                options={keys(ROD_NAMES).map((rod) => ({ value: rod, label: ROD_NAMES[rod], icon: variantIcon(variant({ rod })) }))}
-              />
+              <div className="actuation-row">
+                <SymbolPicker<CylinderRod>
+                  label="Kolbenstangenseite"
+                  value={config.rod}
+                  empty={null}
+                  onChange={(rod) => rod && set({ rod })}
+                  options={keys(ROD_NAMES).map((rod) => ({ value: rod, label: ROD_NAMES[rod], icon: variantIcon(variant({ rod })) }))}
+                />
+                <span>Kolbenstangenseite</span>
+              </div>
+            )}
+            {pistonOnly && config.rod === 'single' && (
+              <div className="actuation-row">
+                <SymbolPicker<RodStyle>
+                  label="Stangenart"
+                  value={rodStyle}
+                  empty={null}
+                  onChange={(st) => st && set(rodStyleChange(st))}
+                  options={ROD_STYLES.map((st) => ({ value: st, label: ROD_STYLE_NAMES[st], icon: variantIcon(variant(rodStyleChange(st))) }))}
+                />
+                <span>Stangenart</span>
+              </div>
             )}
             {!rodless && <div className="actuation-row">
               <SymbolPicker<RodActuator>
@@ -235,16 +281,6 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
                 options={symbolOptions(keys(LIMIT_SWITCH_NAMES), (v) => LIMIT_SWITCH_NAMES[v], (limitSwitch) => variant({ limitSwitch }))}
               />
             </Field>
-            {canDetent(config) && (
-              <Field title="Raste" wide>
-                <Segmented
-                  label="Raste"
-                  value={config.detent}
-                  onChange={(detent) => set({ detent })}
-                  options={symbolOptions(keys(DETENT_NAMES), (v) => DETENT_NAMES[v], (detent) => variant({ detent }))}
-                />
-              </Field>
-            )}
             {canVent(config) && (
               <Check title="Entlüftung ohne Anschlussmöglichkeit" checked={config.vent} onChange={(vent) => set({ vent })} />
             )}
@@ -286,7 +322,7 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
 /** Beim Wechsel der Bauart bleibt die Wirkungsweise, soweit die neue Bauart sie kennt. */
 function designChange(config: CylinderConfig, design: CylinderDesign): Partial<CylinderConfig> {
   if (design === 'piston' || design === 'diaphragm') {
-    return { design, action: config.action, rod: config.rod === 'rodless' && design === 'diaphragm' ? 'single' : config.rod };
+    return { design, action: config.action, rod: config.rod === 'none' && design === 'diaphragm' ? 'single' : config.rod };
   }
   return { design, action: 'single' };
 }

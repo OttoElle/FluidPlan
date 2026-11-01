@@ -22,8 +22,10 @@ import { ACTUATOR_NAMES, ACTUATOR_WIDTH, upgradeActuator, type Actuator } from '
 
 export type CylinderDesign = 'piston' | 'diaphragm' | 'plunger' | 'telescopic';
 export type CylinderAction = 'double' | 'single';
-/** rodless = kolbenstangenlos, magnetisch gekoppelt (Beispiel 6.3.11). */
-export type CylinderRod = 'single' | 'through' | 'rodless';
+/** Kolbenstangenseite: einseitig, durchgehend oder ohne Kolbenstange (kolbenstangenlos, Beispiele 6.3.9–6.3.11). */
+export type CylinderRod = 'single' | 'through' | 'none';
+/** Kolbenart wie in FluidDraw: mit Magnet zur Positionserfassung, Schlitten, magnetisch gekoppeltem Schlitten. */
+export type PistonType = 'plain' | 'magnet' | 'magnetic-transmission' | 'slide' | 'slide-magnet' | 'coupled-slide';
 /** rod = Feder im Stangenraum (drückend, Rückstellung), piston = im Kolbenraum (ziehend). */
 export type CylinderSpring = 'none' | 'rod' | 'piston';
 export type Cushion = 'none' | 'fixed' | 'adjustable';
@@ -59,6 +61,10 @@ export interface CylinderConfig {
   strokeLimiter: boolean;
   /** Raste, nur Kolbenzylinder mit einseitiger Stange ohne Betätigung; fehlt in älteren Dateien. */
   detent: Detent;
+  /** Kolbenart, nur Kolbenzylinder; fehlt in älteren Dateien (dann ohne Positionserfassung). */
+  pistonType: PistonType;
+  /** Hohlkolbenstange; fehlt in älteren Dateien. */
+  hollowRod: boolean;
 }
 
 export const DESIGN_NAMES: Record<CylinderDesign, string> = {
@@ -74,8 +80,18 @@ export const ACTION_NAMES: Record<CylinderAction, string> = {
 export const ROD_NAMES: Record<CylinderRod, string> = {
   single: 'Einseitige Kolbenstange',
   through: 'Durchgehende Kolbenstange',
-  rodless: 'Kolbenstangenlos, magnetisch gekoppelt',
+  none: 'Ohne Kolbenstange',
 };
+export const PISTON_TYPE_NAMES: Record<PistonType, string> = {
+  plain: 'Kolben ohne Positionserfassung',
+  magnet: 'Kolben mit Magnet zur Positionserfassung',
+  'magnetic-transmission': 'Kolben mit magnetischer Kraftübertragung',
+  slide: 'Kolben mit Schlitten, ohne Positionserfassung',
+  'slide-magnet': 'Kolben mit Schlitten und Magnet zur Positionserfassung',
+  'coupled-slide': 'Kolben mit magnetisch gekoppeltem Schlitten und Positionserfassung',
+};
+/** Kolbenarten mit Schlitten über dem Rahmen. */
+export const hasSlide = (t: PistonType) => t === 'slide' || t === 'slide-magnet' || t === 'coupled-slide';
 export const DETENT_NAMES: Record<Detent, string> = {
   none: 'Keine',
   retracted: 'Eingefahren',
@@ -126,11 +142,14 @@ export function defaultCylinderConfig(action: CylinderAction = 'double', design:
     vent: false,
     strokeLimiter: false,
     detent: 'none',
+    pistonType: 'plain',
+    hollowRod: false,
   });
 }
 
 /** Kann der Zylinder eine Raste haben (Raste sitzt auf der einseitigen Kolbenstange)? */
-export const canDetent = (c: CylinderConfig) => c.design === 'piston' && c.rod === 'single' && (c.rodActuator ?? 'none') === 'none';
+export const canDetent = (c: CylinderConfig) =>
+  c.design === 'piston' && c.rod === 'single' && !c.hollowRod && (c.rodActuator ?? 'none') === 'none';
 
 /** Hat der Zylinder den kolbenseitigen (A) bzw. stangenseitigen (B) Anschluss? */
 export function cylinderPorts(config: CylinderConfig) {
@@ -154,7 +173,7 @@ export function normalizeCylinder(config: CylinderConfig): CylinderConfig {
   if (config.design === 'piston' || config.design === 'diaphragm') {
     const diaphragm = config.design === 'diaphragm';
     // Kolbenstangenlos: immer doppeltwirkend, ohne Betätigung am Stangenende
-    const rodless = !diaphragm && config.rod === 'rodless';
+    const rodless = !diaphragm && config.rod === 'none';
     const action = rodless ? 'double' : config.action;
     // Einfachwirkender Membranzylinder hat immer eine Feder (Beispiel 6.3.5)
     let spring = action === 'double' ? 'none' : config.spring;
@@ -171,6 +190,8 @@ export function normalizeCylinder(config: CylinderConfig): CylinderConfig {
       strokeLimiter: diaphragm && config.strokeLimiter === true,
       vent: false,
       detent: 'none',
+      pistonType: diaphragm ? 'plain' : (config.pistonType ?? 'plain'),
+      hollowRod: !diaphragm && config.rod === 'single' && config.hollowRod === true,
     };
     return { ...c, vent: canVent(c) && config.vent === true, detent: canDetent(c) ? (config.detent ?? 'none') : 'none' };
   }
@@ -184,6 +205,8 @@ export function normalizeCylinder(config: CylinderConfig): CylinderConfig {
     vent: false,
     strokeLimiter: false,
     detent: 'none',
+    pistonType: 'plain',
+    hollowRod: false,
   } as const;
   if (config.design === 'plunger') return { ...config, ...none, action: 'single', stroke };
   // Doppeltwirkender Teleskopzylinder: Anschluss C sitzt an der ersten Stufe, daher immer eingefahren.
@@ -199,7 +222,9 @@ export function cylinderTitle(config: CylinderConfig): string {
   const kind = config.design === 'diaphragm' ? 'Membranzylinder' : 'Zylinder';
   const parts = [config.action === 'double' ? `Doppeltwirkender ${kind}` : `Einfachwirkender ${kind}`];
   if (config.rod === 'through') parts.push('durchgehende Stange');
-  if (config.rod === 'rodless') parts.push('kolbenstangenlos, magnetisch gekoppelt');
+  if (config.rod === 'none') parts.push('ohne Kolbenstange');
+  if (config.hollowRod) parts.push('Hohlkolbenstange');
+  if (config.pistonType && config.pistonType !== 'plain') parts.push(PISTON_TYPE_NAMES[config.pistonType]);
   if (config.springPort) parts.push('Federraum mit Anschluss');
   if (config.strokeLimiter) parts.push('Hubbegrenzung voreingestellt');
   if (config.vent) parts.push('Entlüftung');
@@ -261,7 +286,7 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
   if (config.design === 'piston' || config.design === 'diaphragm') {
     const diaphragm = config.design === 'diaphragm';
     const through = config.rod === 'through';
-    const rodless = config.rod === 'rodless';
+    const rodless = config.rod === 'none';
     const left = config.limitSwitch === 'left' || config.limitSwitch === 'both';
     const right = config.limitSwitch === 'right' || config.limitSwitch === 'both';
     // Membran: Sehne 3,5M vom Boden (6.3.4), mit Feder im Kolbenraum weiter rechts (6.3.5)
@@ -272,7 +297,8 @@ export function cylinderLayout(config: CylinderConfig): CylinderLayout {
     let bodyX = config.strokeLimiter ? 5.5 : left ? 3.5 : 1.5;
     // Durchgehende Stange: Rahmen so weit nach rechts, dass die Stange links nicht übersteht.
     while (through && bodyX + offset - THROUGH_ROD < 0) bodyX += 2;
-    const top = config.limitSwitch !== 'none' ? SWITCH_BOX : rodless ? CARRIAGE_HEIGHT : config.strokeLimiter ? 1 : 0;
+    const top =
+      config.limitSwitch !== 'none' ? SWITCH_BOX : !diaphragm && hasSlide(config.pistonType ?? 'plain') ? CARRIAGE_HEIGHT : config.strokeLimiter ? 1 : 0;
     const pistonX = bodyX + offset;
     const bodyEnd = bodyX + BODY_WIDTH;
     const extra = rodActuatorExtra(config.rodActuator ?? 'none');
@@ -350,6 +376,8 @@ export function cylinderGeometry(config: CylinderConfig, unit: number) {
 
 export function readCylinderConfig(v: unknown, path: string, errors: string[]): CylinderConfig | undefined {
   if (isObject(v) && v.rodActuator !== undefined) v = { ...v, rodActuator: upgradeActuator(v.rodActuator) };
+  // Stand vom 31.10.2026: "kolbenstangenlos" war immer magnetisch gekoppelt
+  if (isObject(v) && v.rod === 'rodless') v = { ...v, rod: 'none', pistonType: 'coupled-slide' };
   const r = configReader(v, path, errors);
   if (!r) return undefined;
   const design = r.oneOf('design', DESIGN_NAMES, 'piston');
@@ -366,6 +394,8 @@ export function readCylinderConfig(v: unknown, path: string, errors: string[]): 
   const vent = r.bool('vent', false);
   const strokeLimiter = r.bool('strokeLimiter', false);
   const detent = r.oneOf('detent', DETENT_NAMES, 'none');
+  const pistonType = r.oneOf('pistonType', PISTON_TYPE_NAMES, 'plain');
+  const hollowRod = r.bool('hollowRod', false);
   if (!r.ok || !piston || !rodCushion) return undefined;
   return normalizeCylinder({
     kind: 'cylinder',
@@ -381,5 +411,7 @@ export function readCylinderConfig(v: unknown, path: string, errors: string[]): 
     vent,
     strokeLimiter,
     detent,
+    pistonType,
+    hollowRod,
   });
 }

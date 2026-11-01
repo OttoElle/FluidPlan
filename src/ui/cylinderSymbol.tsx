@@ -12,6 +12,7 @@ import {
   SWITCH_BOX,
   THROUGH_ROD,
   type CylinderConfig,
+  type PistonType,
   type CylinderLayout,
 } from '../model/cylinder.ts';
 import { DRAWING_FONT } from '../model/lettering.ts';
@@ -103,7 +104,7 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
   const { bodyX: bx, pistonX: px } = l;
   const bodyEnd = bx + BODY_WIDTH;
   const through = config.rod === 'through';
-  const rodless = config.rod === 'rodless';
+  const rodless = config.rod === 'none';
   const actuator = config.rodActuator ?? 'none';
   const rodEnd = px + PISTON + (through ? THROUGH_ROD : ROD);
   const zigzag = (from: number, to: number) => {
@@ -115,7 +116,7 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
     <>
       {/* Rahmen; die Wand ist dort offen, wo die Kolbenstange austritt (Beispiele 6.3.1/6.3.2) */}
       {rodless ? (
-        <RodlessParts bx={bx} px={px} />
+        <rect x={bx} y={0} width={BODY_WIDTH} height={BODY_HEIGHT} />
       ) : through ? (
         <>
           <polyline points={pts([bodyEnd, ROD_Y], [bodyEnd, 0], [bx, 0], [bx, ROD_Y])} />
@@ -125,6 +126,7 @@ function PistonCylinder({ config, l }: { config: CylinderConfig; l: CylinderLayo
         <polyline points={pts([bodyEnd, ROD_Y], [bodyEnd, 0], [bx, 0], [bx, BODY_HEIGHT], [bodyEnd, BODY_HEIGHT], [bodyEnd, ROD_Y + 1])} />
       )}
       <rect x={px} y={0} width={PISTON} height={BODY_HEIGHT} />
+      <PistonParts type={config.pistonType ?? 'plain'} px={px} />
       {rodless ? null : actuator === 'none' ? (
         <RodWithDetent config={config} l={l} from={px + PISTON} to={rodEnd} />
       ) : (
@@ -158,6 +160,14 @@ const LATCH = 2.25;
  */
 function RodWithDetent({ config, l, from, to }: { config: CylinderConfig; l: CylinderLayout; from: number; to: number }) {
   const detent = config.detent ?? 'none';
+  // Hohlkolbenstange (wie FluidDraw): nur die beiden Längskanten, Stangenende offen
+  if (config.hollowRod)
+    return (
+      <>
+        <line x1={from} y1={ROD_Y} x2={to} y2={ROD_Y} />
+        <line x1={from} y1={ROD_Y + 1} x2={to} y2={ROD_Y + 1} />
+      </>
+    );
   if (detent === 'none') return <rect x={from} y={ROD_Y} width={to - from} height={1} />;
   const latch = l.bodyX + BODY_WIDTH + LATCH;
   const [min, max] = l.travel;
@@ -192,26 +202,46 @@ function Cushions({ config, left, right }: { config: CylinderConfig; left: numbe
   );
 }
 
+/** Gefüllter Magnet "[" im Kolben (Beispiel 6.3.11). */
+const pistonMagnet = (px: number, y0 = 0.7, y1 = 3.3) =>
+  pts([px + 0.45, y0], [px + 1.6, y0], [px + 1.6, y0 + 0.5], [px + 1, y0 + 0.5], [px + 1, y1 - 0.5], [px + 1.6, y1 - 0.5], [px + 1.6, y1], [px + 0.45, y1]);
+
 /**
- * Kolbenstangenloser Zylinder, magnetisch gekoppelt (Beispiel 6.3.11):
- * geschlossener Rahmen, im Kolben ein gefüllter Magnet "[", darüber der
- * Schlitten 4M × 2M mit gefülltem Magnet "⊓".
+ * Kolbenarten (wie in FluidDraw): Magnet zur Positionserfassung "[" im Kolben
+ * (6.3.11); magnetische Kraftübertragung mit zusätzlichen Magneten oben und
+ * unten; Schlitten als Steg 4M × 0,75M über dem Rahmen, mit dem Kolben
+ * verbunden (bandgeführt, 6.3.9); magnetisch gekoppelter Schlitten 4M × 2M
+ * mit gefülltem Magnet "⊓" (6.3.11).
  */
-function RodlessParts({ bx, px }: { bx: number; px: number }) {
+function PistonParts({ type, px }: { type: PistonType; px: number }) {
+  const magnet = type !== 'plain' && type !== 'slide';
   const cx = px - 1;
   const ch = CARRIAGE_HEIGHT;
   return (
     <>
-      <rect x={bx} y={0} width={BODY_WIDTH} height={BODY_HEIGHT} />
-      <polygon
-        className="fill"
-        points={pts([px + 0.45, 0.7], [px + 1.6, 0.7], [px + 1.6, 1.2], [px + 1, 1.2], [px + 1, 2.8], [px + 1.6, 2.8], [px + 1.6, 3.3], [px + 0.45, 3.3])}
-      />
-      <rect x={cx} y={-ch} width={4} height={ch} />
-      <polygon
-        className="fill"
-        points={pts([cx + 0.7, -ch + 1.6], [cx + 0.7, -ch + 0.45], [cx + 3.3, -ch + 0.45], [cx + 3.3, -ch + 1.6], [cx + 2.75, -ch + 1.6], [cx + 2.75, -ch + 1], [cx + 1.25, -ch + 1], [cx + 1.25, -ch + 1.6])}
-      />
+      {magnet && <polygon className="fill" points={type === 'magnetic-transmission' ? pistonMagnet(px, 1.05, 2.95) : pistonMagnet(px)} />}
+      {type === 'magnetic-transmission' &&
+        [0.25, 3.25].map((y) => (
+          <g key={y}>
+            <polygon className="fill" points={pts([px + 0.3, y], [px + 0.85, y], [px + 0.85, y + 0.15], [px + 0.5, y + 0.15], [px + 0.5, y + 0.35], [px + 0.85, y + 0.35], [px + 0.85, y + 0.5], [px + 0.3, y + 0.5])} />
+            <polygon className="fill" points={pts([px + 1.7, y], [px + 1.15, y], [px + 1.15, y + 0.15], [px + 1.5, y + 0.15], [px + 1.5, y + 0.35], [px + 1.15, y + 0.35], [px + 1.15, y + 0.5], [px + 1.7, y + 0.5])} />
+          </g>
+        ))}
+      {(type === 'slide' || type === 'slide-magnet') && (
+        <>
+          <polyline points={pts([px, 0], [px, -1], [px + PISTON, -1], [px + PISTON, 0])} />
+          <rect x={cx} y={-1.75} width={4} height={0.75} />
+        </>
+      )}
+      {type === 'coupled-slide' && (
+        <>
+          <rect x={cx} y={-ch} width={4} height={ch} />
+          <polygon
+            className="fill"
+            points={pts([cx + 0.7, -ch + 1.6], [cx + 0.7, -ch + 0.45], [cx + 3.3, -ch + 0.45], [cx + 3.3, -ch + 1.6], [cx + 2.75, -ch + 1.6], [cx + 2.75, -ch + 1], [cx + 1.25, -ch + 1], [cx + 1.25, -ch + 1.6])}
+          />
+        </>
+      )}
     </>
   );
 }

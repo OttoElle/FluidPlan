@@ -3,7 +3,7 @@ import { parseDiagram, serializeDiagram } from '../io/json.ts';
 import { MANIFOLD_OUTLETS, type ManifoldConfig, type PressureConverterConfig, type PrimeMoverConfig, type SwivelConfig } from './actuators.ts';
 import { BORES, FORMS, normalizeBallValve, type BallValveConfig, type BallValveWays } from './ballValve.ts';
 import { CHECK_COUNTS, type CouplingConfig } from './coupling.ts';
-import { defaultCylinderConfig, normalizeCylinder, ROD_ACTUATORS, type CylinderConfig } from './cylinder.ts';
+import { defaultCylinderConfig, normalizeCylinder, readCylinderConfig, ROD_ACTUATORS, type CylinderConfig } from './cylinder.ts';
 import { addComponent, configureComponent, connect, createDiagram, transformLocalPoint } from './diagram.ts';
 import { exampleHydraulicDiagram } from './example.ts';
 import { definitionOf, typeOfConfig } from './library.ts';
@@ -58,6 +58,11 @@ function cylinderVariants(): CylinderConfig[] {
   for (const rodActuator of ROD_ACTUATORS)
     for (const stroke of [0, 50])
       out.push(normalizeCylinder({ ...defaultCylinderConfig('single'), rodActuator, stroke }));
+  for (const pistonType of ['plain', 'magnet', 'magnetic-transmission', 'slide', 'slide-magnet', 'coupled-slide'] as const)
+    for (const rod of ['single', 'through', 'none'] as const)
+      for (const limitSwitch of ['none', 'right'] as const)
+        for (const hollowRod of [false, true])
+          out.push(normalizeCylinder({ ...defaultCylinderConfig('double'), pistonType, rod, limitSwitch, hollowRod, stroke: 100 }));
   for (const detent of ['retracted', 'extended', 'both'] as const)
     for (const spring of ['none', 'rod', 'piston'] as const)
       for (const stroke of [0, 50, 100])
@@ -65,7 +70,7 @@ function cylinderVariants(): CylinderConfig[] {
   // Membranzylinder, kolbenstangenlos, Endschalter, Entlüftung, Hubbegrenzung
   for (const design of ['piston', 'diaphragm'] as const)
     for (const action of ['double', 'single'] as const)
-      for (const rod of ['single', 'through', 'rodless'] as const)
+      for (const rod of ['single', 'through', 'none'] as const)
         for (const spring of ['rod', 'piston'] as const)
           for (const limitSwitch of ['none', 'left', 'right', 'both'] as const)
             for (const stroke of [0, 100])
@@ -205,13 +210,21 @@ describe('Konfigurierbare Bauteile', () => {
   });
 
   it('halten Membranzylinder und kolbenstangenlose Zylinder in sinnvollen Einstellungen', () => {
-    const rodless = normalizeCylinder({ ...defaultCylinderConfig('single'), rod: 'rodless', rodActuator: 'pedal', spring: 'rod' });
+    const rodless = normalizeCylinder({ ...defaultCylinderConfig('single'), rod: 'none', rodActuator: 'pedal', spring: 'rod' });
     expect(rodless).toMatchObject({ action: 'double', spring: 'none', rodActuator: 'none' });
     const diaphragm = normalizeCylinder({ ...defaultCylinderConfig('single', 'diaphragm'), spring: 'none', rod: 'through', vent: true });
     expect(diaphragm).toMatchObject({ spring: 'piston', rod: 'single', vent: true });
     expect(definition(diaphragm).ports.map((p) => p.id)).toEqual(['B']);
     // Entlüftung nur am Raum ohne Anschluss, Hubbegrenzung nur beim Membranzylinder
     expect(normalizeCylinder({ ...defaultCylinderConfig('double'), vent: true, strokeLimiter: true })).toMatchObject({ vent: false, strokeLimiter: false });
+  });
+
+  it('lesen den kolbenstangenlosen Zylinder vom 31.10. als Zylinder ohne Stange mit gekoppeltem Schlitten', () => {
+    const errors: string[] = [];
+    const c = readCylinderConfig({ ...defaultCylinderConfig('double'), rod: 'rodless' }, 'c', errors);
+    expect(errors).toEqual([]);
+    expect(c).toMatchObject({ rod: 'none', pistonType: 'coupled-slide', action: 'double' });
+    expect(normalizeCylinder({ ...defaultCylinderConfig('double'), rod: 'none' }).pistonType).toBe('plain');
   });
 
   it('geben die Raste nur dem Kolbenzylinder mit einseitiger Stange ohne Betätigung', () => {
