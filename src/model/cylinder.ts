@@ -172,9 +172,9 @@ export function normalizeCylinder(config: CylinderConfig): CylinderConfig {
   const limitSwitch = config.limitSwitch ?? 'none';
   if (config.design === 'piston' || config.design === 'diaphragm') {
     const diaphragm = config.design === 'diaphragm';
-    // Kolbenstangenlos: immer doppeltwirkend, ohne Betätigung am Stangenende
+    // Kolbenstangenlos: ohne Betätigung am Stangenende
     const rodless = !diaphragm && config.rod === 'none';
-    const action = rodless ? 'double' : config.action;
+    const action = config.action;
     // Einfachwirkender Membranzylinder hat immer eine Feder (Beispiel 6.3.5)
     let spring = action === 'double' ? 'none' : config.spring;
     if (diaphragm && action === 'single' && spring === 'none') spring = 'piston';

@@ -136,9 +136,7 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
         ? { action: 'double' }
         : { action: 'single', spring: d === 'pull' ? 'piston' : config.spring === 'none' && !diaphragm ? 'none' : 'rod' },
     );
-  const directions: { value: Direction; label: string }[] = rodless
-    ? []
-    : piston
+  const directions: { value: Direction; label: string }[] = piston
     ? [
         { value: 'push', label: 'Einfachwirkend, drückend →' },
         { value: 'pull', label: 'Einfachwirkend, ziehend ←' },
@@ -180,7 +178,6 @@ export function CylinderEditor({ config, onChange }: ConfigEditorProps<CylinderC
               </label>
             ))}
             {config.design === 'plunger' && <span className="hint">Plungerzylinder sind immer einfachwirkend.</span>}
-            {rodless && <span className="hint">Kolbenstangenlose Zylinder sind doppeltwirkend.</span>}
           </div>
           {config.design === 'piston' && direction === 'push' && (
             <label className="check">
