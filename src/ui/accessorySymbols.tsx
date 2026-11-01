@@ -14,6 +14,8 @@ import { CheckElement, FlowArrow, pts, Spring, Triangle, type P } from './symbol
 // --- Kugelhahn ------------------------------------------------------------------
 
 const BALL_R = 1.5;
+/** Abstand der (verdeckten) Dreiecksspitze von der Kugelmitte: die Dreiecke reichen in die Kugel hinein. */
+const TIP_DEPTH = 0.75;
 
 export function BallValveSymbol({ config }: { config: BallValveConfig }) {
   const form = formOf(config);
@@ -26,18 +28,28 @@ export function BallValveSymbol({ config }: { config: BallValveConfig }) {
     <>
       <circle cx={c[0]} cy={c[1]} r={BALL_R} />
       {/*
-        Je Anschluss ein Dreieck des Absperrventils (8.7.23: 2M lang, Grundseite 1,5M) mit der Spitze
-        an der Kugel (8.2.12, Kreis 3M), dahinter die Leitung bis zum Anschluss.
+        Je Anschluss ein Dreieck des Absperrventils (8.7.23, Grundseite 1,5M), dessen Spitze in der
+        Kugel (8.2.12, Kreis 3M) liegt: gezeichnet wird nur der Teil außerhalb der Kugel.
       */}
       {SIDES[form].map(({ side }) => {
         const [dx, dy] = SIDE_DIR[side];
         const base = at(side, BALL_R + 2);
+        const c0: P = [base[0] - dy * 0.75, base[1] + dx * 0.75];
+        const c1: P = [base[0] + dy * 0.75, base[1] - dx * 0.75];
+        const tip = at(side, TIP_DEPTH);
+        // Schnittpunkt der Dreiecksseite (Spitze → Ecke) mit dem Kugelkreis
+        const onBall = ([bx, by]: P): P => {
+          const [ux, uy] = [bx - tip[0], by - tip[1]];
+          const [ox, oy] = [tip[0] - c[0], tip[1] - c[1]];
+          const qa = ux * ux + uy * uy;
+          const qb = 2 * (ox * ux + oy * uy);
+          const qc = ox * ox + oy * oy - BALL_R * BALL_R;
+          const t = (-qb + Math.sqrt(qb * qb - 4 * qa * qc)) / (2 * qa);
+          return [tip[0] + ux * t, tip[1] + uy * t];
+        };
         return (
           <g key={side}>
-            <polygon
-              points={pts(at(side, BALL_R), [base[0] - dy * 0.75, base[1] + dx * 0.75], [base[0] + dy * 0.75, base[1] - dx * 0.75])}
-              strokeLinejoin="round"
-            />
+            <polyline points={pts(onBall(c0), c0, c1, onBall(c1))} strokeLinejoin="round" />
             <line x1={base[0]} y1={base[1]} x2={at(side, PORT_DISTANCE)[0]} y2={at(side, PORT_DISTANCE)[1]} />
           </g>
         );
