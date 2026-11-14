@@ -142,6 +142,11 @@ export interface ComponentInstance {
   manufacturer?: string;
   /** Teile- bzw. Bestellnummer des Herstellers. */
   partNumber?: string;
+  /**
+   * In die Stückliste aufnehmen; fehlt = ja bei allen Bauteilen mit
+   * Kennzeichen (nicht bei GRAFCET, Schalldämpfer, Verschlussstopfen).
+   */
+  inPartsList?: boolean;
   /** Verschiebung von Kennzeichen und Bezeichnung gegenüber der Standardlage (Blattkoordinaten). */
   labelOffset?: Point;
   /** Verschiebung einzelner Anschlussbezeichnungen gegenüber der Standardlage, je Anschluss-ID. */
@@ -359,6 +364,27 @@ export interface ArcAnnotation extends AnnotationLook {
 }
 
 /**
+ * Stückliste (Teileliste nach DIN ISO 1219-2, Abschnitt 7 und Anhang E) als
+ * Tabelle auf dem Blatt. Die Zeilen werden nicht gespeichert, sondern immer
+ * aus den Bauteilen der Zeichnung erzeugt (siehe partsList.ts).
+ */
+export interface PartsListAnnotation {
+  id: string;
+  kind: 'partslist';
+  /** Zeichnungsebene (siehe layers.ts); fehlt = Standardebene. */
+  layer?: string;
+  /** Linke untere Ecke: die Tabelle wächst nach oben, z. B. vom Schriftfeld weg. */
+  position: Point;
+  /** Zusätzliche Spalten zu Kennzeichen, Benennung und Teilenummer. */
+  technicalData: boolean;
+  manufacturer: boolean;
+  /** Kopfzeile unten wie bei einer Stückliste über dem Schriftfeld; sonst oben (Anhang E). */
+  headerBelow?: boolean;
+  /** Nur die Bauteile des eigenen Blatts statt der ganzen Zeichnung. */
+  onlyThisSheet?: boolean;
+}
+
+/**
  * Freier Text und einfache Grafik auf dem Blatt (z. B. Baugruppen-Umrandung).
  * Sie gehören zu keinem Bauteil und haben keine Anschlüsse.
  */
@@ -369,7 +395,8 @@ export type Annotation =
   | CircleAnnotation
   | EllipseAnnotation
   | PolylineAnnotation
-  | ArcAnnotation;
+  | ArcAnnotation
+  | PartsListAnnotation;
 
 /**
  * Gruppe: Teile, die zusammen ausgewählt und verschoben werden.
@@ -400,6 +427,21 @@ export interface Diagram {
   page?: PageInfo;
   /** Nur in der Sicht auf ein Blatt: die Ebenen der Zeichnung (für Sichtbarkeit und Sperre). */
   layers?: Layer[];
+  /** Nur in der Sicht auf ein Blatt mit Stückliste: deren Zeilen aus der ganzen Zeichnung. */
+  partsList?: PartsListRow[];
+}
+
+/** Zeile der Stückliste, erzeugt aus einem Bauteil (siehe partsList.ts). */
+export interface PartsListRow {
+  /** Kennzeichen (Bezeichnungsschlüssel), z. B. "1.2". */
+  label: string;
+  /** Bauteilbenennung: die Bezeichnung des Bauteils, sonst sein Symbolname. */
+  name: string;
+  technicalData: string;
+  manufacturer: string;
+  partNumber: string;
+  /** Blattnummer, ab 1. */
+  sheet: number;
 }
 
 /**

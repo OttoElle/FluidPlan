@@ -372,7 +372,7 @@ export function DiagramView({
       junctions: diagram.junctions.filter((j) => inside(j.position)).map((j) => j.id),
       annotations: diagram.annotations
         .filter((a) => {
-          const box = annotationBox(a);
+          const box = annotationBox(a, diagram);
           return inside({ x: box.minX, y: box.minY }) && inside({ x: box.maxX, y: box.maxY });
         })
         .map((a) => a.id),
@@ -702,6 +702,7 @@ export function DiagramView({
             <AnnotationShape
               key={a.id}
               annotation={a}
+              view={diagram}
               selected={selected}
               className={locked.annotations.has(a.id) ? 'layer-locked' : undefined}
               handles={selected && selection.annotations.length === 1}

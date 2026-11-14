@@ -31,7 +31,7 @@ import { isColor } from '../model/annotations.ts';
 /**
  * Dateiformat (.fluidplan.json):
  *
- *   { "format": "fluidplan", "version": 9, "drawing": { "meta", "sheets": [ ... ] } }
+ *   { "format": "fluidplan", "version": 10, "drawing": { "meta", "sheets": [ ... ] } }
  *
  * Bis Version 5 stand dort ein einzelner Schaltplan unter "diagram".
  * Seit Version 7 kann "drawing" Zeichnungsebenen ("layers") haben, und
@@ -41,12 +41,14 @@ import { isColor } from '../model/annotations.ts';
  * (siehe migrateMedium).
  * Seit Version 9 gibt es Kreisbögen ("arc") und für freie Grafik und Text
  * optional "lineWidth" (mm) und "color" (#rrggbb).
+ * Seit Version 10 gibt es Stücklisten ("partslist") als Grafik und am
+ * Bauteil optional "inPartsList".
  *
  * `version` wird erhöht, sobald sich das Format inkompatibel ändert.
  * Ältere Versionen werden dann beim Laden in `migrate` hochgezogen.
  */
 const FILE_FORMAT = 'fluidplan';
-export const FILE_VERSION = 9;
+export const FILE_VERSION = 10;
 export const FILE_EXTENSION = '.fluidplan.json';
 
 interface FileEnvelope {
@@ -73,7 +75,7 @@ export type ParseResult = { ok: true; drawing: Drawing } | { ok: false; errors: 
 export function parseDiagram(text: string): { ok: true; diagram: Diagram } | { ok: false; errors: string[] } {
   const r = parseDrawing(text);
   if (!r.ok) return r;
-  const { page: _page, layers: _layers, ...diagram } = sheetView(r.drawing, 0);
+  const { page: _page, layers: _layers, partsList: _parts, ...diagram } = sheetView(r.drawing, 0);
   return { ok: true, diagram: r.drawing.layers ? { ...diagram, layers: r.drawing.layers } : diagram };
 }
 
@@ -218,7 +220,7 @@ const LINE_KINDS: readonly LineKind[] = ['working', 'pilot', 'drain'];
 const SHEET_FORMAT_KEYS = Object.keys(SHEET_FORMATS) as SheetFormat[];
 const ORIENTATIONS: readonly Orientation[] = ['portrait', 'landscape'];
 const STROKE_STYLES: readonly StrokeStyle[] = ['solid', 'dashed', 'dashdot'];
-const ANNOTATION_KINDS: readonly Annotation['kind'][] = ['text', 'line', 'rect', 'circle', 'ellipse', 'polyline', 'arc'];
+const ANNOTATION_KINDS: readonly Annotation['kind'][] = ['text', 'line', 'rect', 'circle', 'ellipse', 'polyline', 'arc', 'partslist'];
 
 function readDrawing(v: unknown, errors: string[]): Drawing | undefined {
   if (!isObject(v)) {
@@ -307,7 +309,7 @@ function readGroup(v: unknown, path: string, errors: string[]): Group | undefine
 /** Grafik samt optionaler Linienbreite und Farbe. */
 function readAnnotation(v: unknown, path: string, errors: string[]): Annotation | undefined {
   const a = readAnnotationShape(v, path, errors);
-  if (!a || !isObject(v)) return a;
+  if (!a || !isObject(v) || a.kind === 'partslist') return a;
   const look: { lineWidth?: number; color?: string } = {};
   if (v.color !== undefined) {
     if (isColor(v.color)) look.color = v.color;
@@ -337,6 +339,20 @@ function readAnnotationShape(v: unknown, path: string, errors: string[]): Annota
     const comment = v.comment === undefined ? undefined : bool(v.comment, `${path}.comment`, errors);
     if (!position || text === undefined || size === undefined || (v.comment !== undefined && comment === undefined)) return undefined;
     return comment ? { id, kind, position, text, size, comment } : { id, kind, position, text, size };
+  }
+  if (kind === 'partslist') {
+    const position = point(v.position, `${path}.position`, errors);
+    const technicalData = bool(v.technicalData, `${path}.technicalData`, errors);
+    const manufacturer = bool(v.manufacturer, `${path}.manufacturer`, errors);
+    const flags: { headerBelow?: boolean; onlyThisSheet?: boolean } = {};
+    for (const key of ['headerBelow', 'onlyThisSheet'] as const) {
+      if (v[key] === undefined) continue;
+      const b = bool(v[key], `${path}.${key}`, errors);
+      if (b === undefined) return undefined;
+      if (b) flags[key] = true;
+    }
+    if (!position || technicalData === undefined || manufacturer === undefined) return undefined;
+    return { id, kind, position, technicalData, manufacturer, ...flags };
   }
   const style = oneOf(v.style, STROKE_STYLES, `${path}.style`, errors);
   if (kind === 'line') {
@@ -487,7 +503,7 @@ function readComponent(v: unknown, path: string, errors: string[]): ComponentIns
     if (typeof v[key] === 'string') extra[key] = v[key];
     else errors.push(`${path}.${key}: Text erwartet`);
   }
-  for (const key of ['showLabel', 'showDescription', 'showTechnicalData'] as const) {
+  for (const key of ['showLabel', 'showDescription', 'showTechnicalData', 'inPartsList'] as const) {
     if (v[key] === undefined) continue;
     if (typeof v[key] === 'boolean') extra[key] = v[key];
     else errors.push(`${path}.${key}: true oder false erwartet`);

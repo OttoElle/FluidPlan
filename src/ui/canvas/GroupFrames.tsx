@@ -28,7 +28,7 @@ export function GroupFrames({
         }
         for (const a of diagram.annotations) {
           if (!g.annotations.includes(a.id)) continue;
-          const box = annotationBox(a);
+          const box = annotationBox(a, diagram);
           points.push({ x: box.minX, y: box.minY }, { x: box.maxX, y: box.maxY });
         }
         for (const id of g.connections) points.push(...(paths.get(id) ?? []));

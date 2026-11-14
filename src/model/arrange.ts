@@ -180,7 +180,7 @@ function arrangeItems(diagram: Diagram, s: Selection): ArrangeItem[] {
   const make = (components: string[], annotations: string[]) => {
     const boxes = [
       ...diagram.components.filter((c) => components.includes(c.id)).map(componentBox),
-      ...diagram.annotations.filter((a) => annotations.includes(a.id)).map(annotationBox),
+      ...diagram.annotations.filter((a) => annotations.includes(a.id)).map((a) => annotationBox(a, diagram)),
     ].filter((b): b is Box => b !== undefined);
     if (boxes.length === 0) return;
     items.push({ components, annotations, box: unionBox(boxes) });

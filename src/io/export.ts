@@ -84,6 +84,9 @@ const PRINT_STYLE: [selector: string, attributes: Record<string, string>][] = [
   ['.sheet-frame .caption', { fill: '#555555' }],
   ['.note-line', { fill: 'none', stroke: '#000000', 'stroke-width': '1' }],
   ['.note', { fill: '#000000' }],
+  ['.parts-list .pl-heavy', { fill: 'none', stroke: '#000000', 'stroke-width': '2.8' }],
+  ['.parts-list .pl-thin', { stroke: '#000000', 'stroke-width': '1.4' }],
+  ['.parts-list text', { fill: '#000000' }],
 ];
 
 /** Nur für die Bearbeitung: wird beim Export entfernt. */

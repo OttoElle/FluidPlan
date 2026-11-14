@@ -121,7 +121,7 @@ export function pasteFragment(diagram: Diagram, fragment: Fragment, offset: Poin
 export function offsetToPoint(fragment: Fragment, at: Point): Point {
   const boxes: Box[] = [
     ...fragment.components.map(componentBox).filter((b): b is Box => b !== undefined),
-    ...fragment.annotations.map(annotationBox),
+    ...fragment.annotations.map((a) => annotationBox(a)),
   ];
   if (boxes.length === 0) return { x: 0, y: 0 };
   const minX = Math.min(...boxes.map((b) => b.minX));

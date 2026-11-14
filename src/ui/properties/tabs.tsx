@@ -1,3 +1,4 @@
+import { inPartsList } from '../../model/partsList.ts';
 import { TrianglesCenterlineDashedHorizontal, TrianglesCenterlineDashedVertical } from 'lucide-react';
 import { useState, type ComponentType } from 'react';
 import { mediumOf } from '../../model/library.ts';
@@ -173,7 +174,7 @@ function PlacementTab({ component, onChange, layers }: ComponentTabProps) {
   );
 }
 
-/** Technische Daten und Angaben für eine spätere Stückliste. */
+/** Technische Daten und Angaben für die Stückliste. */
 function DataTab({ component, onChange }: ComponentTabProps) {
   return (
     <div className="tab-form">
@@ -210,6 +211,14 @@ function DataTab({ component, onChange }: ComponentTabProps) {
           />
         </label>
       </div>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={inPartsList(component)}
+          onChange={(e) => onChange({ ...component, inPartsList: e.target.checked })}
+        />
+        In Stückliste aufnehmen
+      </label>
     </div>
   );
 }

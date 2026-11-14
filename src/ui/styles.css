@@ -282,6 +282,11 @@ fieldset.column { flex-direction: column; gap: 4px; }
 .annotation .hit { fill: transparent; }
 .annotation .stroke-hit { fill: none; stroke: transparent; stroke-width: 8; pointer-events: stroke; }
 .note-line { fill: none; stroke: var(--line); stroke-width: 1; }
+.parts-list .pl-heavy { fill: none; stroke: var(--frame); stroke-width: 2.8; }
+.parts-list .pl-thin { stroke: var(--frame); stroke-width: 1.4; }
+.parts-list text { fill: var(--text); white-space: pre; }
+.annotation.partslist.selected .pl-frame { stroke: var(--accent); }
+.annotation.partslist.selected text { fill: var(--accent); }
 .note { fill: var(--text); white-space: pre; }
 .annotation.selected .note-line { stroke: var(--accent); }
 .annotation.selected .note { fill: var(--accent); }

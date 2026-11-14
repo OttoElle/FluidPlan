@@ -1,6 +1,7 @@
 import { DiagramError, nextId } from './diagram.ts';
 import type { Box } from './routing.ts';
 import { fontSizeFor } from './lettering.ts';
+import { PARTS_LIST_WIDTH, partsListBox, rowsOf } from './partsList.ts';
 import type {
   Annotation,
   ArcAnnotation,
@@ -266,6 +267,9 @@ export function annotationSnapPoints(a: Annotation): Point[] {
       return [a.center];
     case 'arc':
       return [a.center, arcStart(a), arcEnd(a)];
+    case 'partslist':
+      // Untere Ecken: damit rastet die Stückliste bündig auf dem Schriftfeld ein.
+      return [a.position, { x: a.position.x + PARTS_LIST_WIDTH, y: a.position.y }];
     case 'text':
       return [];
   }
@@ -292,9 +296,11 @@ export function textLines(t: Pick<TextAnnotation, 'text' | 'comment'>): string[]
 
 /**
  * Umriss einer Grafik. Bei Text geschätzt (mittlere Zeichenbreite 0,6 × Schrifthöhe),
- * das genügt für Auswahlrahmen und Prüfung.
+ * das genügt für Auswahlrahmen und Prüfung. Die Höhe einer Stückliste hängt
+ * von ihren Zeilen ab, die in der Blattsicht `view` stehen.
  */
-export function annotationBox(a: Annotation): Box {
+export function annotationBox(a: Annotation, view?: Pick<Diagram, 'partsList' | 'page'>): Box {
+  if (a.kind === 'partslist') return partsListBox(a, rowsOf(a, view).length);
   if (a.kind === 'line') {
     return {
       minX: Math.min(a.from.x, a.to.x),
@@ -320,6 +326,7 @@ export function annotationBox(a: Annotation): Box {
     const ys = a.points.map((p) => p.y);
     return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
   }
+  if (a.kind !== 'text') throw new Error('unreachable');
   const lines = textLines(a);
   const longest = Math.max(1, ...lines.map((l) => l.length)) + (a.comment ? 2 : 0);
   const em = fontSizeFor(a.size);

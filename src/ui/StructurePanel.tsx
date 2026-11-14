@@ -117,6 +117,7 @@ const ANNOTATION_NAMES: Record<Annotation['kind'], string> = {
   ellipse: 'Ellipse',
   polyline: 'Linienzug',
   arc: 'Kreisbogen',
+  partslist: 'Stückliste',
 };
 
 function annotationName(a: Annotation): string {

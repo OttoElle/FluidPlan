@@ -8,6 +8,7 @@ import { LINE_DASH } from './lineStyle.ts';
 import { LinkArrows } from './LinkArrows.tsx';
 import { grafcetConnections, grafcetJunctions, upwardArrows } from '../../model/grafcet.ts';
 import { SheetFrame } from './SheetFrame.tsx';
+import { sameRows } from '../../model/partsList.ts';
 
 const SHEET_KEYS = ['sheet', 'components', 'connections', 'junctions', 'annotations', 'groups', 'meta', 'layers'] as const;
 
@@ -30,7 +31,7 @@ export const StaticSheet = memo(
       <>
         {diagram.sheet.frame && <SheetFrame diagram={diagram} />}
         {diagram.annotations.filter((a) => !hidden.annotations.has(a.id)).map((a) => (
-          <AnnotationShape key={a.id} annotation={a} />
+          <AnnotationShape key={a.id} annotation={a} view={diagram} />
         ))}
         {connections.map((l) => (
           <g key={l.id} className="connection">
@@ -63,7 +64,8 @@ export const StaticSheet = memo(
     SHEET_KEYS.every((k) => a.diagram[k] === b.diagram[k]) &&
     a.diagram.page?.name === b.diagram.page?.name &&
     a.diagram.page?.number === b.diagram.page?.number &&
-    a.diagram.page?.count === b.diagram.page?.count,
+    a.diagram.page?.count === b.diagram.page?.count &&
+    sameRows(a.diagram.partsList, b.diagram.partsList),
 );
 
 

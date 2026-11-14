@@ -23,6 +23,7 @@ import {
   Tag,
   Undo2,
   Ungroup,
+  TableProperties,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
@@ -57,6 +58,7 @@ import {
 import { checkSheets, sheetName, type Issue } from '../model/check.ts';
 import { exampleHydraulicDiagram } from '../model/example.ts';
 import { autoLabelSheets } from '../model/labels.ts';
+import { DEFAULT_PARTS_LIST, defaultPartsListPosition } from '../model/partsList.ts';
 import { nextFrameName, nextStepName } from '../model/grafcet.ts';
 import { MODULE, definitionOf, grafcetPalette, paletteFor, type PaletteEntry } from '../model/library.ts';
 
@@ -307,7 +309,17 @@ export function App() {
     setSelection(selectAnnotation(r.annotation.id));
     setTool(null);
     // Neuen Text gleich im Eigenschaften-Fenster eintippen.
-    if (a.kind === 'text' || (a.kind === 'rect' && a.grafcet)) setProperties({ kind: 'annotation', id: r.annotation.id });
+    if (a.kind === 'text' || a.kind === 'partslist' || (a.kind === 'rect' && a.grafcet)) setProperties({ kind: 'annotation', id: r.annotation.id });
+  };
+  /** Stückliste: die vorhandene des Blatts öffnen, sonst eine über dem Schriftfeld einfügen. */
+  const partsList = () => {
+    const existing = diagram.annotations.find((a) => a.kind === 'partslist');
+    if (existing) {
+      setSelection(selectAnnotation(existing.id));
+      setProperties({ kind: 'annotation', id: existing.id });
+      return;
+    }
+    createAnnotation({ ...DEFAULT_PARTS_LIST, position: defaultPartsListPosition(diagram.sheet) });
   };
   const setMeta = (field: keyof DiagramMeta, value: string) =>
     edit((d) => ({ ...d, meta: { ...d.meta, [field]: value } }), `meta:${field}`);
@@ -463,6 +475,7 @@ export function App() {
         </div>
         <div className="tool-group">
           <IconButton icon={Tag} label="Kennzeichnen nach ISO 1219-2 (0.1, 1.1, 1.2, …)" onClick={label} />
+          <IconButton icon={TableProperties} label="Stückliste einfügen (DIN ISO 1219-2, Abschnitt 7)" onClick={partsList} />
           <IconButton
             icon={ListChecks}
             label="Zeichnung prüfen"

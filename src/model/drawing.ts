@@ -1,5 +1,6 @@
 import { createDiagram, nextId } from './diagram.ts';
 import { layersOf } from './layers.ts';
+import { partsListRows } from './partsList.ts';
 import { sheetSize } from './sheet.ts';
 import type { Diagram, Drawing, DrawingSheet, Sheet, SheetContent } from './types.ts';
 
@@ -40,12 +41,15 @@ export function sheetIndex(drawing: Drawing, id: string | null | undefined): num
 /** Ein Blatt als bearbeitbarer Schaltplan. */
 export function sheetView(drawing: Drawing, index: number): Diagram {
   const s = drawing.sheets[index]!;
-  return {
+  const view: Diagram = {
     meta: drawing.meta,
     ...contentOf(s),
     page: { name: s.name, number: index + 1, count: drawing.sheets.length },
     layers: layersOf(drawing),
   };
+  // Eine Stückliste zeigt Bauteile aller Blätter; nur Blätter mit Stückliste brauchen die Zeilen.
+  if (s.annotations.some((a) => a.kind === 'partslist')) view.partsList = partsListRows(drawing);
+  return view;
 }
 
 /** Schreibt ein bearbeitetes Blatt zurück; ohne Änderung bleibt die Zeichnung derselbe Wert. */

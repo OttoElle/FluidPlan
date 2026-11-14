@@ -1,3 +1,4 @@
+import { annotationBox } from './annotations.ts';
 import { connectionsAt } from './diagram.ts';
 import { needsLabel } from './labels.ts';
 import { isGrafcetType } from './grafcet.ts';
@@ -112,6 +113,17 @@ export function checkDiagram(diagram: Diagram): Issue[] {
   for (const { c, box } of boxes) {
     if (!inside(box, area)) issue('warning', `${describe(c)} liegt außerhalb der Zeichenfläche.`, [c.id]);
     else if (block && overlaps(box, block)) issue('warning', `${describe(c)} liegt auf dem Schriftfeld.`, [c.id]);
+  }
+  // Stückliste: muss auf das Blatt passen und darf keine Bauteile verdecken.
+  for (const list of diagram.annotations) {
+    if (list.kind !== 'partslist') continue;
+    const box = annotationBox(list, diagram);
+    if (!inside(box, area)) issue('warning', 'Die Stückliste ragt aus der Zeichenfläche (zu viele Zeilen? Eigenes Blatt verwenden).');
+    else if (block && overlaps(box, block)) issue('warning', 'Die Stückliste liegt auf dem Schriftfeld.');
+    const covered = boxes.filter((e) => overlaps(e.box, box)).map((e) => e.c);
+    if (covered.length > 0) {
+      issue('warning', `Die Stückliste verdeckt ${covered.map(describe).join(', ')}.`, covered.map((c) => c.id));
+    }
   }
   for (let i = 0; i < boxes.length; i++) {
     for (let j = i + 1; j < boxes.length; j++) {

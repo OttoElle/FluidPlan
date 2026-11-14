@@ -131,6 +131,7 @@ src/
     routing.ts       Rechtwinklige Leitungsführung im Raster (A*-Suche, Teilstücke verschieben)
     labels.ts        Automatische Kennzeichnung nach ISO 1219-2:2019 (0.1, 1.1, 1.2, …)
     check.ts         „Zeichnung prüfen“: doppelte Kennzeichen, offene Anschlüsse, Überlappungen
+    partsList.ts     Stückliste nach DIN ISO 1219-2, Abschnitt 7: Zeilen, Tabellenlage, CSV
     example.ts       Beispielschaltplan
   io/
     json.ts          Dateiformat, Speichern (serialize) und Laden mit Prüfung (parse)
@@ -183,6 +184,12 @@ src/
   (`approvedBy`), Dokumentenart (`documentType`) und Änderungsindex stehen in `meta`;
   Ausgabedatum, Papierformat und Blatt füllt das Programm. Rahmen nach ISO 5457 mit
   Mittenmarken und Feldeinteilung (`frameMarks` in `sheet.ts`).
+- **Stückliste** (Grafik `partslist`, ab Dateiversion 10): Tabelle in Schriftfeldbreite
+  (180 mm), Lage = linke untere Ecke, wächst nach oben. Die Zeilen werden nicht gespeichert,
+  sondern aus den Bauteilen aller Blätter erzeugt (Kennzeichen, Bezeichnung bzw. Symbolname,
+  technische Daten, Hersteller, Teilenummer; `inPartsList` am Bauteil schließt aus oder ein).
+  Werkzeugleiste „Stückliste einfügen“, Doppelklick öffnet Spalten, Kopfzeile oben/unten,
+  „nur dieses Blatt“ und CSV-Ausgabe für Excel.
 
 Das Datenmodell wird nur über die Funktionen in `diagram.ts` verändert. Sie geben jeweils
 einen neuen Schaltplan zurück, was Undo/Redo später einfach macht.

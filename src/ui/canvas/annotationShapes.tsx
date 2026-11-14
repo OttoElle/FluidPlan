@@ -14,7 +14,8 @@ import {
   textLines,
   type NewAnnotation,
 } from '../../model/annotations.ts';
-import type { Annotation, GrafcetFrame, Point, RectAnnotation } from '../../model/types.ts';
+import { PARTS_LIST_TEXT, partsListLayout, rowsOf } from '../../model/partsList.ts';
+import type { Annotation, Diagram, GrafcetFrame, PartsListAnnotation, Point, RectAnnotation } from '../../model/types.ts';
 
 /** Werkzeuge, deren Form durch Aufziehen entsteht. */
 /** `grafcet-frame` zieht einen Teil-GRAFCET-Rahmen auf (Rechteck mit Zusatz `grafcet`). */
@@ -185,8 +186,11 @@ export function AnnotationShape({
   className,
   onPointerDown,
   onHandlePointerDown,
+  view,
 }: {
   annotation: Annotation;
+  /** Blattsicht mit den Zeilen der Stückliste (nur für Stücklisten nötig). */
+  view?: Pick<Diagram, 'partsList' | 'page'>;
   selected?: boolean;
   handles?: boolean;
   /** Zusätzliche Klasse, z. B. "creating" für die Vorschau beim Aufziehen. */
@@ -194,6 +198,13 @@ export function AnnotationShape({
   onPointerDown?: (e: React.PointerEvent<SVGGElement>) => void;
   onHandlePointerDown?: (handle: Handle, origin: Point, e: React.PointerEvent) => void;
 }) {
+  if (a.kind === 'partslist') {
+    return (
+      <g className={`annotation partslist${selected ? ' selected' : ''}${className ? ' ' + className : ''}`} onPointerDown={onPointerDown}>
+        <PartsListTable list={a} view={view} />
+      </g>
+    );
+  }
   const width = a.kind === 'text' ? undefined : strokeWidthOf(a);
   const dash = a.kind === 'text' ? undefined : strokeDash(a.style, a.lineWidth);
   // Als Inline-Stil, damit er Stylesheet und Druckdarstellung (export.ts) übersteuert.
@@ -271,6 +282,39 @@ export function AnnotationShape({
     >
       {shape}
       {grips}
+    </g>
+  );
+}
+
+/**
+ * Stückliste als Tabelle (DIN ISO 1219-2, Anhang E). Linien wie im Schriftfeld:
+ * Außenrand und Trennung der Kopfzeile 0,7 mm, sonst 0,35 mm.
+ */
+function PartsListTable({ list, view }: { list: PartsListAnnotation; view?: Pick<Diagram, 'partsList' | 'page'> }) {
+  const layout = partsListLayout(list, rowsOf(list, view));
+  const { box } = layout;
+  const font = fontSizeFor(PARTS_LIST_TEXT);
+  return (
+    <g className="parts-list">
+      <rect x={box.minX} y={box.minY} width={box.maxX - box.minX} height={box.maxY - box.minY} className="hit" />
+      {layout.rules.map((r, i) => (
+        <line key={`r${i}`} x1={box.minX} x2={box.maxX} y1={r.y} y2={r.y} className={r.heavy ? 'pl-heavy' : 'pl-thin'} />
+      ))}
+      {layout.dividers.map((x, i) => (
+        <line key={`d${i}`} x1={x} x2={x} y1={box.minY} y2={box.maxY} className="pl-thin" />
+      ))}
+      <rect x={box.minX} y={box.minY} width={box.maxX - box.minX} height={box.maxY - box.minY} className="pl-heavy pl-frame" />
+      {layout.header.map((c, i) => (
+        <text key={`h${i}`} x={c.x} y={c.y} fontSize={font} className="pl-caption">
+          {c.text}
+        </text>
+      ))}
+      {layout.cells.map((c, i) => (
+        <text key={`c${i}`} x={c.x} y={c.y} fontSize={font} className="pl-text">
+          {c.text}
+          {c.full && <title>{c.full}</title>}
+        </text>
+      ))}
     </g>
   );
 }

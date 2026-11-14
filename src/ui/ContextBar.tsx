@@ -89,7 +89,10 @@ export function ContextBar({
     edit((d) => styledAnnotations.reduce((acc, a) => updateAnnotation(acc, a.id, { style }), d));
   const setLineWidth = (lineWidth: number) =>
     edit((d) => styledAnnotations.reduce((acc, a) => updateAnnotation(acc, a.id, { lineWidth }), d));
-  const selectedAnnotations = diagram.annotations.filter((a) => current.annotations.includes(a.id));
+  // Die Stückliste hat keine eigene Farbe: sie wird wie Rahmen und Schriftfeld gezeichnet.
+  const selectedAnnotations = diagram.annotations.filter(
+    (a): a is Exclude<Annotation, { kind: 'partslist' }> => a.kind !== 'partslist' && current.annotations.includes(a.id),
+  );
   const setColor = (color: string | null) =>
     edit((d) => selectedAnnotations.reduce((acc, a) => updateAnnotation(acc, a.id, { color }), d));
   const colors = selectedAnnotations.map((a) => a.color);

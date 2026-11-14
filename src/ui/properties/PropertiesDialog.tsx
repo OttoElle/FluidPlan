@@ -9,7 +9,10 @@ import { DEFAULT_LAYER_ID } from '../../model/layers.ts';
 import { definitionOf } from '../../model/library.ts';
 import { boundsOf, mirrorComponents, moveComponents, rotateComponents } from '../../model/arrange.ts';
 import { GRID, componentBox, keepRoutes } from '../../model/routing.ts';
-import type { Annotation, ComponentInstance, Connection, Diagram, Layer } from '../../model/types.ts';
+import type { Annotation, ComponentInstance, Connection, Diagram, Layer, PartsListAnnotation } from '../../model/types.ts';
+import { defaultPartsListPosition, inPartsList, partsListCsv, rowsOf } from '../../model/partsList.ts';
+import { downloadBlob, fileNameFor } from '../../io/browser.ts';
+import { Download } from 'lucide-react';
 import { SymbolPreview } from '../SymbolPreview.tsx';
 import { LINE_KIND_OPTIONS, STROKE_STYLE_OPTIONS, TEXT_SIZE_OPTIONS } from './options.tsx';
 import { Segmented } from './Segmented.tsx';
@@ -55,6 +58,8 @@ export function PropertiesDialog({
         <ComponentProperties key={component.id} component={component} layers={layers} {...body} />
       ) : connection ? (
         <ConnectionProperties key={connection.id} connection={connection} {...body} />
+      ) : annotation?.kind === 'partslist' ? (
+        <PartsListProperties key={annotation.id} list={annotation} {...body} />
       ) : annotation ? (
         <AnnotationProperties key={annotation.id} annotation={annotation} {...body} />
       ) : null}
@@ -113,6 +118,8 @@ function ComponentProperties({
       showTechnicalData: draft.showTechnicalData === false ? false : undefined,
       manufacturer: draft.manufacturer?.trim() || undefined,
       partNumber: draft.partNumber?.trim() || undefined,
+      // Nur speichern, wenn es vom Standard abweicht (siehe inPartsList).
+      inPartsList: draft.inPartsList === undefined || draft.inPartsList === inPartsList({ type: draft.type }) ? undefined : draft.inPartsList,
       layer: draft.layer === DEFAULT_LAYER_ID ? undefined : draft.layer,
     });
     // Lage über arrange.ts ändern: dreht um die Rastermitte und führt Leitungen nach.
@@ -239,10 +246,13 @@ const ANNOTATION_NAMES: Record<Annotation['kind'], string> = {
   ellipse: 'Ellipse',
   polyline: 'Linienzug',
   arc: 'Kreisbogen',
+  partslist: 'Stückliste',
 };
 
-function AnnotationProperties({ annotation, diagram, ...rest }: BodyProps & { annotation: Annotation }) {
-  const [draft, setDraft] = useState<Annotation>(annotation);
+type Graphic = Exclude<Annotation, PartsListAnnotation>;
+
+function AnnotationProperties({ annotation, diagram, ...rest }: BodyProps & { annotation: Graphic }) {
+  const [draft, setDraft] = useState<Graphic>(annotation);
   // Fehlende Farbe bzw. Linienbreite heißt Standard: als null übergeben, damit sie entfällt.
   const apply = () =>
     updateAnnotation(diagram, annotation.id, {
@@ -361,6 +371,82 @@ function AnnotationProperties({ annotation, diagram, ...rest }: BodyProps & { an
         <div className="field">
           <span>Farbe</span>
           <ColorPicker inline value={draft.color} onChange={(color) => setDraft({ ...draft, color: color ?? undefined })} />
+        </div>
+      </div>
+    </Frame>
+  );
+}
+
+/**
+ * Stückliste (DIN ISO 1219-2, Abschnitt 7): Spalten, Lage der Kopfzeile,
+ * Umfang und Ausgabe als CSV für die Tabellenkalkulation.
+ */
+function PartsListProperties({ list, diagram, ...rest }: BodyProps & { list: PartsListAnnotation }) {
+  const [draft, setDraft] = useState(list);
+  const apply = () => ({ ...diagram, annotations: diagram.annotations.map((a) => (a.id === list.id ? draft : a)) });
+  const rows = rowsOf(draft, diagram);
+  const multiSheet = (diagram.page?.count ?? 1) > 1;
+  const flag = (key: 'headerBelow' | 'onlyThisSheet', on: boolean) => {
+    const next = { ...draft };
+    if (on) next[key] = true;
+    else delete next[key];
+    setDraft(next);
+  };
+  const csv = () =>
+    downloadBlob(
+      new Blob([partsListCsv(rows, multiSheet && !draft.onlyThisSheet)], { type: 'text/csv;charset=utf-8' }),
+      fileNameFor(`${diagram.meta.title.trim() || 'schaltplan'} Stückliste`, '.csv'),
+    );
+  const home = defaultPartsListPosition(diagram.sheet);
+  return (
+    <Frame apply={apply} {...rest}>
+      <h2>Stückliste</h2>
+      <div className="tab-form">
+        <p className="hint">
+          Teileliste nach DIN ISO 1219-2, Abschnitt 7: eine Zeile je Bauteil mit Kennzeichen, Bauteilbenennung und
+          Teilenummer, nach Kennzeichen sortiert. Die Angaben kommen aus den Bauteilen (Doppelklick, Reiter „Daten“);
+          ohne Bezeichnung steht dort der Symbolname. {rows.length === 1 ? '1 Bauteil' : `${rows.length} Bauteile`}.
+        </p>
+        <div className="field">
+          <span>Zusätzliche Spalten</span>
+          <label className="check">
+            <input type="checkbox" checked={draft.technicalData} onChange={(e) => setDraft({ ...draft, technicalData: e.target.checked })} />
+            Technische Daten
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={draft.manufacturer} onChange={(e) => setDraft({ ...draft, manufacturer: e.target.checked })} />
+            Hersteller
+          </label>
+        </div>
+        <div className="field">
+          <span>Kopfzeile</span>
+          <Segmented
+            label="Kopfzeile"
+            options={[
+              { value: 'top', label: 'Oben, Zeilen darunter (wie DIN ISO 1219-2, Anhang E)', icon: 'Oben' },
+              { value: 'below', label: 'Unten, Zeilen darüber (wie eine Stückliste auf dem Schriftfeld)', icon: 'Unten' },
+            ]}
+            value={draft.headerBelow ? 'below' : 'top'}
+            onChange={(v) => flag('headerBelow', v === 'below')}
+          />
+        </div>
+        {multiSheet && (
+          <label className="check">
+            <input type="checkbox" checked={draft.onlyThisSheet ?? false} onChange={(e) => flag('onlyThisSheet', e.target.checked)} />
+            Nur Bauteile dieses Blatts (sonst alle Blätter)
+          </label>
+        )}
+        <div className="field-row">
+          <button
+            type="button"
+            disabled={draft.position.x === home.x && draft.position.y === home.y}
+            onClick={() => setDraft({ ...draft, position: home })}
+          >
+            {diagram.sheet.frame ? 'Auf das Schriftfeld setzen' : 'Nach unten rechts setzen'}
+          </button>
+          <button type="button" className="with-icon" onClick={csv}>
+            <Download size={14} aria-hidden /> Als CSV speichern (Excel)
+          </button>
         </div>
       </div>
     </Frame>
