@@ -378,8 +378,17 @@ export interface PartsListAnnotation {
   /** Zusätzliche Spalten zu Kennzeichen, Benennung und Teilenummer. */
   technicalData: boolean;
   manufacturer: boolean;
-  /** Kopfzeile unten wie bei einer Stückliste über dem Schriftfeld; sonst oben (Anhang E). */
+  /**
+   * Kopfzeile unten. Pflicht, wenn die Stückliste am Schriftfeld steht
+   * (ISO 7573, 5.1: Kopfzeile schließt direkt an das Schriftfeld an);
+   * frei stehend darf sie oben (wie DIN ISO 1219-2, Anhang E) oder unten sein.
+   */
   headerBelow?: boolean;
+  /**
+   * Gleiche Teile in einer Zeile zusammenfassen, mit Positionsnummer und Menge
+   * (ISO 7573, 5.2.2 und 5.2.3); die Kennzeichen stehen dann gesammelt in der Zeile.
+   */
+  merge?: boolean;
   /** Nur die Bauteile des eigenen Blatts statt der ganzen Zeichnung. */
   onlyThisSheet?: boolean;
 }
@@ -440,8 +449,10 @@ export interface PartsListRow {
   technicalData: string;
   manufacturer: string;
   partNumber: string;
-  /** Blattnummer, ab 1. */
+  /** Blattnummer, ab 1 (zusammengefasst: das erste Vorkommen). */
   sheet: number;
+  /** Menge (ISO 7573, 5.2.3); ohne Zusammenfassen immer 1. */
+  quantity: number;
 }
 
 /**

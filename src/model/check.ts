@@ -1,4 +1,5 @@
 import { annotationBox } from './annotations.ts';
+import { onTitleBlock } from './partsList.ts';
 import { connectionsAt } from './diagram.ts';
 import { needsLabel } from './labels.ts';
 import { isGrafcetType } from './grafcet.ts';
@@ -120,6 +121,9 @@ export function checkDiagram(diagram: Diagram): Issue[] {
     const box = annotationBox(list, diagram);
     if (!inside(box, area)) issue('warning', 'Die Stückliste ragt aus der Zeichenfläche (zu viele Zeilen? Eigenes Blatt verwenden).');
     else if (block && overlaps(box, block)) issue('warning', 'Die Stückliste liegt auf dem Schriftfeld.');
+    else if (onTitleBlock(list, diagram.sheet) && !list.headerBelow) {
+      issue('warning', 'Die Kopfzeile der Stückliste muss direkt am Schriftfeld stehen (ISO 7573, 5.1): Kopfzeile unten wählen.');
+    }
     const covered = boxes.filter((e) => overlaps(e.box, box)).map((e) => e.c);
     if (covered.length > 0) {
       issue('warning', `Die Stückliste verdeckt ${covered.map(describe).join(', ')}.`, covered.map((c) => c.id));

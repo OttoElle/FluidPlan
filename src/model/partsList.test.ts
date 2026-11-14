@@ -15,6 +15,7 @@ import {
   partsListCsv,
   partsListLayout,
   partsListRows,
+  rowsOf,
 } from './partsList.ts';
 import { titleBlock } from './sheet.ts';
 import type { Diagram, Drawing, PartsListAnnotation } from './types.ts';
@@ -54,13 +55,18 @@ describe('Stückliste', () => {
   });
 
   it('teilt die Breite des Schriftfelds auf die Spalten auf', () => {
-    for (const technicalData of [true, false]) {
-      for (const manufacturer of [true, false]) {
-        const cols = partsListColumns({ technicalData, manufacturer });
-        expect(cols.reduce((s, c) => s + c.width, 0)).toBe(PARTS_LIST_WIDTH);
-        expect(cols.map((c) => c.key)).toEqual(
-          ['label', 'name', technicalData && 'technicalData', manufacturer && 'manufacturer', 'partNumber'].filter(Boolean),
-        );
+    for (const merge of [true, false]) {
+      for (const technicalData of [true, false]) {
+        for (const manufacturer of [true, false]) {
+          const cols = partsListColumns({ technicalData, manufacturer, merge });
+          expect(cols.reduce((s, c) => s + c.width, 0)).toBe(PARTS_LIST_WIDTH);
+          expect(cols.map((c) => c.key)).toEqual(
+            [
+              merge && 'position', merge && 'quantity', 'label', 'name',
+              technicalData && 'technicalData', manufacturer && 'manufacturer', 'partNumber',
+            ].filter(Boolean),
+          );
+        }
       }
     }
   });
@@ -118,7 +124,7 @@ describe('Stückliste', () => {
 
   it('gibt CSV für Excel aus', () => {
     const rows = partsListRows(drawingOf(sample()));
-    const csv = partsListCsv([{ ...rows[0]!, name: 'Behälter; groß "neu"' }], true);
+    const csv = partsListCsv([{ ...rows[0]!, name: 'Behälter; groß "neu"' }], { sheet: true, merged: false });
     expect(csv.startsWith('﻿Kennzeichen;Bauteilbenennung;Technische Daten;Hersteller;Teilenummer;Blatt\r\n')).toBe(true);
     expect(csv).toContain('0.2;"Behälter; groß ""neu""";;ACME;T-40;1\r\n');
   });
@@ -133,5 +139,35 @@ describe('Stückliste', () => {
     const sheet = parsed.drawing.sheets[0]!;
     expect(sheet.annotations[0]).toEqual(r.annotation);
     expect(sheet.components[4]!.inPartsList).toBe(true);
+  });
+
+  it('fasst gleiche Teile mit Pos. und Menge zusammen (ISO 7573)', () => {
+    let d = createDiagram();
+    for (const [x, label] of [[100, '1.2'], [300, '2.2'], [500, '1.10']] as const) {
+      const r = addComponent(d, 'valve.directional', { x, y: 100 });
+      d = updateComponent(r.diagram, r.component.id, { label, partNumber: 'V-42' });
+    }
+    const r = addComponent(d, 'valve.directional', { x: 700, y: 100 });
+    d = updateComponent(r.diagram, r.component.id, { label: '3.1', partNumber: 'V-43' });
+    const list = addAnnotation(d, { ...DEFAULT_PARTS_LIST, merge: true, position: defaultPartsListPosition(d.sheet) });
+    const view = sheetView(drawingOf(list.diagram), 0);
+    const rows = rowsOf(list.annotation as PartsListAnnotation, view);
+    expect(rows.map((x) => [x.label, x.quantity, x.partNumber])).toEqual([
+      ['1.2, 1.10, 2.2', 3, 'V-42'],
+      ['3.1', 1, 'V-43'],
+    ]);
+    const layout = partsListLayout(list.annotation as PartsListAnnotation, rows);
+    expect(layout.cells.filter((c) => c.text === '1' || c.text === '2' || c.text === '3').map((c) => c.text)).toEqual(['1', '3', '2', '1']);
+    expect(partsListCsv(rows, { sheet: false, merged: true }).split('\r\n')[1]).toBe('1;3;"1.2, 1.10, 2.2";4/2-Wegeventil;;;V-42'.replace('"1.2, 1.10, 2.2"', '1.2, 1.10, 2.2'));
+  });
+
+  it('verlangt am Schriftfeld die Kopfzeile unten (ISO 7573, 5.1)', () => {
+    const d = createDiagram();
+    const position = defaultPartsListPosition(d.sheet);
+    const top = addAnnotation(d, { ...DEFAULT_PARTS_LIST, headerBelow: undefined, position });
+    const message = (x: Diagram) => checkDiagram(sheetView(drawingOf(x), 0)).map((i) => i.message).join('\n');
+    expect(message(top.diagram)).toContain('ISO 7573');
+    const below = addAnnotation(d, { ...DEFAULT_PARTS_LIST, position });
+    expect(message(below.diagram)).not.toContain('ISO 7573');
   });
 });

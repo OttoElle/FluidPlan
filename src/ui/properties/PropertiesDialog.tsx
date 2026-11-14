@@ -10,7 +10,7 @@ import { definitionOf } from '../../model/library.ts';
 import { boundsOf, mirrorComponents, moveComponents, rotateComponents } from '../../model/arrange.ts';
 import { GRID, componentBox, keepRoutes } from '../../model/routing.ts';
 import type { Annotation, ComponentInstance, Connection, Diagram, Layer, PartsListAnnotation } from '../../model/types.ts';
-import { defaultPartsListPosition, inPartsList, partsListCsv, rowsOf } from '../../model/partsList.ts';
+import { defaultPartsListPosition, inPartsList, onTitleBlock, partsListCsv, rowsOf } from '../../model/partsList.ts';
 import { downloadBlob, fileNameFor } from '../../io/browser.ts';
 import { Download } from 'lucide-react';
 import { SymbolPreview } from '../SymbolPreview.tsx';
@@ -378,15 +378,19 @@ function AnnotationProperties({ annotation, diagram, ...rest }: BodyProps & { an
 }
 
 /**
- * Stückliste (DIN ISO 1219-2, Abschnitt 7): Spalten, Lage der Kopfzeile,
- * Umfang und Ausgabe als CSV für die Tabellenkalkulation.
+ * Stückliste (DIN ISO 1219-2, Abschnitt 7; ISO 7573): Spalten, Zusammenfassen
+ * gleicher Teile, Lage der Kopfzeile, Umfang und Ausgabe als CSV.
  */
 function PartsListProperties({ list, diagram, ...rest }: BodyProps & { list: PartsListAnnotation }) {
   const [draft, setDraft] = useState(list);
-  const apply = () => ({ ...diagram, annotations: diagram.annotations.map((a) => (a.id === list.id ? draft : a)) });
+  const docked = onTitleBlock(draft, diagram.sheet);
+  // Am Schriftfeld schließt die Kopfzeile immer daran an (ISO 7573, 5.1).
+  const final = (): PartsListAnnotation => (docked ? { ...draft, headerBelow: true } : draft);
+  const apply = () => ({ ...diagram, annotations: diagram.annotations.map((a) => (a.id === list.id ? final() : a)) });
   const rows = rowsOf(draft, diagram);
+  const parts = (draft.onlyThisSheet ? rowsOf({ ...draft, merge: false }, diagram) : diagram.partsList ?? []).length;
   const multiSheet = (diagram.page?.count ?? 1) > 1;
-  const flag = (key: 'headerBelow' | 'onlyThisSheet', on: boolean) => {
+  const flag = (key: 'headerBelow' | 'onlyThisSheet' | 'merge', on: boolean) => {
     const next = { ...draft };
     if (on) next[key] = true;
     else delete next[key];
@@ -394,7 +398,9 @@ function PartsListProperties({ list, diagram, ...rest }: BodyProps & { list: Par
   };
   const csv = () =>
     downloadBlob(
-      new Blob([partsListCsv(rows, multiSheet && !draft.onlyThisSheet)], { type: 'text/csv;charset=utf-8' }),
+      new Blob([partsListCsv(rows, { sheet: multiSheet && !draft.onlyThisSheet && !draft.merge, merged: draft.merge ?? false })], {
+        type: 'text/csv;charset=utf-8',
+      }),
       fileNameFor(`${diagram.meta.title.trim() || 'schaltplan'} Stückliste`, '.csv'),
     );
   const home = defaultPartsListPosition(diagram.sheet);
@@ -403,9 +409,10 @@ function PartsListProperties({ list, diagram, ...rest }: BodyProps & { list: Par
       <h2>Stückliste</h2>
       <div className="tab-form">
         <p className="hint">
-          Teileliste nach DIN ISO 1219-2, Abschnitt 7: eine Zeile je Bauteil mit Kennzeichen, Bauteilbenennung und
-          Teilenummer, nach Kennzeichen sortiert. Die Angaben kommen aus den Bauteilen (Doppelklick, Reiter „Daten“);
-          ohne Bezeichnung steht dort der Symbolname. {rows.length === 1 ? '1 Bauteil' : `${rows.length} Bauteile`}.
+          Nach DIN ISO 1219-2, Abschnitt 7, und ISO 7573: Kennzeichen, Bauteilbenennung und Teilenummer, nach Kennzeichen
+          sortiert. Die Angaben kommen aus den Bauteilen (Doppelklick, Reiter „Daten“); ohne Bezeichnung steht dort der
+          Symbolname. {parts === 1 ? '1 Bauteil' : `${parts} Bauteile`}
+          {draft.merge ? `, ${rows.length === 1 ? '1 Position' : `${rows.length} Positionen`}` : ''}.
         </p>
         <div className="field">
           <span>Zusätzliche Spalten</span>
@@ -417,18 +424,26 @@ function PartsListProperties({ list, diagram, ...rest }: BodyProps & { list: Par
             <input type="checkbox" checked={draft.manufacturer} onChange={(e) => setDraft({ ...draft, manufacturer: e.target.checked })} />
             Hersteller
           </label>
+          <label className="check">
+            <input type="checkbox" checked={draft.merge ?? false} onChange={(e) => flag('merge', e.target.checked)} />
+            Gleiche Teile zusammenfassen, mit Pos. und Menge (ISO 7573, 5.2.2 und 5.2.3)
+          </label>
         </div>
         <div className="field">
           <span>Kopfzeile</span>
-          <Segmented
-            label="Kopfzeile"
-            options={[
-              { value: 'top', label: 'Oben, Zeilen darunter (wie DIN ISO 1219-2, Anhang E)', icon: 'Oben' },
-              { value: 'below', label: 'Unten, Zeilen darüber (wie eine Stückliste auf dem Schriftfeld)', icon: 'Unten' },
-            ]}
-            value={draft.headerBelow ? 'below' : 'top'}
-            onChange={(v) => flag('headerBelow', v === 'below')}
-          />
+          {docked ? (
+            <p className="hint">Unten, direkt am Schriftfeld (ISO 7573, 5.1); die Zeilen stehen darüber.</p>
+          ) : (
+            <Segmented
+              label="Kopfzeile"
+              options={[
+                { value: 'top', label: 'Oben, Zeilen darunter (wie DIN ISO 1219-2, Anhang E)', icon: 'Oben' },
+                { value: 'below', label: 'Unten, Zeilen darüber', icon: 'Unten' },
+              ]}
+              value={draft.headerBelow ? 'below' : 'top'}
+              onChange={(v) => flag('headerBelow', v === 'below')}
+            />
+          )}
         </div>
         {multiSheet && (
           <label className="check">
@@ -440,7 +455,7 @@ function PartsListProperties({ list, diagram, ...rest }: BodyProps & { list: Par
           <button
             type="button"
             disabled={draft.position.x === home.x && draft.position.y === home.y}
-            onClick={() => setDraft({ ...draft, position: home })}
+            onClick={() => setDraft({ ...draft, position: home, ...(diagram.sheet.frame ? { headerBelow: true } : {}) })}
           >
             {diagram.sheet.frame ? 'Auf das Schriftfeld setzen' : 'Nach unten rechts setzen'}
           </button>

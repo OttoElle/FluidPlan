@@ -344,8 +344,8 @@ function readAnnotationShape(v: unknown, path: string, errors: string[]): Annota
     const position = point(v.position, `${path}.position`, errors);
     const technicalData = bool(v.technicalData, `${path}.technicalData`, errors);
     const manufacturer = bool(v.manufacturer, `${path}.manufacturer`, errors);
-    const flags: { headerBelow?: boolean; onlyThisSheet?: boolean } = {};
-    for (const key of ['headerBelow', 'onlyThisSheet'] as const) {
+    const flags: { headerBelow?: boolean; onlyThisSheet?: boolean; merge?: boolean } = {};
+    for (const key of ['headerBelow', 'onlyThisSheet', 'merge'] as const) {
       if (v[key] === undefined) continue;
       const b = bool(v[key], `${path}.${key}`, errors);
       if (b === undefined) return undefined;
