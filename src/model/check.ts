@@ -3,6 +3,7 @@ import { onTitleBlock } from './partsList.ts';
 import { connectionsAt } from './diagram.ts';
 import { needsLabel } from './labels.ts';
 import { isGrafcetType } from './grafcet.ts';
+import { contactTerminals, isElectricType, type ElectricContactConfig } from './electric.ts';
 import { definitionOf, mediumOf, portName } from './library.ts';
 import { componentBox, routeAll, type Box } from './routing.ts';
 import { drawingArea, titleBlock } from './sheet.ts';
@@ -59,8 +60,27 @@ export function checkDiagram(diagram: Diagram): Issue[] {
     else if (needsLabel(c)) issue('warning', `${describe(c)} hat kein Kennzeichen.`, [c.id]);
   }
   for (const [label, members] of byLabel) {
-    if (members.length > 1) {
-      issue('error', `Kennzeichen ${label} ist ${members.length}-mal vergeben.`, members.map((c) => c.id));
+    // Stromlaufplan: Kontakte tragen das Kennzeichen ihres Relais bzw. Schalters (DIN EN IEC 81346-2).
+    const devices = members.filter((c) => c.config?.kind !== 'electric-contact');
+    const contacts = members.filter((c) => c.config?.kind === 'electric-contact');
+    const electricOnly = members.every((c) => isElectricType(c.type));
+    if (members.length > 1 && (!electricOnly || devices.length > 1)) {
+      issue('error', `Kennzeichen ${label} ist ${(electricOnly ? devices : members).length}-mal vergeben.`, (electricOnly ? devices : members).map((c) => c.id));
+    }
+    if (!electricOnly) continue;
+    const seen = new Map<string, string>();
+    for (const c of contacts) {
+      const t = contactTerminals(c.config as ElectricContactConfig);
+      for (const n of [t.top, t.bottom, t.nc]) {
+        if (!n) continue;
+        const other = seen.get(n);
+        if (other && other !== c.id) issue('error', `${label}: Anschluss ${n} ist an zwei Kontakten vergeben (Ordnungsziffer ändern).`, [other, c.id]);
+        else seen.set(n, c.id);
+      }
+    }
+    const relayContacts = contacts.filter((c) => (c.config as ElectricContactConfig).actuation === 'none');
+    if (relayContacts.length && !devices.some((c) => c.config?.kind === 'electric-coil')) {
+      issue('warning', `Relaiskontakt ${label}: Es gibt keine Relaisspule ${label}.`, relayContacts.map((c) => c.id));
     }
   }
 
@@ -85,7 +105,8 @@ export function checkDiagram(diagram: Diagram): Issue[] {
   // GRAFCET-Elemente dürfen offen enden (Quell- und Schlussschritt, Abschnitt 6.3).
   for (const c of diagram.components) {
     const def = definitionOf(c);
-    if (!def || isGrafcetType(c.type)) continue;
+    // Abgänge einer Versorgungsschiene dürfen frei bleiben.
+    if (!def || isGrafcetType(c.type) || c.type === 'electric.rail') continue;
     const open = def.ports.filter((p) => {
       if (mediumOf(c) === 'pneumatic' && p.kind === 'return' && c.type.startsWith('valve.')) return false;
       return connectionsAt(diagram, { componentId: c.id, portId: p.id }).length === 0;

@@ -1,3 +1,6 @@
+import { definitionOf, MODULE } from '../../model/library.ts';
+import { contactTables, railJunctions } from '../../model/electric.ts';
+import { ContactTables } from '../electricSymbols.tsx';
 import { memo, useMemo } from 'react';
 import { layerState } from '../../model/layers.ts';
 import { branchDots, crossings, linePathData, routeAll } from '../../model/routing.ts';
@@ -26,6 +29,8 @@ export const StaticSheet = memo(
     const linkJunctions = grafcetJunctions(diagram, links);
     const dots = branchDots(connections.filter((l) => !links.has(l.id)), shownPaths);
     const arrows = upwardArrows(diagram, shownPaths, links);
+    const tables = contactTables(diagram, definitionOf, MODULE);
+    const railDots = railJunctions(diagram, definitionOf);
     const jumps = diagram.sheet.lineJumps ? crossings(shownPaths) : new Map<string, Point[]>();
     return (
       <>
@@ -42,6 +47,7 @@ export const StaticSheet = memo(
           <circle key={`${p.x},${p.y}`} className="junction" cx={p.x} cy={p.y} r={2} />
         ))}
         <LinkArrows arrows={arrows} />
+        <ContactTables tables={tables} dots={railDots} />
         {diagram.junctions.filter((j) => !hidden.junctions.has(j.id) && !linkJunctions.has(j.id)).map((j) => (
           <circle key={j.id} className="junction" cx={j.position.x} cy={j.position.y} r={2} />
         ))}

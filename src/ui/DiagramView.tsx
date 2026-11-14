@@ -1,3 +1,6 @@
+import { definitionOf, MODULE } from '../model/library.ts';
+import { contactTables, railJunctions } from '../model/electric.ts';
+import { ContactTables } from './electricSymbols.tsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { endpointPosition, sameEndpoint } from '../model/diagram.ts';
 import { angleOf, annotationBox, arcFromPoints, normalizeAngle, type NewAnnotation } from '../model/annotations.ts';
@@ -351,6 +354,8 @@ export function DiagramView({
     shownPaths,
   );
   const arrows = upwardArrows(diagram, shownPaths, links);
+  const tables = useMemo(() => contactTables(diagram, definitionOf, MODULE), [diagram]);
+  const railDots = useMemo(() => railJunctions(diagram, definitionOf), [diagram]);
   const jumps = sheet.lineJumps ? crossings(shownPaths) : new Map<string, Point[]>();
 
   /** Alles, was ganz im Rahmen zwischen a und b liegt. */
@@ -801,6 +806,7 @@ export function DiagramView({
           <circle key={`${p.x},${p.y}`} className="junction" cx={p.x} cy={p.y} r={2} />
         ))}
         <LinkArrows arrows={arrows} />
+        <ContactTables tables={tables} dots={railDots} />
         {diagram.junctions.map((j) => {
           if (hidden.junctions.has(j.id)) return null;
           const ref = { junctionId: j.id };

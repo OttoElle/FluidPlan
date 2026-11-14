@@ -197,6 +197,7 @@ select {
 .component.selected .hit { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 3; }
 .symbol { fill: none; stroke: var(--line); stroke-linejoin: miter; }
 .symbol .fill { fill: var(--line); }
+.symbol .knockout { stroke: var(--paper); }
 .component .name { text-anchor: middle; dominant-baseline: middle; fill: var(--muted); }
 .component .label { text-anchor: middle; fill: var(--text); }
 .component .label-box { fill: none; stroke: var(--text); stroke-width: 1; }

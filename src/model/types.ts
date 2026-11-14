@@ -27,6 +27,7 @@ import type {
   GrafcetSyncConfig,
   GrafcetTransitionConfig,
 } from './grafcet.ts';
+import type { ElectricConfig } from './electric.ts';
 
 /** Medium eines Bauteils (Hydraulik oder Pneumatik). */
 export type Domain = 'hydraulic' | 'pneumatic';
@@ -108,7 +109,8 @@ export type ComponentConfig =
   | GrafcetTransitionConfig
   | GrafcetActionConfig
   | GrafcetSyncConfig
-  | GrafcetConnectorConfig;
+  | GrafcetConnectorConfig
+  | ElectricConfig;
 
 /** Ein im Schaltplan platziertes Bauteil. */
 export interface ComponentInstance {

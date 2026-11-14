@@ -134,6 +134,33 @@ import {
   type GrafcetSyncConfig,
   type GrafcetTransitionConfig,
 } from './grafcet.ts';
+import {
+  coilGeometry,
+  coilTitle,
+  contactGeometry,
+  contactTitle,
+  defaultCoilConfig,
+  defaultContactConfig,
+  defaultElectricSensorConfig,
+  defaultLampConfig,
+  defaultRailConfig,
+  electricSensorGeometry,
+  electricSensorTitle,
+  lampGeometry,
+  lampTitle,
+  railGeometry,
+  railTitle,
+  readCoilConfig,
+  readContactConfig,
+  readElectricSensorConfig,
+  readLampConfig,
+  readRailConfig,
+  type ElectricCoilConfig,
+  type ElectricContactConfig,
+  type ElectricLampConfig,
+  type ElectricRailConfig,
+  type ElectricSensorConfig,
+} from './electric.ts';
 import type { ComponentConfig, ComponentDefinition, ComponentInstance, Domain, PortDefinition, PortKind } from './types.ts';
 import {
   defaultValveConfig,
@@ -500,6 +527,58 @@ const CONNECTOR: ConfigurableType<GrafcetConnectorConfig> = {
   read: readConnectorConfig,
 };
 
+// --- Elektrik (Stromlaufplan, DIN EN 60617, siehe electric.ts) ---
+
+const CONTACT: ConfigurableType<ElectricContactConfig> = {
+  type: 'electric.contact',
+  name: 'Kontakt',
+  domains: NONE,
+  defaultConfig: () => defaultContactConfig(),
+  title: contactTitle,
+  geometry: contactGeometry,
+  read: readContactConfig,
+};
+
+const COIL: ConfigurableType<ElectricCoilConfig> = {
+  type: 'electric.coil',
+  name: 'Spule',
+  domains: NONE,
+  defaultConfig: () => defaultCoilConfig(),
+  title: coilTitle,
+  geometry: coilGeometry,
+  read: readCoilConfig,
+};
+
+const LAMP: ConfigurableType<ElectricLampConfig> = {
+  type: 'electric.lamp',
+  name: 'Leuchtmelder',
+  domains: NONE,
+  defaultConfig: () => defaultLampConfig(),
+  title: lampTitle,
+  geometry: lampGeometry,
+  read: readLampConfig,
+};
+
+const ELECTRIC_SENSOR: ConfigurableType<ElectricSensorConfig> = {
+  type: 'electric.sensor',
+  name: 'Näherungsschalter, 3-Leiter',
+  domains: NONE,
+  defaultConfig: () => defaultElectricSensorConfig(),
+  title: electricSensorTitle,
+  geometry: electricSensorGeometry,
+  read: readElectricSensorConfig,
+};
+
+const RAIL: ConfigurableType<ElectricRailConfig> = {
+  type: 'electric.rail',
+  name: 'Versorgung',
+  domains: NONE,
+  defaultConfig: () => defaultRailConfig(),
+  title: railTitle,
+  geometry: railGeometry,
+  read: readRailConfig,
+};
+
 const CONFIGURABLE = new Map<string, ConfigurableType<any>>(
   [
     VALVE,
@@ -528,6 +607,11 @@ const CONFIGURABLE = new Map<string, ConfigurableType<any>>(
     ACTION,
     SYNC,
     CONNECTOR,
+    CONTACT,
+    COIL,
+    LAMP,
+    ELECTRIC_SENSOR,
+    RAIL,
   ].map((t) => [t.type, t]),
 );
 
@@ -636,8 +720,8 @@ export function definitionsFor(domain: Domain): ComponentDefinition[] {
 
 // --- Bauteilliste in der Oberfläche ----------------------------------------------
 
-/** Bauteilkataloge der Seitenleiste: die beiden Medien und GRAFCET. */
-export type Catalog = Domain | 'grafcet';
+/** Bauteilkataloge der Seitenleiste: die beiden Medien, GRAFCET und Elektrik. */
+export type Catalog = Domain | 'grafcet' | 'electric';
 
 export interface PaletteEntry {
   key: string;
@@ -654,7 +738,7 @@ export interface PaletteEntry {
 }
 
 /** Bauteilkataloge in der Seitenleiste, in dieser Reihenfolge. */
-export const CATALOG_NAMES: Record<Catalog, string> = { hydraulic: 'Hydraulik', pneumatic: 'Pneumatik', grafcet: 'GRAFCET' };
+export const CATALOG_NAMES: Record<Catalog, string> = { hydraulic: 'Hydraulik', pneumatic: 'Pneumatik', grafcet: 'GRAFCET', electric: 'Elektrik' };
 
 /** Kategorien der Bauteilliste, in dieser Reihenfolge (nach Ottos Liste vom 31.10.2026). */
 export const PALETTE_GROUPS = [
@@ -675,6 +759,12 @@ export const PALETTE_GROUPS = [
   'Transitionen',
   'Aktionen',
   'Ablaufstruktur',
+  // Elektrik (DIN EN 60617)
+  'Versorgung',
+  'Schalter und Taster',
+  'Sensoren',
+  'Relais',
+  'Ausgänge',
 ] as const;
 
 type PaletteGroup = (typeof PALETTE_GROUPS)[number];
@@ -801,6 +891,41 @@ export function grafcetPalette(): PaletteEntry[] {
     c('forcing', 'Zwangssteuernder Befehl', 'Aktionen', ACTION, defaultActionConfig('forcing', 'G2{INIT}')),
     c('sync', 'Synchronisierung', 'Ablaufstruktur', SYNC, defaultSyncConfig()),
     c('connector', 'Zielhinweis', 'Ablaufstruktur', CONNECTOR, defaultConnectorConfig()),
+  ];
+}
+
+/**
+ * Elektrik-Katalog für kleine Stromlaufpläne (Elektropneumatik): nur die
+ * Grundformen, Betätigung, Raste, Verzögerung usw. im Konfigurator.
+ */
+export function electricPalette(): PaletteEntry[] {
+  const c = (key: string, name: string, group: PaletteGroup, t: ConfigurableType<any>, config: ComponentConfig): PaletteEntry => ({
+    key: `electric:${key}`,
+    catalog: 'electric',
+    name,
+    group,
+    type: t.type,
+    config,
+    configurable: true,
+  });
+  const contact = (fn: ElectricContactConfig['function'], actuation: ElectricContactConfig['actuation']) => defaultContactConfig(fn, actuation);
+  return [
+    c('rail-plus', 'Versorgung +24 V', 'Versorgung', RAIL, defaultRailConfig('plus')),
+    c('rail-minus', 'Versorgung 0 V', 'Versorgung', RAIL, defaultRailConfig('minus')),
+    c('push-no', 'Taster (Schließer)', 'Schalter und Taster', CONTACT, contact('no', 'push')),
+    c('push-nc', 'Taster (Öffner)', 'Schalter und Taster', CONTACT, contact('nc', 'push')),
+    c('switch', 'Stellschalter (Raste)', 'Schalter und Taster', CONTACT, { ...contact('no', 'push'), detent: true }),
+    c('limit-no', 'Endschalter (Schließer)', 'Sensoren', CONTACT, contact('no', 'position')),
+    c('limit-nc', 'Endschalter (Öffner)', 'Sensoren', CONTACT, contact('nc', 'position')),
+    c('proximity-2', 'Näherungsschalter (2-Leiter)', 'Sensoren', CONTACT, { ...contact('no', 'proximity'), sensing: 'magnetic' }),
+    c('proximity-3', 'Näherungsschalter (3-Leiter)', 'Sensoren', ELECTRIC_SENSOR, defaultElectricSensorConfig()),
+    c('coil', 'Relaisspule', 'Relais', COIL, defaultCoilConfig('relay')),
+    c('timer-coil', 'Zeitrelais (Spule)', 'Relais', COIL, defaultCoilConfig('on-delay')),
+    c('relay-no', 'Schließer', 'Relais', CONTACT, contact('no', 'none')),
+    c('relay-nc', 'Öffner', 'Relais', CONTACT, contact('nc', 'none')),
+    c('relay-co', 'Wechsler', 'Relais', CONTACT, contact('changeover', 'none')),
+    c('solenoid', 'Magnetspule (Ventil)', 'Ausgänge', COIL, defaultCoilConfig('solenoid')),
+    c('lamp', 'Leuchtmelder', 'Ausgänge', LAMP, defaultLampConfig()),
   ];
 }
 

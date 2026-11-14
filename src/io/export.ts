@@ -69,6 +69,7 @@ const PRINT_STYLE: [selector: string, attributes: Record<string, string>][] = [
   ['.link-arrow', { fill: '#000000', stroke: 'none' }],
   ['.symbol', { fill: 'none', stroke: '#000000', 'stroke-linejoin': 'miter' }],
   ['.symbol .fill', { fill: '#000000' }],
+  ['.symbol .knockout', { stroke: '#ffffff' }],
   ['.component .box', { fill: '#ffffff', stroke: '#000000', 'stroke-width': '1' }],
   ['.component .name', { 'text-anchor': 'middle', 'dominant-baseline': 'middle', fill: '#000000' }],
   ['.component .label', { 'text-anchor': 'middle', fill: '#000000' }],

@@ -1,5 +1,6 @@
 import { transformLocalPoint } from '../../model/diagram.ts';
 import { LETTERING, fontSizeFor, textWidth } from '../../model/lettering.ts';
+import { isElectricType } from '../../model/electric.ts';
 import { definitionOf, portName } from '../../model/library.ts';
 import type { ComponentInstance } from '../../model/types.ts';
 import { ComponentSymbol, hasSymbol } from '../symbols.tsx';
@@ -60,6 +61,9 @@ export function ComponentShape({
   const off = component.labelOffset ?? { x: 0, y: 0 };
   const lx = x + off.x;
   const ly = y + off.y;
+  // Stromlaufplan: Betriebsmittelkennzeichen (-KF1) ohne Kasten links neben der Mitte des Schaltzeichens.
+  const electric = isElectricType(component.type);
+  const labelY = electric ? ly + h / 2 - BOX_HEIGHT / 2 : ly;
   const grab = (port: string | null) =>
     onLabelPointerDown && !locked
       ? (e: React.PointerEvent) => {
@@ -99,8 +103,8 @@ export function ComponentShape({
         // Bezeichnungsschlüssel im rechteckigen Kasten (DIN ISO 1219-2, 5.1.1.2).
         <g className="label-group" onPointerDown={grab(null)}>
           <title>Kennzeichen: ziehen zum Verschieben, Doppelklick setzt zurück</title>
-          <rect x={lx - 4 - labelWidth} y={ly} width={labelWidth} height={BOX_HEIGHT} className="label-box" />
-          <text x={lx - 4 - labelWidth / 2} y={ly + PAD + LETTERING.normal} className="label" fontSize={FONT}>
+          {!electric && <rect x={lx - 4 - labelWidth} y={ly} width={labelWidth} height={BOX_HEIGHT} className="label-box" />}
+          <text x={lx - 4 - labelWidth / 2} y={labelY + PAD + LETTERING.normal} className="label" fontSize={FONT}>
             {component.label}
           </text>
         </g>
@@ -110,7 +114,7 @@ export function ComponentShape({
         <text
           key={i}
           x={lx - 4}
-          y={ly + (showLabel ? BOX_HEIGHT + 4 : 0) + LETTERING.normal + i * LINE_PITCH}
+          y={labelY + (showLabel ? BOX_HEIGHT + 4 : 0) + LETTERING.normal + i * LINE_PITCH}
           className={line.className}
           fontSize={FONT}
           onPointerDown={grab(null)}

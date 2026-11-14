@@ -9,6 +9,7 @@ import { ArrowHead, CheckElement, DASH, Junction, pts, seatTip, Triangle, type P
 import { ValveSymbol } from './valveSymbol.tsx';
 import { CoolerSymbol, FilterSymbol, Heater, Separator } from './conditioningSymbols.tsx';
 import { CheckValveSymbol, FlowDividerSymbol, PressureValveSymbol, ThrottleSymbol } from './fluidValveSymbols.tsx';
+import { CoilSymbol, ContactSymbol, ElectricSensorSymbol, LampSymbol, RailSymbol } from './electricSymbols.tsx';
 import { ActionSymbol, ConnectorSymbol, StepSymbol, SyncSymbol, TransitionSymbol } from './grafcetSymbols.tsx';
 import { GaugeFace, IndicatorSymbol, InstrumentSymbol } from './instrumentSymbols.tsx';
 import { SymbolOrientation } from './symbolOrientation.tsx';
@@ -245,6 +246,11 @@ const CONFIG_SYMBOLS: { [K in ComponentConfig['kind']]: (props: { config: Config
   'grafcet-action': ActionSymbol,
   'grafcet-sync': SyncSymbol,
   'grafcet-connector': ConnectorSymbol,
+  'electric-contact': ContactSymbol,
+  'electric-coil': CoilSymbol,
+  'electric-lamp': LampSymbol,
+  'electric-sensor': ElectricSensorSymbol,
+  'electric-rail': RailSymbol,
 };
 
 export function hasSymbol(type: string): boolean {

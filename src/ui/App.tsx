@@ -60,10 +60,11 @@ import { exampleHydraulicDiagram } from '../model/example.ts';
 import { autoLabelSheets } from '../model/labels.ts';
 import { DEFAULT_PARTS_LIST, defaultPartsListPosition } from '../model/partsList.ts';
 import { nextFrameName, nextStepName } from '../model/grafcet.ts';
-import { MODULE, definitionOf, grafcetPalette, paletteFor, type PaletteEntry } from '../model/library.ts';
+import { electricInsert, isElectricConfig } from '../model/electric.ts';
+import { MODULE, definitionOf, electricPalette, grafcetPalette, paletteFor, type PaletteEntry } from '../model/library.ts';
 
 /** Alle Bauteilkataloge; in der Seitenleiste je Medium aufklappbar. */
-const PALETTE: PaletteEntry[] = [...paletteFor('hydraulic'), ...paletteFor('pneumatic'), ...grafcetPalette()];
+const PALETTE: PaletteEntry[] = [...paletteFor('hydraulic'), ...paletteFor('pneumatic'), ...grafcetPalette(), ...electricPalette()];
 import { drawingArea, type TitleField } from '../model/sheet.ts';
 import type { Diagram, DiagramMeta, Drawing, Point } from '../model/types.ts';
 import { downloadDrawing, readDrawingFile } from '../io/browser.ts';
@@ -269,7 +270,13 @@ export function App() {
       entry.config?.kind === 'grafcet-step' && entry.config.variant !== 'macro'
         ? { ...entry.config, name: nextStepName(drawing.sheets) }
         : entry.config;
-    const { diagram: placed, component } = addComponent(base, entry.type, position, { config, medium: entry.medium });
+    // Elektrik: Kennzeichen nach DIN EN IEC 81346-2 fortlaufend (-KF1, -SJ1 …), Relaiskontakte zum letzten Relais.
+    const electric = isElectricConfig(config) ? electricInsert(config, drawing.sheets) : undefined;
+    const { diagram: placed, component } = addComponent(base, entry.type, position, {
+      config: electric?.config ?? config,
+      medium: entry.medium,
+      label: electric?.label,
+    });
     const next = onActiveLayer(placed, { components: [component.id] });
     if (sheet === active) edit(keepRoutes(base, next));
     else {

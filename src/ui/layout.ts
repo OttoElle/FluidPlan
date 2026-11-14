@@ -96,11 +96,11 @@ const CATALOGS_KEY = 'fluidplan.catalogs';
  */
 export function useOpenCatalogs(): [Record<Catalog, boolean>, (catalog: Catalog, open: boolean) => void] {
   const [open, setOpen] = useState<Record<Catalog, boolean>>(() => {
-    const fallback = { hydraulic: true, pneumatic: false, grafcet: false };
+    const fallback = { hydraulic: true, pneumatic: false, grafcet: false, electric: false };
     try {
       const raw = JSON.parse(load(CATALOGS_KEY) ?? 'null') as Partial<Record<Catalog, unknown>> | null;
       const pick = (k: Catalog) => (typeof raw?.[k] === 'boolean' ? (raw[k] as boolean) : fallback[k]);
-      return { hydraulic: pick('hydraulic'), pneumatic: pick('pneumatic'), grafcet: pick('grafcet') };
+      return { hydraulic: pick('hydraulic'), pneumatic: pick('pneumatic'), grafcet: pick('grafcet'), electric: pick('electric') };
     } catch {
       return fallback;
     }

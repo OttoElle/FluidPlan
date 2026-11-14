@@ -34,7 +34,8 @@ const UNLABELED = new Set(['supply.silencer', 'line.plug']);
 
 export function needsLabel(component: Pick<ComponentInstance, 'type'>): boolean {
   // GRAFCET-Elemente tragen ihre Bezeichnung selbst (Schrittnummer, Bedingung).
-  return !UNLABELED.has(component.type) && !component.type.startsWith('grafcet.');
+  // Versorgungsschienen sind Leiter, keine Betriebsmittel.
+  return !UNLABELED.has(component.type) && !component.type.startsWith('grafcet.') && component.type !== 'electric.rail';
 }
 
 export function componentCode(type: string): ComponentCode {
@@ -158,7 +159,8 @@ export function autoLabel(diagram: Diagram, counter: LabelCounter = newLabelCoun
   const offset = counter.circuits;
   const groups = new Map<string, ComponentInstance[]>();
   for (const c of diagram.components) {
-    if (!needsLabel(c)) continue;
+    // Elektrik hat Kennzeichen nach DIN EN IEC 81346-2 (-KF1 …), die Kontakte mit ihrer Spule teilen.
+    if (!needsLabel(c) || c.type.startsWith('electric.')) continue;
     const n = circuit.get(c.id)!;
     const key = `${n === 0 ? 0 : n + offset}`;
     groups.set(key, [...(groups.get(key) ?? []), c]);

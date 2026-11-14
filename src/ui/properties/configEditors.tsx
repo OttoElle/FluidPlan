@@ -29,6 +29,7 @@ import {
   GrafcetSyncEditor,
   GrafcetTransitionEditor,
 } from './grafcetEditors.tsx';
+import { CoilEditor, ContactEditor, ElectricSensorEditor, LampEditor, RailEditor } from './electricEditors.tsx';
 
 /** Was ein Konfigurator bekommt: die aktuelle Konfiguration und wohin Änderungen gehen. */
 export interface ConfigEditorProps<C extends ComponentConfig = ComponentConfig> {
@@ -73,6 +74,11 @@ const CONFIG_EDITORS: { [K in ComponentConfig['kind']]: ComponentType<ConfigEdit
   'grafcet-action': GrafcetActionEditor,
   'grafcet-sync': GrafcetSyncEditor,
   'grafcet-connector': GrafcetConnectorEditor,
+  'electric-contact': ContactEditor,
+  'electric-coil': CoilEditor,
+  'electric-lamp': LampEditor,
+  'electric-sensor': ElectricSensorEditor,
+  'electric-rail': RailEditor,
 };
 
 /** Passenden Konfigurator für eine beliebige Konfiguration anzeigen. */
